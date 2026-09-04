@@ -12,6 +12,8 @@ var require_constants = __commonJS({
   "src/constants.js"(exports2, module2) {
     var NAMES = Object.freeze({
       staffRole: "NexaDev Staff",
+      operativeRole: "Operat\xEDv \xE1llom\xE1ny",
+      leadershipRole: "Vezet\u0151s\xE9g",
       memberRole: "K\xF6z\xF6ss\xE9gi tag",
       acceptedRole: "Felvett tag",
       infoCategory: "\u2501\u2501 INFORM\xC1CI\xD3K \u2501\u2501",
@@ -427,6 +429,846 @@ var require_setup = __commonJS({
   }
 });
 
+// src/documents.js
+var require_documents = __commonJS({
+  "src/documents.js"(exports2, module2) {
+    var {
+      ActionRowBuilder,
+      ButtonBuilder,
+      ButtonStyle,
+      EmbedBuilder,
+      MessageFlags,
+      ModalBuilder,
+      PermissionFlagsBits: PermissionFlagsBits2,
+      TextInputBuilder,
+      TextInputStyle
+    } = require("discord.js");
+    var { NAMES, COLORS } = require_constants();
+    var { baseEmbed, ephemeralError, sendLog } = require_utils();
+    var EPHEMERAL = MessageFlags.Ephemeral;
+    var REVIEW_CHANNEL_KEY = "case_files";
+    var short = (id, label, placeholder, required = true, maxLength = 200) => ({
+      id,
+      label,
+      placeholder,
+      required,
+      maxLength,
+      style: "short"
+    });
+    var paragraph = (id, label, placeholder, required = true, maxLength = 1e3) => ({
+      id,
+      label,
+      placeholder,
+      required,
+      maxLength,
+      style: "paragraph"
+    });
+    var DOCUMENT_TYPES = Object.freeze([
+      {
+        key: "dc_rules",
+        channel: "dc-szab\xE1lyzat",
+        title: "Discord-szab\xE1lyzat",
+        emoji: "\u{1F4C4}",
+        approval: false,
+        fields: [
+          short("title", "Szab\xE1lyzat c\xEDme", "P\xE9ld\xE1ul: Discord k\xF6z\xF6ss\xE9gi szab\xE1lyzat"),
+          short("section", "Fejezet vagy t\xE9mak\xF6r", "P\xE9ld\xE1ul: kommunik\xE1ci\xF3 \xE9s viselked\xE9s"),
+          short("effective", "Hat\xE1lybal\xE9p\xE9s", "\xC9\xC9\xC9\xC9.HH.NN."),
+          paragraph("content", "Szab\xE1lyzat tartalma", "\xCDrd le pontosan a szab\xE1lyokat"),
+          paragraph("source", "Hivatkoz\xE1s vagy megjegyz\xE9s", "Opcion\xE1lis link vagy kieg\xE9sz\xEDt\xE9s", false, 500)
+        ]
+      },
+      {
+        key: "info_calls",
+        channel: "felh\xEDv\xE1sok",
+        parent: "inform\xE1ci\xF3k",
+        title: "Felh\xEDv\xE1s",
+        emoji: "\u{1F4E2}",
+        approval: false,
+        fields: [
+          short("title", "Felh\xEDv\xE1s c\xEDme", "R\xF6vid, egy\xE9rtelm\u0171 c\xEDm"),
+          short("audience", "C\xEDmzettek", "Kiknek sz\xF3l?"),
+          short("deadline", "Id\u0151pont vagy hat\xE1rid\u0151", "\xC9\xC9\xC9\xC9.HH.NN. \xD3\xD3:PP"),
+          paragraph("details", "R\xE9szletes felh\xEDv\xE1s", "Minden fontos tudnival\xF3"),
+          short("contact", "Kapcsolattart\xF3", "N\xE9v vagy beoszt\xE1s", false)
+        ]
+      },
+      {
+        key: "internal_calls",
+        channel: "felh\xEDv\xE1sok-bels\u0151s",
+        parent: "inform\xE1ci\xF3k",
+        title: "Bels\u0151 felh\xEDv\xE1s",
+        emoji: "\u{1F4E3}",
+        approval: false,
+        fields: [
+          short("title", "Bels\u0151 felh\xEDv\xE1s c\xEDme", "R\xF6vid c\xEDm"),
+          short("units", "\xC9rintett \xE1llom\xE1ny vagy egys\xE9g", "Kiknek sz\xF3l?"),
+          short("deadline", "Hat\xE1rid\u0151", "\xC9\xC9\xC9\xC9.HH.NN. \xD3\xD3:PP"),
+          paragraph("task", "Feladat vagy t\xE1j\xE9koztat\xE1s", "\xCDrd le r\xE9szletesen"),
+          paragraph("link", "Csatolm\xE1ny vagy link", "Opcion\xE1lis hivatkoz\xE1s", false, 500)
+        ]
+      },
+      {
+        key: "important_info",
+        channel: "fontos-inform\xE1ci\xF3k",
+        parent: "inform\xE1ci\xF3k",
+        title: "Fontos inform\xE1ci\xF3",
+        emoji: "\u{1F4E3}",
+        approval: false,
+        fields: [
+          short("title", "Inform\xE1ci\xF3 c\xEDme", "Mi a k\xF6zlem\xE9ny t\xE1rgya?"),
+          short("affected", "\xC9rintettek", "Rang, egys\xE9g vagy teljes \xE1llom\xE1ny"),
+          short("validity", "\xC9rv\xE9nyess\xE9g", "Mikort\xF3l meddig \xE9rv\xE9nyes?"),
+          paragraph("details", "R\xE9szletes inform\xE1ci\xF3", "\xCDrd le a teljes t\xE1j\xE9koztat\xE1st"),
+          paragraph("link", "Forr\xE1s vagy csatolm\xE1ny", "Opcion\xE1lis hivatkoz\xE1s", false, 500)
+        ]
+      },
+      {
+        key: "rules",
+        channel: "szab\xE1lyzatok",
+        parent: "inform\xE1ci\xF3k",
+        title: "Szab\xE1lyzat",
+        emoji: "\u203C\uFE0F",
+        approval: false,
+        fields: [
+          short("title", "Szab\xE1lyzat c\xEDme", "A szab\xE1lyzat megnevez\xE9se"),
+          short("scope", "Hat\xE1ly \xE9s \xE9rintettek", "Kire vonatkozik?"),
+          short("effective", "Hat\xE1lybal\xE9p\xE9s", "\xC9\xC9\xC9\xC9.HH.NN."),
+          paragraph("content", "Szab\xE1lyzat sz\xF6vege", "\xCDrd le a rendelkez\xE9seket"),
+          paragraph("source", "Forr\xE1s vagy mell\xE9klet", "Opcion\xE1lis link", false, 500)
+        ]
+      },
+      {
+        key: "inspection_rules",
+        channelPrefix: "szab\xE1lyzatok-bels\u0151-ellen\u0151rz",
+        parent: "inform\xE1ci\xF3k",
+        title: "Bels\u0151 ellen\u0151rz\xE9si szab\xE1lyzat",
+        emoji: "\u203C\uFE0F",
+        approval: false,
+        fields: [
+          short("title", "Szab\xE1lyzat c\xEDme", "A bels\u0151 ellen\u0151rz\xE9s t\xE9m\xE1ja"),
+          short("scope", "Ellen\u0151rz\xE9si hat\xE1ly", "Szervezet, egys\xE9g vagy szem\xE9lyi k\xF6r"),
+          short("effective", "Hat\xE1lybal\xE9p\xE9s", "\xC9\xC9\xC9\xC9.HH.NN."),
+          paragraph("procedure", "Ellen\u0151rz\xE9si elj\xE1r\xE1s", "L\xE9p\xE9sek, hat\xE1rid\u0151k \xE9s felel\u0151s\xF6k"),
+          paragraph("attachment", "Mell\xE9klet vagy link", "Opcion\xE1lis hivatkoz\xE1s", false, 500)
+        ]
+      },
+      {
+        key: "decrees",
+        channel: "rendeletek",
+        parent: "inform\xE1ci\xF3k",
+        title: "Rendelet",
+        emoji: "\u{1F4DC}",
+        approval: false,
+        fields: [
+          short("number", "Rendelet sz\xE1ma", "P\xE9ld\xE1ul: 12/2026."),
+          short("issuer", "Kiad\xF3 vagy elrendel\u0151", "N\xE9v \xE9s beoszt\xE1s"),
+          short("effective", "Hat\xE1lybal\xE9p\xE9s", "\xC9\xC9\xC9\xC9.HH.NN."),
+          short("subject", "Rendelet t\xE1rgya", "R\xF6vid t\xE1rgymegjel\xF6l\xE9s"),
+          paragraph("content", "Rendelet teljes tartalma", "\xCDrd le a rendelkez\xE9st")
+        ]
+      },
+      {
+        key: "radio",
+        channel: "r\xE1di\xF3-\xE9s-h\xEDv\xF3jel",
+        parent: "inform\xE1ci\xF3k",
+        title: "R\xE1di\xF3- \xE9s h\xEDv\xF3jelrend",
+        emoji: "\u{1F4FB}",
+        approval: false,
+        fields: [
+          short("unit", "Egys\xE9g vagy beoszt\xE1s", "Melyik egys\xE9ghez tartozik?"),
+          short("frequency", "Frekvencia vagy h\xEDv\xF3jel", "R\xE1di\xF3frekvencia \xE9s h\xEDv\xF3jel"),
+          short("access", "Haszn\xE1latra jogosultak", "Rangok vagy szem\xE9lyek"),
+          paragraph("rules", "Haszn\xE1lati szab\xE1lyok", "R\xE1di\xF3z\xE1si rend \xE9s el\u0151\xEDr\xE1sok"),
+          paragraph("note", "Megjegyz\xE9s", "Opcion\xE1lis kieg\xE9sz\xEDt\xE9s", false, 500)
+        ]
+      },
+      {
+        key: "uniform",
+        channel: "ruh\xE1zat",
+        parent: "inform\xE1ci\xF3k",
+        title: "Ruh\xE1zati el\u0151\xEDr\xE1s",
+        emoji: "\u{1F94B}",
+        approval: false,
+        fields: [
+          short("unit", "Rang vagy egys\xE9g", "Kire vonatkozik?"),
+          short("occasion", "Szolg\xE1lati helyzet", "Mikor kell ezt viselni?"),
+          paragraph("required", "K\xF6telez\u0151 ruh\xE1zat", "Sorold fel a k\xF6telez\u0151 elemeket"),
+          paragraph("forbidden", "Tiltott vagy elt\xE9r\u0151 elemek", "Mi nem viselhet\u0151?", false, 700),
+          paragraph("image", "K\xE9p vagy minta linkje", "Opcion\xE1lis hivatkoz\xE1s", false, 500)
+        ]
+      },
+      {
+        key: "vehicle_rules",
+        channel: "j\xE1rm\u0171-szab\xE1lyzat",
+        parent: "inform\xE1ci\xF3k",
+        title: "J\xE1rm\u0171szab\xE1lyzat",
+        emoji: "\u{1F693}",
+        approval: false,
+        fields: [
+          short("vehicle", "J\xE1rm\u0171t\xEDpus", "Melyik j\xE1rm\u0171re vonatkozik?"),
+          short("authorized", "Haszn\xE1latra jogosultak", "Rang vagy egys\xE9g"),
+          paragraph("rules", "Haszn\xE1lati szab\xE1lyok", "Kiad\xE1s, vezet\xE9s \xE9s visszav\xE9tel rendje"),
+          paragraph("equipment", "K\xF6telez\u0151 felszerel\xE9s", "A j\xE1rm\u0171 k\xF6telez\u0151 tartalma", false, 700),
+          paragraph("image", "K\xE9p vagy dokumentum linkje", "Opcion\xE1lis hivatkoz\xE1s", false, 500)
+        ]
+      },
+      {
+        key: "tgf_results",
+        channel: "tgf-eredm\xE9nyek",
+        parent: "inform\xE1ci\xF3k",
+        title: "TGF-eredm\xE9ny",
+        emoji: "\u2705",
+        approval: false,
+        fields: [
+          short("applicant", "Jelentkez\u0151 neve", "Discord-n\xE9v vagy megjel\xF6l\xE9s"),
+          short("result", "Eredm\xE9ny", "Elfogadva vagy elutas\xEDtva"),
+          short("reviewer", "Elb\xEDr\xE1l\xF3", "N\xE9v \xE9s beoszt\xE1s"),
+          short("date", "Elb\xEDr\xE1l\xE1s d\xE1tuma", "\xC9\xC9\xC9\xC9.HH.NN."),
+          paragraph("note", "Indokl\xE1s vagy megjegyz\xE9s", "R\xF6vid \xE9rt\xE9kel\xE9s", false, 700)
+        ]
+      },
+      {
+        key: "btk",
+        channel: "btk",
+        parent: "inform\xE1ci\xF3k",
+        title: "BTK-bejegyz\xE9s",
+        emoji: "\u{1F4C1}",
+        approval: false,
+        fields: [
+          short("section", "Szakasz vagy paragrafus", "P\xE9ld\xE1ul: 12. \xA7"),
+          short("title", "T\xE9ny\xE1ll\xE1s megnevez\xE9se", "A szab\xE1lys\xE9rt\xE9s vagy b\u0171ncselekm\xE9ny neve"),
+          paragraph("definition", "T\xE9ny\xE1ll\xE1s le\xEDr\xE1sa", "Mikor val\xF3sul meg?"),
+          paragraph("sanction", "B\xFCntet\xE9si t\xE9tel", "Alkalmazhat\xF3 jogk\xF6vetkezm\xE9ny"),
+          paragraph("note", "Kieg\xE9sz\xEDt\xE9s vagy p\xE9lda", "Opcion\xE1lis megjegyz\xE9s", false, 500)
+        ]
+      },
+      {
+        key: "service_log",
+        channel: "szolg\xE1lati-napl\xF3",
+        parent: "inform\xE1ci\xF3k",
+        title: "Szolg\xE1lati napl\xF3",
+        emoji: "\u{1F4DD}",
+        approval: false,
+        fields: [
+          short("time", "Szolg\xE1lat kezdete \xE9s v\xE9ge", "\xC9\xC9\xC9\xC9.HH.NN. \xD3\xD3:PP\u2013\xD3\xD3:PP"),
+          short("unit", "Egys\xE9g \xE9s h\xEDv\xF3jel", "Egys\xE9g, j\xE1rm\u0171, h\xEDv\xF3jel"),
+          short("participants", "R\xE9sztvev\u0151k", "Nevek vagy Discord-megjel\xF6l\xE9sek"),
+          paragraph("activity", "Elv\xE9gzett tev\xE9kenys\xE9g", "Feladatok \xE9s int\xE9zked\xE9sek"),
+          paragraph("incident", "Rendk\xEDv\xFCli esem\xE9ny", "Esem\xE9ny vagy nincs", false, 700)
+        ]
+      },
+      {
+        key: "service_report",
+        channel: "szolg\xE1lati-jelent\xE9s",
+        parent: "inform\xE1ci\xF3k",
+        title: "Szolg\xE1lati jelent\xE9s",
+        emoji: "\u{1F4DD}",
+        approval: false,
+        fields: [
+          short("subject", "Jelent\xE9s t\xE1rgya", "R\xF6vid t\xE1rgy"),
+          short("time_place", "Id\u0151pont \xE9s helysz\xEDn", "Mikor \xE9s hol t\xF6rt\xE9nt?"),
+          short("participants", "\xC9rintettek \xE9s r\xE9sztvev\u0151k", "Nevek, egys\xE9gek"),
+          paragraph("events", "Esem\xE9ny r\xE9szletes le\xEDr\xE1sa", "Mi t\xF6rt\xE9nt id\u0151rendben?"),
+          paragraph("action", "Megtett int\xE9zked\xE9sek", "Int\xE9zked\xE9s, eredm\xE9ny, bizony\xEDt\xE9k")
+        ]
+      },
+      {
+        key: "leave_request",
+        channel: "szabads\xE1g-ig\xE9nyl\xE9s",
+        parent: "inform\xE1ci\xF3k",
+        title: "Szabads\xE1gig\xE9nyl\xE9s",
+        emoji: "\u{1F4DD}",
+        approval: false,
+        fields: [
+          short("period", "Szabads\xE1g id\u0151tartama", "Kezd\u0151 \xE9s befejez\u0151 d\xE1tum"),
+          short("reason", "Ig\xE9nyl\xE9s oka", "R\xF6vid indokl\xE1s"),
+          short("availability", "El\xE9rhet\u0151s\xE9g ezalatt", "El\xE9rhet\u0151 vagy nem el\xE9rhet\u0151"),
+          short("substitute", "Helyettes\xEDt\u0151", "N\xE9v vagy nincs", false),
+          paragraph("note", "Tov\xE1bbi megjegyz\xE9s", "Opcion\xE1lis kieg\xE9sz\xEDt\xE9s", false, 500)
+        ]
+      },
+      {
+        key: "members",
+        channel: "tagok",
+        parent: "inform\xE1ci\xF3k",
+        title: "\xC1llom\xE1nytag-adatlap",
+        emoji: "\u{1F6E1}\uFE0F",
+        approval: false,
+        fields: [
+          short("member", "Tag neve", "Discord-n\xE9v \xE9s karakter neve"),
+          short("badge", "Jelv\xE9nysz\xE1m", "A tag jelv\xE9nysz\xE1ma"),
+          short("rank", "Rendfokozat", "Aktu\xE1lis rendfokozat"),
+          short("unit", "Egys\xE9g vagy beoszt\xE1s", "Szervezeti hely"),
+          short("status", "\xC1llapot", "Akt\xEDv, szabads\xE1gon vagy inakt\xEDv")
+        ]
+      },
+      {
+        key: "ranks",
+        channel: "rendfokozatok",
+        parent: "inform\xE1ci\xF3k",
+        title: "Rendfokozati le\xEDr\xE1s",
+        emoji: "\u{1F6E1}\uFE0F",
+        approval: false,
+        fields: [
+          short("rank", "Rendfokozat neve", "A rendfokozat megnevez\xE9se"),
+          short("level", "Helye a hierarchi\xE1ban", "Al\xE1- \xE9s f\xF6l\xE9rendelt fokozatok"),
+          paragraph("requirements", "El\xE9r\xE9si k\xF6vetelm\xE9nyek", "Szolg\xE1lati id\u0151 \xE9s felt\xE9telek"),
+          paragraph("authority", "Jogk\xF6r \xE9s feladatok", "Mire jogosult a visel\u0151je?"),
+          paragraph("note", "Megjegyz\xE9s", "Opcion\xE1lis kieg\xE9sz\xEDt\xE9s", false, 500)
+        ]
+      },
+      {
+        key: "authority",
+        channel: "hat\xE1sk\xF6r\xF6k",
+        parent: "inform\xE1ci\xF3k",
+        title: "Hat\xE1sk\xF6ri le\xEDr\xE1s",
+        emoji: "\u{1F6E1}\uFE0F",
+        approval: false,
+        fields: [
+          short("role", "Rang, egys\xE9g vagy beoszt\xE1s", "Kinek a hat\xE1sk\xF6re?"),
+          short("scope", "Ter\xFCleti vagy t\xE1rgyi hat\xE1ly", "Mire terjed ki?"),
+          paragraph("allowed", "Enged\xE9lyezett int\xE9zked\xE9sek", "Mit tehet?"),
+          paragraph("limits", "Korl\xE1tok \xE9s tilalmak", "Mit nem tehet?"),
+          paragraph("source", "Jogalap vagy forr\xE1s", "Opcion\xE1lis hivatkoz\xE1s", false, 500)
+        ]
+      },
+      {
+        key: "badge_numbers",
+        channel: "jelv\xE9nysz\xE1mok",
+        parent: "inform\xE1ci\xF3k",
+        title: "Jelv\xE9nysz\xE1m-nyilv\xE1ntart\xE1s",
+        emoji: "\u{1F522}",
+        approval: false,
+        fields: [
+          short("member", "Tag neve", "Discord-n\xE9v \xE9s karakter neve"),
+          short("badge", "Jelv\xE9nysz\xE1m", "Kiadott jelv\xE9nysz\xE1m"),
+          short("rank", "Rendfokozat", "Aktu\xE1lis rendfokozat"),
+          short("issued", "Kiad\xE1s d\xE1tuma", "\xC9\xC9\xC9\xC9.HH.NN."),
+          short("status", "\xC1llapot", "Akt\xEDv, bevont vagy m\xF3dos\xEDtott")
+        ]
+      },
+      {
+        key: "promotion",
+        channel: "el\u0151l\xE9ptet\xE9s-lefokoz\xE1s",
+        parent: "inform\xE1ci\xF3k",
+        title: "El\u0151l\xE9ptet\xE9s vagy lefokoz\xE1s",
+        emoji: "\u2195\uFE0F",
+        approval: false,
+        fields: [
+          short("member", "\xC9rintett tag", "Discord-n\xE9v vagy megjel\xF6l\xE9s"),
+          short("old_rank", "Jelenlegi rendfokozat", "A kor\xE1bbi rang"),
+          short("new_rank", "\xDAj rendfokozat", "Az \xFAj rang"),
+          short("effective", "Hat\xE1lybal\xE9p\xE9s", "\xC9\xC9\xC9\xC9.HH.NN."),
+          paragraph("reason", "Indokl\xE1s", "Teljes\xEDtm\xE9ny, v\xE9ts\xE9g vagy d\xF6nt\xE9si ok")
+        ]
+      },
+      {
+        key: "ideas",
+        channel: "\xF6tletek",
+        parent: "inform\xE1ci\xF3k",
+        title: "Fejleszt\xE9si \xF6tlet",
+        emoji: "\u{1F4A1}",
+        approval: false,
+        fields: [
+          short("title", "\xD6tlet c\xEDme", "R\xF6vid, \xE9rthet\u0151 c\xEDm"),
+          short("area", "\xC9rintett ter\xFClet", "Melyik r\xE9szleget \xE9rinti?"),
+          paragraph("idea", "\xD6tlet r\xE9szletes le\xEDr\xE1sa", "Mit szeretn\xE9l megv\xE1ltoztatni?"),
+          paragraph("benefit", "V\xE1rhat\xF3 el\u0151ny", "Mi\xE9rt lenne hasznos?"),
+          paragraph("implementation", "Megval\xF3s\xEDt\xE1si javaslat", "Opcion\xE1lis l\xE9p\xE9sek", false, 700)
+        ]
+      },
+      {
+        key: "internal_investigation",
+        channel: "bels\u0151-vizsg\xE1latok",
+        parent: "ellen\u0151rz\xE9s",
+        title: "Bels\u0151 vizsg\xE1lat",
+        emoji: "\u{1F50E}",
+        approval: true,
+        fields: [
+          short("subject", "Vizsg\xE1lat t\xE1rgya vagy \xE9rintettje", "Szem\xE9ly, egys\xE9g vagy esem\xE9ny"),
+          short("opened", "Megind\xEDt\xE1s d\xE1tuma", "\xC9\xC9\xC9\xC9.HH.NN."),
+          short("investigator", "Kijel\xF6lt vizsg\xE1l\xF3", "N\xE9v \xE9s beoszt\xE1s"),
+          paragraph("basis", "Vizsg\xE1lat alapja", "Bejelent\xE9s, gyan\xFA vagy esem\xE9ny"),
+          paragraph("evidence", "Bizony\xEDt\xE9kok \xE9s hivatkoz\xE1sok", "Linkek, tan\xFAk, iratok")
+        ]
+      },
+      {
+        key: "weekly_inspection",
+        channel: "heti-ellen\u0151rz\xE9si-feladat",
+        parent: "ellen\u0151rz\xE9s",
+        title: "Heti ellen\u0151rz\xE9si feladat",
+        emoji: "\u{1F575}\uFE0F",
+        approval: true,
+        fields: [
+          short("week", "H\xE9t \xE9s hat\xE1rid\u0151", "P\xE9ld\xE1ul: 36. h\xE9t, p\xE9ntek 20:00"),
+          short("assigned", "Kijel\xF6lt szem\xE9ly vagy egys\xE9g", "Ki hajtja v\xE9gre?"),
+          short("scope", "Ellen\u0151rz\xE9s helye vagy t\xE1rgya", "Mit kell ellen\u0151rizni?"),
+          paragraph("tasks", "V\xE9grehajtand\xF3 feladatok", "L\xE9p\xE9sek \xE9s elv\xE1rt eredm\xE9ny"),
+          paragraph("note", "Kiemelt szempontok", "Opcion\xE1lis megjegyz\xE9s", false, 600)
+        ]
+      },
+      {
+        key: "disciplinary",
+        channel: "fegyelmi-elj\xE1r\xE1sok",
+        parent: "ellen\u0151rz\xE9s",
+        title: "Fegyelmi elj\xE1r\xE1s",
+        emoji: "\u2696\uFE0F",
+        approval: true,
+        fields: [
+          short("person", "Elj\xE1r\xE1s al\xE1 vont szem\xE9ly", "N\xE9v, rang, jelv\xE9nysz\xE1m"),
+          short("incident", "Esem\xE9ny id\u0151pontja", "\xC9\xC9\xC9\xC9.HH.NN. \xD3\xD3:PP"),
+          short("violation", "Felt\xE9telezett szab\xE1lys\xE9rt\xE9s", "Mely szab\xE1ly s\xE9r\xFClhetett?"),
+          paragraph("facts", "T\xE9ny\xE1ll\xE1s \xE9s k\xF6r\xFClm\xE9nyek", "R\xE9szletes esem\xE9nyle\xEDr\xE1s"),
+          paragraph("evidence", "Bizony\xEDt\xE9kok \xE9s javaslat", "Linkek, tan\xFAk, javasolt int\xE9zked\xE9s")
+        ]
+      },
+      {
+        key: "case_files",
+        channel: "\xFCgyiratok",
+        parent: "ellen\u0151rz\xE9s",
+        title: "\xDCgyirat",
+        emoji: "\u{1F4C1}",
+        approval: true,
+        fields: [
+          short("title", "\xDCgy megnevez\xE9se", "R\xF6vid \xFCgyc\xEDm"),
+          short("parties", "\xC9rintett szem\xE9lyek vagy egys\xE9gek", "Nevek \xE9s beoszt\xE1sok"),
+          short("opened", "\xDCgy megnyit\xE1s\xE1nak d\xE1tuma", "\xC9\xC9\xC9\xC9.HH.NN."),
+          paragraph("summary", "\xDCgy \xF6sszefoglal\xE1sa", "T\xE9ny\xE1ll\xE1s, el\u0151zm\xE9nyek \xE9s c\xE9l"),
+          paragraph("attachment", "Bizony\xEDt\xE9k vagy irat linkje", "Opcion\xE1lis hivatkoz\xE1s", false, 500)
+        ]
+      },
+      {
+        key: "case_documents",
+        channel: "\xFCgyiratok-dokumentumban",
+        parent: "ellen\u0151rz\xE9s",
+        title: "\xDCgyirati dokumentum",
+        emoji: "\u{1F4C1}",
+        approval: true,
+        fields: [
+          short("document", "Dokumentum megnevez\xE9se", "Az irat c\xEDme"),
+          short("reference", "Kapcsol\xF3d\xF3 \xFCgy vagy \xFCgysz\xE1m", "BVI-... vagy \xFCgy megnevez\xE9se"),
+          short("date", "Dokumentum d\xE1tuma", "\xC9\xC9\xC9\xC9.HH.NN."),
+          paragraph("description", "Dokumentum tartalma", "R\xE9szletes \xF6sszefoglal\xE1s"),
+          paragraph("link", "Dokumentum vagy mell\xE9klet linkje", "Opcion\xE1lis hivatkoz\xE1s", false, 500)
+        ]
+      },
+      {
+        key: "complaints",
+        channel: "panaszok",
+        parent: "ellen\u0151rz\xE9s",
+        title: "Panasz",
+        emoji: "\u2709\uFE0F",
+        approval: false,
+        fields: [
+          short("complainant", "Panaszos neve", "N\xE9v vagy n\xE9vtelen"),
+          short("subject", "Panasz t\xE1rgya vagy \xE9rintettje", "Szem\xE9ly, egys\xE9g vagy int\xE9zked\xE9s"),
+          short("incident", "Esem\xE9ny id\u0151pontja", "\xC9\xC9\xC9\xC9.HH.NN. \xD3\xD3:PP"),
+          paragraph("complaint", "Panasz r\xE9szletes le\xEDr\xE1sa", "Mi t\xF6rt\xE9nt \xE9s mit kifog\xE1sol?"),
+          paragraph("evidence", "Bizony\xEDt\xE9k vagy link", "Opcion\xE1lis hivatkoz\xE1s", false, 500)
+        ]
+      },
+      {
+        key: "orders",
+        channel: "utas\xEDt\xE1sok",
+        parent: "hivatalos-iratt\xE1r",
+        title: "Hivatalos utas\xEDt\xE1s",
+        emoji: "\u{1F4DC}",
+        approval: true,
+        fields: [
+          short("subject", "Utas\xEDt\xE1s t\xE1rgya", "R\xF6vid t\xE1rgymegjel\xF6l\xE9s"),
+          short("issuer", "Kiad\xF3 vezet\u0151", "N\xE9v \xE9s beoszt\xE1s"),
+          short("effective", "Hat\xE1ly \xE9s hat\xE1rid\u0151", "Mikort\xF3l meddig \xE9rv\xE9nyes?"),
+          paragraph("content", "Utas\xEDt\xE1s teljes sz\xF6vege", "Feladatok, felel\u0151s\xF6k \xE9s v\xE9grehajt\xE1s"),
+          paragraph("attachment", "Mell\xE9klet vagy hivatkoz\xE1s", "Opcion\xE1lis link", false, 500)
+        ]
+      },
+      {
+        key: "decisions",
+        channel: "hat\xE1rozatok",
+        parent: "hivatalos-iratt\xE1r",
+        title: "Hat\xE1rozat",
+        emoji: "\u2696\uFE0F",
+        approval: true,
+        fields: [
+          short("subject", "Hat\xE1rozat t\xE1rgya", "Mir\u0151l sz\xF3l a d\xF6nt\xE9s?"),
+          short("reference", "Kapcsol\xF3d\xF3 \xFCgy", "\xDCgysz\xE1m vagy \xFCgy megnevez\xE9se"),
+          short("effective", "Hat\xE1lybal\xE9p\xE9s", "\xC9\xC9\xC9\xC9.HH.NN."),
+          paragraph("decision", "D\xF6nt\xE9s rendelkez\u0151 r\xE9sze", "A meghozott hat\xE1rozat"),
+          paragraph("basis", "Indokl\xE1s \xE9s jogalap", "A d\xF6nt\xE9s alapja")
+        ]
+      },
+      {
+        key: "minutes",
+        channel: "jegyz\u0151k\xF6nyv",
+        parent: "hivatalos-iratt\xE1r",
+        title: "Jegyz\u0151k\xF6nyv",
+        emoji: "\u{1F4C1}",
+        approval: true,
+        fields: [
+          short("subject", "Esem\xE9ny vagy \xFCl\xE9s t\xE1rgya", "Mi ker\xFClt jegyz\u0151k\xF6nyvez\xE9sre?"),
+          short("time_place", "Id\u0151pont \xE9s helysz\xEDn", "\xC9\xC9\xC9\xC9.HH.NN. \xD3\xD3:PP, helysz\xEDn"),
+          short("participants", "Jelenl\xE9v\u0151k", "Nevek \xE9s beoszt\xE1sok"),
+          paragraph("events", "Elhangzottak \xE9s esem\xE9nyek", "R\xE9szletes, id\u0151rendi le\xEDr\xE1s"),
+          paragraph("decisions", "D\xF6nt\xE9sek \xE9s feladatok", "Hat\xE1rid\u0151k \xE9s felel\u0151s\xF6k")
+        ]
+      },
+      {
+        key: "laws",
+        channel: "jogszab\xE1lyok",
+        parent: "hivatalos-iratt\xE1r",
+        title: "Jogszab\xE1ly",
+        emoji: "\u{1F4DA}",
+        approval: true,
+        fields: [
+          short("number", "Jogszab\xE1ly sz\xE1ma \xE9s c\xEDme", "Hivatalos megnevez\xE9s"),
+          short("source", "Kibocs\xE1t\xF3 vagy forr\xE1s", "Jogalkot\xF3 vagy hivatkoz\xE1s"),
+          short("effective", "Hat\xE1lybal\xE9p\xE9s", "\xC9\xC9\xC9\xC9.HH.NN."),
+          paragraph("summary", "Tartalmi \xF6sszefoglal\xF3", "A fontos rendelkez\xE9sek"),
+          paragraph("link", "Teljes sz\xF6veg vagy mell\xE9klet", "Opcion\xE1lis link", false, 500)
+        ]
+      },
+      {
+        key: "circulars",
+        channel: "k\xF6rlevelek",
+        parent: "hivatalos-iratt\xE1r",
+        title: "K\xF6rlev\xE9l",
+        emoji: "\u{1F4D1}",
+        approval: true,
+        fields: [
+          short("subject", "K\xF6rlev\xE9l t\xE1rgya", "R\xF6vid c\xEDm"),
+          short("audience", "C\xEDmzettek", "Kik kapj\xE1k a t\xE1j\xE9koztat\xE1st?"),
+          short("effective", "Kiad\xE1s \xE9s \xE9rv\xE9nyess\xE9g", "D\xE1tum vagy id\u0151szak"),
+          paragraph("content", "K\xF6rlev\xE9l sz\xF6vege", "Teljes t\xE1j\xE9koztat\xE1s"),
+          paragraph("attachment", "Mell\xE9klet vagy hivatkoz\xE1s", "Opcion\xE1lis link", false, 500)
+        ]
+      },
+      {
+        key: "archive",
+        channel: "arch\xEDvum",
+        parent: "hivatalos-iratt\xE1r",
+        title: "Archiv\xE1l\xE1si bejegyz\xE9s",
+        emoji: "\u{1F5C4}\uFE0F",
+        approval: true,
+        fields: [
+          short("item", "Archiv\xE1land\xF3 irat vagy \xFCgy", "Megnevez\xE9s \xE9s \xFCgysz\xE1m"),
+          short("origin", "Eredeti csatorna vagy forr\xE1s", "Honnan ker\xFClt az arch\xEDvumba?"),
+          short("date", "Archiv\xE1l\xE1s d\xE1tuma", "\xC9\xC9\xC9\xC9.HH.NN."),
+          paragraph("reason", "Archiv\xE1l\xE1s oka \xE9s \xE1llapot", "Lez\xE1r\xE1s, hat\xE1lyveszt\xE9s vagy egy\xE9b ok"),
+          paragraph("link", "Irat vagy \xFCzenet linkje", "Opcion\xE1lis hivatkoz\xE1s", false, 500)
+        ]
+      },
+      {
+        key: "bomo_calls",
+        channel: "felh\xEDv\xE1sok",
+        parent: "bomo",
+        title: "BOMO-felh\xEDv\xE1s",
+        emoji: "\u{1F4E2}",
+        approval: false,
+        fields: [
+          short("title", "Felh\xEDv\xE1s c\xEDme", "R\xF6vid m\u0171veleti c\xEDm"),
+          short("audience", "C\xEDmzett \xE1llom\xE1ny", "Kiknek sz\xF3l?"),
+          short("time", "Id\u0151pont vagy hat\xE1rid\u0151", "\xC9\xC9\xC9\xC9.HH.NN. \xD3\xD3:PP"),
+          paragraph("details", "R\xE9szletes felh\xEDv\xE1s", "Feladat \xE9s sz\xFCks\xE9ges tudnival\xF3k"),
+          short("contact", "Kapcsolattart\xF3", "N\xE9v vagy h\xEDv\xF3jel", false)
+        ]
+      },
+      {
+        key: "bomo_announcements",
+        channel: "k\xF6zlem\xE9nyek",
+        parent: "bomo",
+        title: "BOMO-k\xF6zlem\xE9ny",
+        emoji: "\u{1F4E2}",
+        approval: false,
+        fields: [
+          short("title", "K\xF6zlem\xE9ny c\xEDme", "R\xF6vid c\xEDm"),
+          short("audience", "C\xEDmzettek", "Kik sz\xE1m\xE1ra k\xE9sz\xFClt?"),
+          short("validity", "\xC9rv\xE9nyess\xE9g", "D\xE1tum vagy id\u0151szak"),
+          paragraph("content", "K\xF6zlem\xE9ny tartalma", "Teljes t\xE1j\xE9koztat\xE1s"),
+          paragraph("link", "Hivatkoz\xE1s vagy mell\xE9klet", "Opcion\xE1lis link", false, 500)
+        ]
+      },
+      {
+        key: "bomo_rules",
+        channel: "bomo-szab\xE1lyzat",
+        parent: "bomo",
+        title: "BOMO-szab\xE1lyzat",
+        emoji: "\u{1F4DC}",
+        approval: false,
+        fields: [
+          short("title", "Szab\xE1lyzat c\xEDme", "BOMO-szab\xE1lyzat megnevez\xE9se"),
+          short("scope", "Hat\xE1ly \xE9s \xE9rintettek", "Kire \xE9s mire vonatkozik?"),
+          short("effective", "Hat\xE1lybal\xE9p\xE9s", "\xC9\xC9\xC9\xC9.HH.NN."),
+          paragraph("content", "Szab\xE1lyzat tartalma", "Elj\xE1r\xE1sok \xE9s k\xF6telezetts\xE9gek"),
+          paragraph("attachment", "Mell\xE9klet vagy hivatkoz\xE1s", "Opcion\xE1lis link", false, 500)
+        ]
+      },
+      {
+        key: "covert_ops",
+        channel: "fedett-m\u0171veletek",
+        parent: "bomo",
+        title: "Fedett m\u0171veleti terv",
+        emoji: "\u{1F575}\uFE0F",
+        approval: true,
+        fields: [
+          short("code", "M\u0171velet k\xF3dneve", "Bels\u0151 m\u0171veleti megnevez\xE9s"),
+          short("classification", "Min\u0151s\xEDt\xE9s", "P\xE9ld\xE1ul: bizalmas vagy szigor\xFAan bizalmas"),
+          short("target", "C\xE9l \xE9s \xE9rintettek", "Szem\xE9ly, csoport vagy helysz\xEDn"),
+          paragraph("plan", "M\u0171veleti terv", "C\xE9l, m\xF3dszer, id\u0151z\xEDt\xE9s \xE9s kock\xE1zatok"),
+          paragraph("responsible", "Felel\u0151s\xF6k \xE9s bizony\xEDt\xE9kok", "R\xE9sztvev\u0151k, enged\xE9lyek, linkek")
+        ]
+      },
+      {
+        key: "bomo_reports",
+        channel: "jelent\xE9sek",
+        parent: "bomo",
+        title: "BOMO-jelent\xE9s",
+        emoji: "\u{1F4DD}",
+        approval: true,
+        fields: [
+          short("code", "Kapcsol\xF3d\xF3 m\u0171velet vagy \xFCgy", "K\xF3dn\xE9v vagy BVI-\xFCgysz\xE1m"),
+          short("reporter", "Jelent\xE9st tev\u0151", "N\xE9v, beoszt\xE1s, h\xEDv\xF3jel"),
+          short("time_place", "Id\u0151pont \xE9s helysz\xEDn", "Mikor \xE9s hol t\xF6rt\xE9nt?"),
+          paragraph("events", "Esem\xE9nyek r\xE9szletesen", "Id\u0151rendi jelent\xE9s"),
+          paragraph("result", "Eredm\xE9ny \xE9s bizony\xEDt\xE9k", "K\xF6vetkeztet\xE9s, linkek, tov\xE1bbi teend\u0151")
+        ]
+      },
+      {
+        key: "confidential_files",
+        channel: "bizalmas-akt\xE1k",
+        parent: "bomo",
+        title: "Bizalmas akta",
+        emoji: "\u{1F4C1}",
+        approval: true,
+        fields: [
+          short("title", "Akta c\xEDme vagy k\xF3dja", "Bels\u0151 azonos\xEDt\xF3"),
+          short("classification", "Titkos\xEDt\xE1si szint", "Bizalmas vagy szigor\xFAan bizalmas"),
+          short("persons", "\xC9rintett szem\xE9lyek", "Nevek, fed\u0151nevek vagy egys\xE9gek"),
+          paragraph("summary", "Akta r\xE9szletes \xF6sszefoglal\xF3ja", "T\xE9nyek, kapcsolatok \xE9s kock\xE1zatok"),
+          paragraph("evidence", "Bizony\xEDt\xE9kok \xE9s iratok", "V\xE9dett hivatkoz\xE1sok vagy mell\xE9kletek")
+        ]
+      }
+    ]);
+    function normalizeName(value) {
+      return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    }
+    function findDocumentType(key) {
+      return DOCUMENT_TYPES.find((type) => type.key === key);
+    }
+    function findDocumentChannel(guild, type) {
+      const expected = normalizeName(type.channel || type.channelPrefix);
+      const expectedParent = type.parent ? normalizeName(type.parent) : null;
+      return guild.channels.cache.find((channel) => {
+        if (!channel?.isTextBased?.() || channel.isThread?.()) return false;
+        const name = normalizeName(channel.name);
+        const nameMatches = type.channelPrefix ? name.startsWith(expected) : name === expected;
+        if (!nameMatches) return false;
+        if (!expectedParent) return true;
+        return normalizeName(channel.parent?.name).includes(expectedParent);
+      });
+    }
+    function fieldRow(field) {
+      return new ActionRowBuilder().addComponents(
+        new TextInputBuilder().setCustomId(field.id).setLabel(field.label).setStyle(field.style === "paragraph" ? TextInputStyle.Paragraph : TextInputStyle.Short).setPlaceholder(field.placeholder).setRequired(field.required).setMaxLength(field.maxLength)
+      );
+    }
+    function documentModal(type) {
+      return new ModalBuilder().setCustomId(`doc_submit:${type.key}`).setTitle(type.title.slice(0, 45)).addComponents(...type.fields.map(fieldRow));
+    }
+    function documentPanel(type) {
+      const embed = new EmbedBuilder().setColor(type.approval ? COLORS.warning : COLORS.primary).setTitle(`${type.emoji} ${type.title}`).setDescription(
+        type.approval ? "Az adatlap kit\xF6lt\xE9se ut\xE1n a dokumentum a **Vezet\u0151s\xE9g** j\xF3v\xE1hagy\xE1s\xE1ra ker\xFCl. J\xF3v\xE1hagy\xE1s ut\xE1n a NexaBot teszi k\xF6zz\xE9 ebben a csatorn\xE1ban." : "T\xF6ltsd ki az adatlapot. A k\xE9sz bejegyz\xE9st a NexaBot teszi k\xF6zz\xE9 ebben a csatorn\xE1ban."
+      ).addFields({ name: "Hozz\xE1f\xE9r\xE9s", value: `Csak az **${NAMES.operativeRole}** rang haszn\xE1lhatja.` }).setFooter({ text: `NexaBot \u2022 Dokumentumpanel \u2022 ${type.key}` });
+      const components = [
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`doc_open:${type.key}`).setLabel(`${type.title} kit\xF6lt\xE9se`.slice(0, 80)).setEmoji(type.emoji).setStyle(ButtonStyle.Primary)
+        )
+      ];
+      return { embeds: [embed], components };
+    }
+    function approvalControls(type, targetChannelId, submitterId) {
+      return new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`doc_approve:${type.key}:${targetChannelId}:${submitterId}`).setLabel("J\xF3v\xE1hagy\xE1s").setEmoji("\u2705").setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`doc_reject:${type.key}:${targetChannelId}:${submitterId}`).setLabel("Elutas\xEDt\xE1s").setEmoji("\u274C").setStyle(ButtonStyle.Danger)
+      );
+    }
+    function rejectionModal(messageId, submitterId) {
+      return new ModalBuilder().setCustomId(`doc_reject_submit:${messageId}:${submitterId}`).setTitle("Dokumentum elutas\xEDt\xE1sa").addComponents(fieldRow(paragraph("reject_reason", "Elutas\xEDt\xE1s k\xF6telez\u0151 indokl\xE1sa", "Mi\xE9rt nem fogadhat\xF3 el a dokumentum?", true, 700)));
+    }
+    function hasNamedRole(member, roleName) {
+      const expected = normalizeName(roleName);
+      return member?.roles?.cache?.some((role) => normalizeName(role.name) === expected);
+    }
+    function isOperative(member) {
+      return hasNamedRole(member, NAMES.operativeRole);
+    }
+    function canApprove(member) {
+      return Boolean(
+        member?.permissions?.has(PermissionFlagsBits2.Administrator) || hasNamedRole(member, NAMES.leadershipRole)
+      );
+    }
+    function bviCaseNumber(date = /* @__PURE__ */ new Date()) {
+      const parts = new Intl.DateTimeFormat("hu-HU", {
+        timeZone: "Europe/Budapest",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23"
+      }).formatToParts(date).reduce((result, part) => ({ ...result, [part.type]: part.value }), {});
+      return `BVI-${parts.year}${parts.month}${parts.day}-${parts.hour}${parts.minute}`;
+    }
+    function documentEmbed(type, interaction, caseNumber, status) {
+      const formFields = type.fields.map((field) => ({ field, value: interaction.fields.getTextInputValue(field.id).trim() })).filter(({ value }) => value).map(({ field, value }) => ({ name: field.label, value }));
+      return baseEmbed(
+        status === "pending" ? `\u23F3 J\xF3v\xE1hagy\xE1sra v\xE1r \u2022 ${type.title}` : `${type.emoji} ${type.title}`,
+        status === "pending" ? "A dokumentum a **Vezet\u0151s\xE9g** vagy egy adminisztr\xE1tor d\xF6nt\xE9s\xE9re v\xE1r." : "Hivatalos bejegyz\xE9s a NexaBot dokument\xE1ci\xF3s rendszer\xE9b\u0151l.",
+        status === "pending" ? COLORS.warning : COLORS.primary
+      ).addFields(
+        { name: "\xDCgysz\xE1m", value: caseNumber, inline: true },
+        { name: "Bek\xFCldte", value: `${interaction.user} \u2022 ${interaction.user.tag}`, inline: true },
+        ...formFields,
+        { name: "\xC1llapot", value: status === "pending" ? "\u23F3 J\xF3v\xE1hagy\xE1sra v\xE1r" : "\u2705 K\xF6zz\xE9t\xE9ve" }
+      );
+    }
+    async function installDocumentPanels(guild, botUser) {
+      const installed = [];
+      const missing = [];
+      for (const type of DOCUMENT_TYPES) {
+        const channel = findDocumentChannel(guild, type);
+        if (!channel) {
+          missing.push(type.channel || type.channelPrefix);
+          continue;
+        }
+        const messages = await channel.messages.fetch({ limit: 50 }).catch(() => null);
+        const footer = `NexaBot \u2022 Dokumentumpanel \u2022 ${type.key}`;
+        const existing = messages?.find(
+          (message) => message.author.id === botUser.id && message.embeds[0]?.footer?.text === footer
+        );
+        if (existing) await existing.edit(documentPanel(type));
+        else await channel.send(documentPanel(type));
+        installed.push(channel.name);
+      }
+      return { installed, missing };
+    }
+    async function handleDocumentButton(interaction) {
+      const id = interaction.customId;
+      if (id.startsWith("doc_open:")) {
+        if (!isOperative(interaction.member)) {
+          return ephemeralError(interaction, `Ezt csak az **${NAMES.operativeRole}** rang haszn\xE1lhatja.`);
+        }
+        const type = findDocumentType(id.split(":")[1]);
+        if (!type) return ephemeralError(interaction, "Ismeretlen dokumentumt\xEDpus.");
+        return interaction.showModal(documentModal(type));
+      }
+      if (id.startsWith("doc_approve:")) {
+        if (!canApprove(interaction.member)) {
+          return ephemeralError(interaction, `Ezt csak adminisztr\xE1tor vagy a **${NAMES.leadershipRole}** rang haszn\xE1lhatja.`);
+        }
+        const [, key, targetChannelId, submitterId] = id.split(":");
+        const type = findDocumentType(key);
+        const target = interaction.guild.channels.cache.get(targetChannelId);
+        if (!type || !target?.isTextBased()) return ephemeralError(interaction, "A c\xE9lcsatorna nem tal\xE1lhat\xF3.");
+        await interaction.deferReply({ flags: EPHEMERAL });
+        const approved = EmbedBuilder.from(interaction.message.embeds[0]).setTitle(`\u2705 J\xF3v\xE1hagyva \u2022 ${type.title}`).setColor(COLORS.success);
+        approved.setFields(
+          ...approved.data.fields.filter((field) => field.name !== "\xC1llapot"),
+          { name: "\xC1llapot", value: `\u2705 J\xF3v\xE1hagyta: ${interaction.user}` }
+        );
+        if (target.id === interaction.channelId) {
+          await interaction.message.edit({ embeds: [approved], components: [] });
+        } else {
+          await target.send({ embeds: [approved] });
+          await interaction.message.edit({ embeds: [approved], components: [] });
+        }
+        const submitter = await interaction.client.users.fetch(submitterId).catch(() => null);
+        await submitter?.send(`\u2705 A **${type.title}** dokumentumodat j\xF3v\xE1hagyt\xE1k a **${interaction.guild.name}** szerveren.`).catch(() => null);
+        await sendLog(interaction.guild, baseEmbed("\u2705 Dokumentum j\xF3v\xE1hagyva", `${type.title} \u2022 ${interaction.user.tag}`, COLORS.success));
+        return interaction.editReply(`\u2705 A dokumentum j\xF3v\xE1hagyva \xE9s k\xF6zz\xE9t\xE9ve itt: ${target}`);
+      }
+      if (id.startsWith("doc_reject:")) {
+        if (!canApprove(interaction.member)) {
+          return ephemeralError(interaction, `Ezt csak adminisztr\xE1tor vagy a **${NAMES.leadershipRole}** rang haszn\xE1lhatja.`);
+        }
+        const [, , , submitterId] = id.split(":");
+        return interaction.showModal(rejectionModal(interaction.message.id, submitterId));
+      }
+    }
+    async function handleDocumentModal(interaction) {
+      if (interaction.customId.startsWith("doc_submit:")) {
+        if (!isOperative(interaction.member)) {
+          return ephemeralError(interaction, `Ezt csak az **${NAMES.operativeRole}** rang haszn\xE1lhatja.`);
+        }
+        const type = findDocumentType(interaction.customId.split(":")[1]);
+        if (!type) return ephemeralError(interaction, "Ismeretlen dokumentumt\xEDpus.");
+        await interaction.deferReply({ flags: EPHEMERAL });
+        const caseNumber = bviCaseNumber();
+        if (type.approval) {
+          const reviewType = findDocumentType(REVIEW_CHANNEL_KEY);
+          const reviewChannel = findDocumentChannel(interaction.guild, reviewType);
+          if (!reviewChannel) {
+            return interaction.editReply("\u274C A megl\xE9v\u0151 **\xFCgyiratok** j\xF3v\xE1hagy\xE1si csatorn\xE1t nem tal\xE1lom. \xDAj csatorn\xE1t nem hoztam l\xE9tre.");
+          }
+          const embed2 = documentEmbed(type, interaction, caseNumber, "pending").addFields({ name: "C\xE9lcsatorna", value: `${interaction.channel}` });
+          const message2 = await reviewChannel.send({
+            embeds: [embed2],
+            components: [approvalControls(type, interaction.channelId, interaction.user.id)]
+          });
+          return interaction.editReply(`\u2705 A dokumentum j\xF3v\xE1hagy\xE1sra elk\xFCldve: ${message2.url}
+**\xDCgysz\xE1m:** ${caseNumber}`);
+        }
+        const embed = documentEmbed(type, interaction, caseNumber, "published");
+        const message = await interaction.channel.send({ embeds: [embed] });
+        await sendLog(interaction.guild, baseEmbed("\u{1F4C4} Dokumentum k\xF6zz\xE9t\xE9ve", `${type.title} \u2022 ${caseNumber} \u2022 ${interaction.user.tag}`, COLORS.success));
+        return interaction.editReply(`\u2705 A NexaBot k\xF6zz\xE9tette a bejegyz\xE9st: ${message.url}
+**\xDCgysz\xE1m:** ${caseNumber}`);
+      }
+      if (interaction.customId.startsWith("doc_reject_submit:")) {
+        if (!canApprove(interaction.member)) {
+          return ephemeralError(interaction, `Ezt csak adminisztr\xE1tor vagy a **${NAMES.leadershipRole}** rang haszn\xE1lhatja.`);
+        }
+        await interaction.deferReply({ flags: EPHEMERAL });
+        const [, messageId, submitterId] = interaction.customId.split(":");
+        const reason = interaction.fields.getTextInputValue("reject_reason").trim();
+        const pending = await interaction.channel.messages.fetch(messageId).catch(() => null);
+        if (!pending?.embeds?.length) return interaction.editReply("\u274C A j\xF3v\xE1hagy\xE1sra v\xE1r\xF3 dokumentum nem tal\xE1lhat\xF3.");
+        const rejected = EmbedBuilder.from(pending.embeds[0]).setTitle("\u274C Elutas\xEDtott dokumentum").setColor(COLORS.danger);
+        rejected.setFields(
+          ...rejected.data.fields.filter((field) => field.name !== "\xC1llapot"),
+          { name: "\xC1llapot", value: `\u274C Elutas\xEDtotta: ${interaction.user}` },
+          { name: "Elutas\xEDt\xE1s indoka", value: reason }
+        );
+        await pending.edit({ embeds: [rejected], components: [] });
+        const submitter = await interaction.client.users.fetch(submitterId).catch(() => null);
+        const dmSent = await submitter?.send(
+          `\u274C A dokumentumodat elutas\xEDtott\xE1k a **${interaction.guild.name}** szerveren.
+**Indok:** ${reason}`
+        ).then(() => true).catch(() => false);
+        await sendLog(interaction.guild, baseEmbed("\u274C Dokumentum elutas\xEDtva", `${reason}
+Vezet\u0151: ${interaction.user.tag}`, COLORS.danger));
+        return interaction.editReply(`\u2705 Az elutas\xEDt\xE1s r\xF6gz\xEDtve.${dmSent === false ? "\n\u26A0\uFE0F A priv\xE1t \xE9rtes\xEDt\xE9st nem siker\xFClt elk\xFCldeni." : ""}`);
+      }
+    }
+    module2.exports = {
+      DOCUMENT_TYPES,
+      normalizeName,
+      findDocumentType,
+      findDocumentChannel,
+      documentModal,
+      documentPanel,
+      approvalControls,
+      rejectionModal,
+      isOperative,
+      canApprove,
+      bviCaseNumber,
+      installDocumentPanels,
+      handleDocumentButton,
+      handleDocumentModal
+    };
+  }
+});
+
 // src/interactions.js
 var require_interactions = __commonJS({
   "src/interactions.js"(exports2, module2) {
@@ -465,6 +1307,11 @@ var require_interactions = __commonJS({
       ephemeralError
     } = require_utils();
     var { setupServer } = require_setup();
+    var {
+      installDocumentPanels,
+      handleDocumentButton,
+      handleDocumentModal
+    } = require_documents();
     var EPHEMERAL = MessageFlags.Ephemeral;
     var applicationDrafts = /* @__PURE__ */ new Map();
     function applicationDraftKey(interaction) {
@@ -533,10 +1380,24 @@ var require_interactions = __commonJS({
       return interaction.editReply(`Elk\xE9sz\xFClt a priv\xE1t csatorn\xE1d: ${channel}`);
     }
     async function handleCommand(interaction) {
-      if (interaction.commandName !== "telepites") return;
       if (!interaction.member.permissions.has(PermissionFlagsBits2.Administrator)) {
         return ephemeralError(interaction, "Ehhez rendszergazdai jogosults\xE1g sz\xFCks\xE9ges.");
       }
+      if (interaction.commandName === "dokumentum-panelek") {
+        await interaction.deferReply({ flags: EPHEMERAL });
+        try {
+          const result = await installDocumentPanels(interaction.guild, interaction.client.user);
+          const missingText = result.missing.length ? `
+\u26A0\uFE0F **Nem tal\xE1lt megl\xE9v\u0151 csatorn\xE1k:** ${result.missing.join(", ")}` : "";
+          return interaction.editReply(
+            `\u2705 **${result.installed.length} dokumentumpanel** elk\xE9sz\xFClt vagy friss\xFClt. A bot nem hozott l\xE9tre \xFAj csatorn\xE1t.${missingText}`
+          );
+        } catch (error) {
+          console.error("Dokumentumpanel-telep\xEDt\xE9si hiba:", error);
+          return interaction.editReply("\u274C A dokumentumpaneleket nem siker\xFClt minden megl\xE9v\u0151 csatorn\xE1ban be\xE1ll\xEDtani. Ellen\u0151rizd a bot jogosults\xE1gait.");
+        }
+      }
+      if (interaction.commandName !== "telepites") return;
       await interaction.deferReply({ flags: EPHEMERAL });
       try {
         const result = await setupServer(interaction.guild, interaction.client.user);
@@ -551,6 +1412,7 @@ var require_interactions = __commonJS({
     }
     async function handleButton(interaction) {
       const id = interaction.customId;
+      if (id.startsWith("doc_")) return handleDocumentButton(interaction);
       if (id === "ticket_support") return createTicket(interaction, "support");
       if (id === "ticket_order") return interaction.showModal(orderModal());
       if (id === "application_open") return interaction.showModal(applicationModal());
@@ -931,6 +1793,9 @@ V\xE1laszd ki, mit szeretn\xE9l tenni vele.`,
       return interaction.editReply(`\u2705 A csatorna elk\xE9sz\xFClt: ${channel}`);
     }
     async function handleModal(interaction) {
+      if (interaction.customId.startsWith("doc_")) {
+        return handleDocumentModal(interaction);
+      }
       if (interaction.customId.startsWith("mod_submit:")) {
         return handleModerationSubmit(interaction);
       }
@@ -1054,11 +1919,12 @@ var client = new Client({
   partials: [Partials.Channel, Partials.Message, Partials.User, Partials.GuildMember]
 });
 var command = new SlashCommandBuilder().setName("telepites").setDescription("L\xE9trehozza vagy friss\xEDti a NexaBot gombos rendszer\xE9t.").setDefaultMemberPermissions(PermissionFlagsBits.Administrator).setDMPermission(false);
+var documentCommand = new SlashCommandBuilder().setName("dokumentum-panelek").setDescription("Paneleket tesz a megl\xE9v\u0151 BVI dokumentumcsatorn\xE1kba, \xFAj csatorna n\xE9lk\xFCl.").setDefaultMemberPermissions(PermissionFlagsBits.Administrator).setDMPermission(false);
 async function registerCommand() {
   const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
   await rest.put(
     Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
-    { body: [command.toJSON()] }
+    { body: [command.toJSON(), documentCommand.toJSON()] }
   );
 }
 client.once(Events.ClientReady, async (readyClient) => {
@@ -1069,7 +1935,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   try {
     await registerCommand();
     console.log(`NexaBot elindult: ${readyClient.user.tag}`);
-    console.log("A /telepites parancs haszn\xE1latra k\xE9sz.");
+    console.log("A /telepites \xE9s /dokumentum-panelek parancs haszn\xE1latra k\xE9sz.");
   } catch (error) {
     console.error("A parancs regisztr\xE1l\xE1sa nem siker\xFClt:", error);
   }
