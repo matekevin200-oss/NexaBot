@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: nexabot
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: CLIENT_ID
+        value: "1554526995083477062"
+      - key: GUILD_ID
+        value: "1517509643734221030"
+      - key: NODE_VERSION
+        value: "22"
