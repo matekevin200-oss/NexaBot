@@ -25,7 +25,8 @@ var require_constants = __commonJS({
       staffPanelChannel: "\u{1F6E1}\uFE0F\u30FBstaff-vez\xE9rl\u0151",
       logsChannel: "\u{1F4D1}\u30FBnapl\xF3",
       warningsChannel: "\u26A0\uFE0F\u30FBfigyelmeztet\xE9sek",
-      applicationReviewChannel: "\u{1F4E8}\u30FBjelentkez\xE9sek"
+      applicationReviewChannel: "\u{1F4E8}\u30FBjelentkez\xE9sek",
+      securityLogsChannel: "minden-log"
     });
     var COLORS = Object.freeze({
       primary: 8150271,
@@ -1269,6 +1270,469 @@ Vezet\u0151: ${interaction.user.tag}`, COLORS.danger));
   }
 });
 
+// src/security.js
+var require_security = __commonJS({
+  "src/security.js"(exports2, module2) {
+    var {
+      ActionRowBuilder,
+      AuditLogEvent,
+      ButtonBuilder,
+      ButtonStyle,
+      EmbedBuilder,
+      Events: Events2,
+      MessageFlags,
+      PermissionFlagsBits: PermissionFlagsBits2,
+      SlashCommandBuilder: SlashCommandBuilder2
+    } = require("discord.js");
+    var { NAMES, COLORS } = require_constants();
+    var { baseEmbed, byName, ephemeralError } = require_utils();
+    var EPHEMERAL = MessageFlags.Ephemeral;
+    var RAID_WINDOW_MS = 2e4;
+    var RAID_JOIN_LIMIT = 8;
+    var FRESH_ACCOUNT_MS = 3 * 24 * 60 * 60 * 1e3;
+    var SPAM_WINDOW_MS = 5e3;
+    var SPAM_MESSAGE_LIMIT = 6;
+    var STRIKE_RESET_MS = 30 * 60 * 1e3;
+    var LOCK_PERMISSIONS = Object.freeze({
+      SendMessages: PermissionFlagsBits2.SendMessages,
+      AddReactions: PermissionFlagsBits2.AddReactions,
+      CreatePublicThreads: PermissionFlagsBits2.CreatePublicThreads,
+      CreatePrivateThreads: PermissionFlagsBits2.CreatePrivateThreads,
+      SendMessagesInThreads: PermissionFlagsBits2.SendMessagesInThreads,
+      Connect: PermissionFlagsBits2.Connect
+    });
+    var joinWindows = /* @__PURE__ */ new Map();
+    var spamWindows = /* @__PURE__ */ new Map();
+    var spamCooldowns = /* @__PURE__ */ new Map();
+    var memberStrikes = /* @__PURE__ */ new Map();
+    var activeRaids = /* @__PURE__ */ new Map();
+    function normalizeName(value) {
+      return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+    }
+    function isLeadership(member) {
+      return Boolean(
+        member?.id === member?.guild?.ownerId || member?.permissions?.has(PermissionFlagsBits2.Administrator) || member?.roles?.cache?.some((role) => role.name === NAMES.leadershipRole)
+      );
+    }
+    function isLinkExempt(member) {
+      return Boolean(
+        isLeadership(member) || member?.roles?.cache?.some((role) => {
+          const name = normalizeName(role.name);
+          return role.name === NAMES.staffRole || name === "staff" || name === "nexadevstaff";
+        })
+      );
+    }
+    function isProtectedMember(member) {
+      return isLinkExempt(member) || member?.id === member?.guild?.ownerId;
+    }
+    function containsBlockedLink(content) {
+      return /(?:https?:\/\/|www\.|discord(?:app)?\.com\/invite\/|discord\.gg\/)/i.test(content || "");
+    }
+    function findSecurityChannel(guild) {
+      const wanted = normalizeName(NAMES.securityLogsChannel);
+      return guild.channels.cache.find(
+        (channel) => channel.isTextBased?.() && !channel.isThread?.() && normalizeName(channel.name) === wanted
+      ) || byName(guild.channels.cache, NAMES.logsChannel);
+    }
+    function leadershipMentions(guild) {
+      const role = byName(guild.roles.cache, NAMES.leadershipRole);
+      const userIds = [...guild.members.cache.values()].filter((member) => member.id === guild.ownerId || member.permissions.has(PermissionFlagsBits2.Administrator)).slice(0, 20).map((member) => member.id);
+      if (!userIds.includes(guild.ownerId)) userIds.unshift(guild.ownerId);
+      return {
+        content: [...new Set(userIds)].map((id) => `<@${id}>`).join(" ") + (role ? ` <@&${role.id}>` : ""),
+        allowedMentions: {
+          users: [...new Set(userIds)],
+          roles: role ? [role.id] : []
+        }
+      };
+    }
+    async function sendSecurityLog(guild, embed, options = {}) {
+      const channel = findSecurityChannel(guild);
+      if (!channel?.isTextBased()) return null;
+      return channel.send({ embeds: [embed], ...options }).catch(() => null);
+    }
+    function permissionState(overwrite, permission) {
+      if (!overwrite) return null;
+      if (overwrite.allow.has(permission)) return true;
+      if (overwrite.deny.has(permission)) return false;
+      return null;
+    }
+    async function inChunks(items, size, callback) {
+      for (let index = 0; index < items.length; index += size) {
+        const chunk = items.slice(index, index + size);
+        await Promise.allSettled(chunk.map(callback));
+      }
+    }
+    async function lockGuild(guild, reason) {
+      const channels = [...guild.channels.cache.values()].filter(
+        (channel) => !channel.isThread?.() && channel.permissionOverwrites?.edit
+      );
+      const states = channels.map((channel) => {
+        const overwrite = channel.permissionOverwrites.cache.get(guild.roles.everyone.id);
+        const permissions = {};
+        for (const [name, bit] of Object.entries(LOCK_PERMISSIONS)) {
+          permissions[name] = permissionState(overwrite, bit);
+        }
+        return { channelId: channel.id, permissions };
+      });
+      const denied = Object.fromEntries(Object.keys(LOCK_PERMISSIONS).map((name) => [name, false]));
+      await inChunks(
+        channels,
+        5,
+        (channel) => channel.permissionOverwrites.edit(guild.roles.everyone, denied, { reason })
+      );
+      return states;
+    }
+    async function restoreGuild(guild, session, reason) {
+      const states = Array.isArray(session?.channelStates) ? session.channelStates : [];
+      await inChunks(states, 5, async ({ channelId, permissions }) => {
+        const channel = guild.channels.cache.get(channelId) || await guild.channels.fetch(channelId).catch(() => null);
+        if (!channel?.permissionOverwrites?.edit) return;
+        await channel.permissionOverwrites.edit(guild.roles.everyone, permissions, { reason });
+      });
+    }
+    function raidDecisionRow(sessionId) {
+      return new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`security_raid_kick:${sessionId}`).setLabel("Gyan\xFAs tagok kir\xFAg\xE1sa").setEmoji("\u{1F6AA}").setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`security_raid_ban:${sessionId}`).setLabel("Gyan\xFAs tagok kitilt\xE1sa").setEmoji("\u{1F528}").setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`security_raid_false:${sessionId}`).setLabel("T\xE9ves riaszt\xE1s \u2022 felold\xE1s").setEmoji("\u2705").setStyle(ButtonStyle.Success)
+      );
+    }
+    function snapshotAttachment(session) {
+      return {
+        attachment: Buffer.from(JSON.stringify(session), "utf8"),
+        name: `nexabot-raid-${session.id}.json`,
+        description: "NexaBot vissza\xE1ll\xEDt\xE1si adat"
+      };
+    }
+    async function beginRaidLock(guild, records) {
+      const existing = activeRaids.get(guild.id);
+      if (existing) {
+        for (const record of records) existing.candidateIds.add(record.userId);
+        return existing;
+      }
+      const logChannel = findSecurityChannel(guild);
+      if (!logChannel?.isTextBased()) {
+        console.error("Raid gyan\xFA \xE9szlelve, de nincs minden-log vagy napl\xF3 csatorna; a lez\xE1r\xE1s biztons\xE1gi okb\xF3l elmaradt.");
+        return null;
+      }
+      const session = {
+        id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`,
+        guildId: guild.id,
+        detectedAt: Date.now(),
+        candidateIds: new Set(records.map((record) => record.userId)),
+        channelStates: []
+      };
+      activeRaids.set(guild.id, session);
+      try {
+        session.channelStates = await lockGuild(guild, "NexaBot: k\xF6zepes \xE9rz\xE9kenys\xE9g\u0171 raidv\xE9delem");
+        const storedSession = { ...session, candidateIds: [...session.candidateIds] };
+        const mentions = leadershipMentions(guild);
+        const embed = baseEmbed(
+          "\u{1F6A8} RAID-RIASZT\xC1S \u2022 A SZERVER LEZ\xC1RVA",
+          `A bot **${RAID_JOIN_LIMIT} vagy t\xF6bb bel\xE9p\xE9st** \xE9szlelt ${RAID_WINDOW_MS / 1e3} m\xE1sodpercen bel\xFCl.
+
+A szerver a vezet\u0151i d\xF6nt\xE9sig lez\xE1rva marad. V\xE1lassz az al\xE1bbi gombok k\xF6z\xFCl. A bot nem b\xFCntet senkit automatikusan raid miatt.`,
+          COLORS.danger
+        ).addFields(
+          { name: "Gyan\xFAs bel\xE9p\u0151k", value: `${session.candidateIds.size} f\u0151`, inline: true },
+          { name: "\xC9rz\xE9kenys\xE9g", value: "K\xF6zepes", inline: true },
+          { name: "D\xF6nthet", value: "Adminisztr\xE1tor vagy Vezet\u0151s\xE9g" }
+        );
+        const message = await logChannel.send({
+          content: mentions.content,
+          allowedMentions: mentions.allowedMentions,
+          embeds: [embed],
+          components: [raidDecisionRow(session.id)],
+          files: [snapshotAttachment(storedSession)]
+        });
+        session.messageId = message.id;
+        return session;
+      } catch (error) {
+        console.error("A raidlez\xE1r\xE1s nem siker\xFClt:", error);
+        await restoreGuild(guild, session, "NexaBot: sikertelen raidlez\xE1r\xE1s vissza\xE1ll\xEDt\xE1sa").catch(() => null);
+        activeRaids.delete(guild.id);
+        return null;
+      }
+    }
+    async function readSessionAttachment(message, expectedSessionId = null) {
+      const attachment = message?.attachments?.find((item) => item.name?.startsWith("nexabot-raid-"));
+      if (!attachment?.url) return null;
+      try {
+        const response = await fetch(attachment.url);
+        if (!response.ok) return null;
+        const data = await response.json();
+        if (!data?.guildId || !data?.id || !Array.isArray(data.channelStates) || !Array.isArray(data.candidateIds)) return null;
+        if (expectedSessionId && data.id !== expectedSessionId) return null;
+        return { ...data, candidateIds: new Set(data.candidateIds) };
+      } catch {
+        return null;
+      }
+    }
+    async function findPendingSession(guild, clientUser) {
+      const current = activeRaids.get(guild.id);
+      if (current) return { session: current, message: null };
+      const channel = findSecurityChannel(guild);
+      const messages = await channel?.messages?.fetch({ limit: 50 }).catch(() => null);
+      if (!messages) return null;
+      for (const message of messages.values()) {
+        if (message.author.id !== clientUser.id || !message.components.length) continue;
+        const hasSecurityButton = message.components.some(
+          (row) => row.components.some((component) => component.customId?.startsWith("security_raid_"))
+        );
+        if (!hasSecurityButton) continue;
+        const session = await readSessionAttachment(message);
+        if (session?.guildId === guild.id) return { session, message };
+      }
+      return null;
+    }
+    async function notifyTemporary(channel, member, text) {
+      const notice = await channel.send({
+        content: `${member} \u26A0\uFE0F ${text}`,
+        allowedMentions: { users: [member.id] }
+      }).catch(() => null);
+      if (notice) setTimeout(() => notice.delete().catch(() => null), 8e3).unref?.();
+    }
+    function strikeKey(guildId, userId) {
+      return `${guildId}:${userId}`;
+    }
+    async function applyViolation(message, label) {
+      const member = message.member;
+      if (!member || isProtectedMember(member)) return;
+      const key = strikeKey(message.guild.id, member.id);
+      const now = Date.now();
+      const previous = memberStrikes.get(key);
+      const count = !previous || now - previous.lastAt > STRIKE_RESET_MS ? 1 : previous.count + 1;
+      memberStrikes.set(key, { count, lastAt: now });
+      let action = "Figyelmeztet\xE9s";
+      let details = "A tiltott \xFCzenet t\xF6r\xF6lve.";
+      try {
+        if (count === 2 && member.moderatable) {
+          await member.timeout(10 * 6e4, `NexaBot automatikus v\xE9delem: ${label}`);
+          action = "10 perces felf\xFCggeszt\xE9s";
+          details = "M\xE1sodik szab\xE1lys\xE9rt\xE9s 30 percen bel\xFCl.";
+        } else if (count === 3 && member.kickable) {
+          await member.send(`\u{1F6AA} A **${message.guild.name}** szerverr\u0151l az automatikus v\xE9delem kir\xFAgott.
+**Indok:** ${label}`).catch(() => null);
+          await member.kick(`NexaBot automatikus v\xE9delem: ${label}`);
+          action = "Kir\xFAg\xE1s";
+          details = "Harmadik szab\xE1lys\xE9rt\xE9s 30 percen bel\xFCl.";
+        } else if (count >= 4 && member.bannable) {
+          await member.send(`\u{1F528} A **${message.guild.name}** szerverr\u0151l az automatikus v\xE9delem kitiltott.
+**Indok:** ${label}`).catch(() => null);
+          await member.ban({ reason: `NexaBot automatikus v\xE9delem: ${label}` });
+          action = "Kitilt\xE1s";
+          details = "Negyedik szab\xE1lys\xE9rt\xE9s 30 percen bel\xFCl.";
+        } else {
+          await member.send(`\u26A0\uFE0F Figyelmeztet\xE9st kapt\xE1l a **${message.guild.name}** szerveren.
+**Indok:** ${label}`).catch(() => null);
+        }
+      } catch (error) {
+        action = "Int\xE9zked\xE9s sikertelen";
+        details = `A bot rangja vagy jogosults\xE1ga nem volt elegend\u0151: ${error.message}`;
+      }
+      if (message.channel?.isTextBased() && count < 3) {
+        await notifyTemporary(message.channel, member, `${label}. Int\xE9zked\xE9s: **${action}**.`);
+      }
+      await sendSecurityLog(
+        message.guild,
+        baseEmbed("\u{1F6E1}\uFE0F Automatikus szerverv\xE9delem", `${member.user.tag} (${member.id})`, COLORS.warning).addFields(
+          { name: "Esem\xE9ny", value: label, inline: true },
+          { name: "Int\xE9zked\xE9s", value: action, inline: true },
+          { name: "Fokozat", value: `${count}/4`, inline: true },
+          { name: "R\xE9szletek", value: details },
+          { name: "Csatorna", value: `${message.channel}` }
+        )
+      );
+    }
+    async function handleProtectedMessage(message) {
+      if (!message.guild || message.author.bot || !message.member) return;
+      if (containsBlockedLink(message.content) && !isLinkExempt(message.member)) {
+        await message.delete().catch(() => null);
+        await applyViolation(message, "Tiltott link vagy Discord-megh\xEDv\xF3");
+        return;
+      }
+      const key = strikeKey(message.guild.id, message.author.id);
+      const now = Date.now();
+      const entries = (spamWindows.get(key) || []).filter((entry) => now - entry.createdAt <= SPAM_WINDOW_MS);
+      entries.push({ createdAt: now, message });
+      spamWindows.set(key, entries);
+      if (entries.length < SPAM_MESSAGE_LIMIT || now - (spamCooldowns.get(key) || 0) < 15e3) return;
+      spamCooldowns.set(key, now);
+      spamWindows.set(key, []);
+      await Promise.allSettled(entries.map((entry) => entry.message.delete().catch(() => null)));
+      await applyViolation(message, `Spam vagy \xFCzenet\xE1radat (${SPAM_MESSAGE_LIMIT} \xFCzenet / ${SPAM_WINDOW_MS / 1e3} mp)`);
+    }
+    async function fetchBotAdder(member) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      const logs = await member.guild.fetchAuditLogs({ type: AuditLogEvent.BotAdd, limit: 6 }).catch(() => null);
+      return logs?.entries.find(
+        (entry) => entry.target?.id === member.id && Date.now() - entry.createdTimestamp < 2e4
+      )?.executor || null;
+    }
+    async function handleBotJoin(member) {
+      if (member.id === member.client.user.id) return;
+      const executor = await fetchBotAdder(member);
+      const executorMember = executor ? await member.guild.members.fetch(executor.id).catch(() => null) : null;
+      const authorized = Boolean(executorMember && isLeadership(executorMember));
+      if (authorized) {
+        await sendSecurityLog(
+          member.guild,
+          baseEmbed("\u{1F916} Enged\xE9lyezett bot hozz\xE1adva", `${member.user.tag} (${member.id})`, COLORS.success).addFields({ name: "Hozz\xE1adta", value: `${executor.tag} (${executor.id})` })
+        );
+        return;
+      }
+      const kicked = member.kickable ? await member.kick("NexaBot: enged\xE9ly n\xE9lk\xFCl hozz\xE1adott bot").then(() => true).catch(() => false) : false;
+      const mentions = leadershipMentions(member.guild);
+      await sendSecurityLog(
+        member.guild,
+        baseEmbed(
+          "\u{1F6AB} Enged\xE9ly n\xE9lk\xFCli bot \xE9szlelve",
+          `${member.user.tag} (${member.id}) ${kicked ? "**azonnal kir\xFAgva**." : "**nem volt kir\xFAghat\xF3**."}`,
+          COLORS.danger
+        ).addFields({
+          name: "Hozz\xE1adta",
+          value: executor ? `${executor.tag} (${executor.id})` : "Nem siker\xFClt biztosan azonos\xEDtani"
+        }),
+        { content: mentions.content, allowedMentions: mentions.allowedMentions }
+      );
+    }
+    async function handleHumanJoin(member) {
+      const now = Date.now();
+      const age = now - member.user.createdTimestamp;
+      if (age < FRESH_ACCOUNT_MS) {
+        await sendSecurityLog(
+          member.guild,
+          baseEmbed("\u{1F195} Gyan\xFAsan friss fi\xF3k csatlakozott", `${member.user.tag} (${member.id})`, COLORS.warning).addFields({ name: "Fi\xF3k \xE9letkora", value: `${Math.max(0, Math.floor(age / 36e5))} \xF3ra` })
+        );
+      }
+      const active = activeRaids.get(member.guild.id);
+      if (active) active.candidateIds.add(member.id);
+      const records = (joinWindows.get(member.guild.id) || []).filter((record) => now - record.joinedAt <= RAID_WINDOW_MS);
+      records.push({ userId: member.id, joinedAt: now, fresh: age < FRESH_ACCOUNT_MS });
+      joinWindows.set(member.guild.id, records);
+      if (records.length >= RAID_JOIN_LIMIT) await beginRaidLock(member.guild, records);
+    }
+    async function handleMemberJoin(member) {
+      if (member.user.bot) return handleBotJoin(member);
+      return handleHumanJoin(member);
+    }
+    async function handleRaidDecision(interaction) {
+      if (!isLeadership(interaction.member)) {
+        return ephemeralError(interaction, "A raid-riaszt\xE1sr\xF3l csak Adminisztr\xE1tor vagy Vezet\u0151s\xE9g d\xF6nthet.");
+      }
+      await interaction.deferReply({ flags: EPHEMERAL });
+      const [actionPart, sessionId] = interaction.customId.split(":");
+      const action = actionPart.replace("security_raid_", "");
+      let session = activeRaids.get(interaction.guildId);
+      if (!session || session.id !== sessionId) {
+        session = await readSessionAttachment(interaction.message, sessionId);
+      }
+      if (!session || session.guildId !== interaction.guildId) {
+        return interaction.editReply("\u274C A lez\xE1r\xE1s vissza\xE1ll\xEDt\xE1si adatai nem tal\xE1lhat\xF3k. Ne m\xF3dos\xEDts k\xE9zzel jogosults\xE1gokat; k\xE9rj technikai seg\xEDts\xE9get.");
+      }
+      let resultText = "T\xE9ves riaszt\xE1sk\xE9nt lez\xE1rva, b\xFCntet\xE9s nem t\xF6rt\xE9nt.";
+      let affected = 0;
+      let skipped = 0;
+      if (action === "kick" || action === "ban") {
+        for (const userId of session.candidateIds) {
+          const target = await interaction.guild.members.fetch(userId).catch(() => null);
+          if (!target || isProtectedMember(target)) {
+            skipped += 1;
+            continue;
+          }
+          try {
+            if (action === "kick" && target.kickable) {
+              await target.send(`\u{1F6AA} A **${interaction.guild.name}** szerverr\u0151l raidv\xE9delem miatt kir\xFAgtak.`).catch(() => null);
+              await target.kick(`Raid meger\u0151s\xEDtve: ${interaction.user.tag}`);
+              affected += 1;
+            } else if (action === "ban" && target.bannable) {
+              await target.send(`\u{1F528} A **${interaction.guild.name}** szerverr\u0151l raidv\xE9delem miatt kitiltottak.`).catch(() => null);
+              await target.ban({ reason: `Raid meger\u0151s\xEDtve: ${interaction.user.tag}` });
+              affected += 1;
+            } else {
+              skipped += 1;
+            }
+          } catch {
+            skipped += 1;
+          }
+        }
+        resultText = `${action === "kick" ? "Kir\xFAgva" : "Kitiltva"}: **${affected} f\u0151**. Kihagyva vagy m\xE1r t\xE1vozott: **${skipped} f\u0151**.`;
+      }
+      await restoreGuild(interaction.guild, session, `NexaBot: raidriaszt\xE1s lez\xE1rva \u2013 ${interaction.user.tag}`);
+      activeRaids.delete(interaction.guildId);
+      joinWindows.set(interaction.guildId, []);
+      const updated = EmbedBuilder.from(interaction.message.embeds[0]).setColor(action === "false" ? COLORS.success : COLORS.danger).addFields(
+        { name: "D\xF6nt\xE9s", value: resultText },
+        { name: "D\xF6nt\xE9shoz\xF3", value: `${interaction.user.tag} (${interaction.user.id})` },
+        { name: "Szerver \xE1llapota", value: "\u2705 Feloldva" }
+      );
+      await interaction.message.edit({ embeds: [updated], components: [], attachments: [] }).catch(() => null);
+      return interaction.editReply(`\u2705 ${resultText}
+A szerver lez\xE1r\xE1s\xE1t feloldottam.`);
+    }
+    function buildSecurityCommand2() {
+      return new SlashCommandBuilder2().setName("vedelem").setDescription("A NexaBot automatikus szerverv\xE9delm\xE9nek kezel\xE9se.").addSubcommand(
+        (subcommand) => subcommand.setName("statusz").setDescription("Megmutatja a v\xE9delem \xE1llapot\xE1t.")
+      ).addSubcommand(
+        (subcommand) => subcommand.setName("feloldas").setDescription("Feloldja az akt\xEDv raid miatti szerverlez\xE1r\xE1st.")
+      ).setDMPermission(false);
+    }
+    async function handleSecurityCommand(interaction) {
+      if (!isLeadership(interaction.member)) {
+        return ephemeralError(interaction, "A v\xE9delmet csak Adminisztr\xE1tor vagy Vezet\u0151s\xE9g kezelheti.");
+      }
+      const subcommand = interaction.options.getSubcommand();
+      await interaction.deferReply({ flags: EPHEMERAL });
+      if (subcommand === "statusz") {
+        const pending = await findPendingSession(interaction.guild, interaction.client.user);
+        return interaction.editReply(
+          `\u{1F6E1}\uFE0F **NexaBot-v\xE9delem akt\xEDv**
+\u2022 Spam: ${SPAM_MESSAGE_LIMIT} \xFCzenet / ${SPAM_WINDOW_MS / 1e3} m\xE1sodperc
+\u2022 Raid: ${RAID_JOIN_LIMIT} bel\xE9p\u0151 / ${RAID_WINDOW_MS / 1e3} m\xE1sodperc
+\u2022 Friss fi\xF3k: 3 napn\xE1l fiatalabb
+\u2022 Linkek: Staff, Admin \xE9s Vezet\u0151s\xE9g sz\xE1m\xE1ra enged\xE9lyezve
+\u2022 Szerver: ${pending ? "\u{1F512} raid miatt lez\xE1rva" : "\u2705 nincs akt\xEDv raidlez\xE1r\xE1s"}`
+        );
+      }
+      if (subcommand === "feloldas") {
+        const pending = await findPendingSession(interaction.guild, interaction.client.user);
+        if (!pending) return interaction.editReply("\u2705 Nincs akt\xEDv NexaBot raidlez\xE1r\xE1s.");
+        await restoreGuild(interaction.guild, pending.session, `NexaBot: k\xE9zi felold\xE1s \u2013 ${interaction.user.tag}`);
+        activeRaids.delete(interaction.guildId);
+        if (pending.message) {
+          const embed = pending.message.embeds[0] ? EmbedBuilder.from(pending.message.embeds[0]).setColor(COLORS.success).addFields(
+            { name: "K\xE9zi felold\xE1s", value: `${interaction.user.tag} (${interaction.user.id})` }
+          ) : baseEmbed("\u2705 Raidlez\xE1r\xE1s k\xE9zzel feloldva", `${interaction.user.tag}`, COLORS.success);
+          await pending.message.edit({ embeds: [embed], components: [], attachments: [] }).catch(() => null);
+        }
+        return interaction.editReply("\u2705 A raid miatti szerverlez\xE1r\xE1st feloldottam.");
+      }
+    }
+    function registerSecurity2(client2) {
+      client2.on(Events2.MessageCreate, handleProtectedMessage);
+      client2.on(Events2.GuildMemberAdd, handleMemberJoin);
+    }
+    module2.exports = {
+      RAID_WINDOW_MS,
+      RAID_JOIN_LIMIT,
+      FRESH_ACCOUNT_MS,
+      SPAM_WINDOW_MS,
+      SPAM_MESSAGE_LIMIT,
+      normalizeName,
+      containsBlockedLink,
+      isLeadership,
+      isLinkExempt,
+      findSecurityChannel,
+      raidDecisionRow,
+      buildSecurityCommand: buildSecurityCommand2,
+      handleSecurityCommand,
+      handleRaidDecision,
+      registerSecurity: registerSecurity2
+    };
+  }
+});
+
 // src/interactions.js
 var require_interactions = __commonJS({
   "src/interactions.js"(exports2, module2) {
@@ -1312,6 +1776,10 @@ var require_interactions = __commonJS({
       handleDocumentButton,
       handleDocumentModal
     } = require_documents();
+    var {
+      handleSecurityCommand,
+      handleRaidDecision
+    } = require_security();
     var EPHEMERAL = MessageFlags.Ephemeral;
     var applicationDrafts = /* @__PURE__ */ new Map();
     function applicationDraftKey(interaction) {
@@ -1380,6 +1848,9 @@ var require_interactions = __commonJS({
       return interaction.editReply(`Elk\xE9sz\xFClt a priv\xE1t csatorn\xE1d: ${channel}`);
     }
     async function handleCommand(interaction) {
+      if (interaction.commandName === "vedelem") {
+        return handleSecurityCommand(interaction);
+      }
       if (!interaction.member.permissions.has(PermissionFlagsBits2.Administrator)) {
         return ephemeralError(interaction, "Ehhez rendszergazdai jogosults\xE1g sz\xFCks\xE9ges.");
       }
@@ -1412,6 +1883,7 @@ var require_interactions = __commonJS({
     }
     async function handleButton(interaction) {
       const id = interaction.customId;
+      if (id.startsWith("security_raid_")) return handleRaidDecision(interaction);
       if (id.startsWith("doc_")) return handleDocumentButton(interaction);
       if (id === "ticket_support") return createTicket(interaction, "support");
       if (id === "ticket_order") return interaction.showModal(orderModal());
@@ -1903,6 +2375,7 @@ var {
 } = require("discord.js");
 var { handleInteraction } = require_interactions();
 var { registerEvents } = require_events();
+var { buildSecurityCommand, registerSecurity } = require_security();
 var requiredVariables = ["DISCORD_TOKEN", "CLIENT_ID", "GUILD_ID"];
 var missingVariables = requiredVariables.filter((name) => !process.env[name]);
 if (missingVariables.length) {
@@ -1914,7 +2387,8 @@ var client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildModeration,
-    GatewayIntentBits.GuildMessages
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
   ],
   partials: [Partials.Channel, Partials.Message, Partials.User, Partials.GuildMember]
 });
@@ -1924,7 +2398,7 @@ async function registerCommand() {
   const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
   await rest.put(
     Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
-    { body: [command.toJSON(), documentCommand.toJSON()] }
+    { body: [command.toJSON(), documentCommand.toJSON(), buildSecurityCommand().toJSON()] }
   );
 }
 client.once(Events.ClientReady, async (readyClient) => {
@@ -1935,13 +2409,14 @@ client.once(Events.ClientReady, async (readyClient) => {
   try {
     await registerCommand();
     console.log(`NexaBot elindult: ${readyClient.user.tag}`);
-    console.log("A /telepites \xE9s /dokumentum-panelek parancs haszn\xE1latra k\xE9sz.");
+    console.log("A /telepites, /dokumentum-panelek \xE9s /vedelem parancs haszn\xE1latra k\xE9sz.");
   } catch (error) {
     console.error("A parancs regisztr\xE1l\xE1sa nem siker\xFClt:", error);
   }
 });
 client.on(Events.InteractionCreate, handleInteraction);
 registerEvents(client);
+registerSecurity(client);
 client.on(Events.Error, (error) => console.error("Discord klienshiba:", error));
 client.on(Events.Warn, (message) => console.warn("Discord figyelmeztet\xE9s:", message));
 var port = Number(process.env.PORT) || 3e3;
