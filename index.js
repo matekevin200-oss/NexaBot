@@ -1,6 +1,10 @@
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __commonJS = (cb, mod) => function __require() {
-  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  try {
+    return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  } catch (e) {
+    throw mod = 0, e;
+  }
 };
 
 // src/constants.js
@@ -41,8 +45,11 @@ var require_panels = __commonJS({
       ButtonStyle,
       EmbedBuilder,
       ModalBuilder,
+      RoleSelectMenuBuilder,
+      StringSelectMenuBuilder,
       TextInputBuilder,
-      TextInputStyle
+      TextInputStyle,
+      UserSelectMenuBuilder
     } = require("discord.js");
     var { COLORS } = require_constants();
     var TGF_QUESTIONS = Object.freeze([
@@ -84,19 +91,70 @@ var require_panels = __commonJS({
       return { embeds: [embed], components: [buttons] };
     }
     function staffPanel() {
-      const embed = new EmbedBuilder().setColor(COLORS.neutral).setTitle("\u{1F6E1}\uFE0F NexaBot staff vez\xE9rl\u0151pult").setDescription("A m\u0171veletek csak a **NexaDev Staff** ranggal vagy szerverkezel\xE9si jogosults\xE1ggal haszn\xE1lhat\xF3k.").addFields(
-        { name: "Moder\xE1ci\xF3", value: "Figyelmeztet\xE9s, id\u0151korl\xE1t \xE9s kir\xFAg\xE1s gombokkal.", inline: true },
+      const embed = new EmbedBuilder().setColor(COLORS.neutral).setTitle("\u{1F6E1}\uFE0F NexaBot staff vez\xE9rl\u0151pult").setDescription(
+        "V\xE1laszd ki a kezelni k\xEDv\xE1nt tagot az al\xE1bbi list\xE1b\xF3l, majd v\xE1laszd ki a m\u0171veletet.\n\nA panelt csak a **NexaDev Staff** ranggal vagy adminisztr\xE1tori jogosults\xE1ggal lehet haszn\xE1lni."
+      ).addFields(
+        { name: "Moder\xE1ci\xF3", value: "Figyelmeztet\xE9s, id\u0151korl\xE1t, kir\xFAg\xE1s, kitilt\xE1s, rang- \xE9s becen\xE9vkezel\xE9s.", inline: true },
         { name: "Szerverkezel\xE9s", value: "\xDAj nyilv\xE1nos vagy priv\xE1t csatorna l\xE9trehoz\xE1sa.", inline: true }
       );
-      const moderation = row(
-        new ButtonBuilder().setCustomId("staff_warn").setLabel("Figyelmeztet\xE9s").setEmoji("\u26A0\uFE0F").setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId("staff_timeout").setLabel("Id\u0151korl\xE1t").setEmoji("\u23F1\uFE0F").setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId("staff_kick").setLabel("Kir\xFAg\xE1s").setEmoji("\u{1F6AA}").setStyle(ButtonStyle.Danger)
+      const memberPicker = row(
+        new UserSelectMenuBuilder().setCustomId("mod_target_select").setPlaceholder("V\xE1lassz ki egy szervertagot\u2026").setMinValues(1).setMaxValues(1)
       );
       const management = row(
+        new ButtonBuilder().setCustomId("mod_unban_open").setLabel("Kitilt\xE1s felold\xE1sa").setEmoji("\u{1F513}").setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId("staff_channel").setLabel("Csatorna l\xE9trehoz\xE1sa").setEmoji("\u2795").setStyle(ButtonStyle.Primary)
       );
-      return { embeds: [embed], components: [moderation, management] };
+      return { embeds: [embed], components: [memberPicker, management] };
+    }
+    function moderationActionRows(targetId) {
+      return [
+        row(
+          new ButtonBuilder().setCustomId(`mod_action:warn:${targetId}`).setLabel("Figyelmeztet\xE9s").setEmoji("\u26A0\uFE0F").setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId(`mod_action:timeout:${targetId}`).setLabel("Felf\xFCggeszt\xE9s").setEmoji("\u23F1\uFE0F").setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId(`mod_action:kick:${targetId}`).setLabel("Kir\xFAg\xE1s").setEmoji("\u{1F6AA}").setStyle(ButtonStyle.Danger),
+          new ButtonBuilder().setCustomId(`mod_action:ban:${targetId}`).setLabel("Kitilt\xE1s").setEmoji("\u{1F528}").setStyle(ButtonStyle.Danger)
+        ),
+        row(
+          new ButtonBuilder().setCustomId(`mod_action:untimeout:${targetId}`).setLabel("Felf\xFCggeszt\xE9s felold\xE1sa").setEmoji("\u2705").setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId(`mod_action:role_add:${targetId}`).setLabel("Rang hozz\xE1ad\xE1sa").setEmoji("\u2795").setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`mod_action:role_remove:${targetId}`).setLabel("Rang lev\xE9tele").setEmoji("\u2796").setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId(`mod_action:nickname:${targetId}`).setLabel("Becen\xE9v m\xF3dos\xEDt\xE1sa").setEmoji("\u270F\uFE0F").setStyle(ButtonStyle.Secondary)
+        )
+      ];
+    }
+    function timeoutChoices(targetId) {
+      return row(
+        new ButtonBuilder().setCustomId(`mod_timeout:10:${targetId}`).setLabel("10 perc").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`mod_timeout:60:${targetId}`).setLabel("1 \xF3ra").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`mod_timeout:1440:${targetId}`).setLabel("1 nap").setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`mod_timeout:custom:${targetId}`).setLabel("Egyedi id\u0151").setStyle(ButtonStyle.Primary)
+      );
+    }
+    function moderationConfirmation(action, targetId) {
+      const labels = {
+        kick: ["Igen, kir\xFAgom", "\u{1F6AA}"],
+        ban: ["Igen, kitiltom", "\u{1F528}"]
+      };
+      const [label, emoji] = labels[action];
+      return row(
+        new ButtonBuilder().setCustomId(`mod_confirm:${action}:${targetId}`).setLabel(label).setEmoji(emoji).setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId("mod_cancel").setLabel("M\xE9gse").setStyle(ButtonStyle.Secondary)
+      );
+    }
+    function rolePicker(action, targetId) {
+      return row(
+        new RoleSelectMenuBuilder().setCustomId(`mod_role_select:${action}:${targetId}`).setPlaceholder(action === "role_add" ? "V\xE1laszd ki a hozz\xE1adand\xF3 rangot\u2026" : "V\xE1laszd ki a leveend\u0151 rangot\u2026").setMinValues(1).setMaxValues(1)
+      );
+    }
+    function unbanPicker(bans) {
+      const menu = new StringSelectMenuBuilder().setCustomId("mod_unban_select").setPlaceholder("V\xE1lassz a kitiltott felhaszn\xE1l\xF3k k\xF6z\xFCl\u2026").setMinValues(1).setMaxValues(1).addOptions(
+        bans.slice(0, 25).map((ban) => ({
+          label: (ban.user.globalName || ban.user.tag || ban.user.username).slice(0, 100),
+          description: "Kitiltott felhaszn\xE1l\xF3",
+          value: ban.user.id
+        }))
+      );
+      return row(menu);
     }
     function ticketControls() {
       return row(
@@ -152,21 +210,34 @@ var require_panels = __commonJS({
         row(input("app_q10", "10. Mi\xE9rt lenn\xE9l alkalmas?", TextInputStyle.Paragraph, "Mi\xE9rt lenn\xE9l alkalmas Belv\xE9delmi tagnak?", true, 350))
       );
     }
-    function moderationModal(type) {
-      const definitions = {
-        warn: ["Figyelmeztet\xE9s", "warn_submit", false],
-        timeout: ["Id\u0151korl\xE1t kioszt\xE1sa", "timeout_submit", true],
-        kick: ["Tag kir\xFAg\xE1sa", "kick_submit", false]
+    function moderationModal(action, targetId, extraId = null) {
+      const titles = {
+        warn: "Figyelmeztet\xE9s",
+        timeout_10: "Felf\xFCggeszt\xE9s \u2022 10 perc",
+        timeout_60: "Felf\xFCggeszt\xE9s \u2022 1 \xF3ra",
+        timeout_1440: "Felf\xFCggeszt\xE9s \u2022 1 nap",
+        timeout_custom: "Egyedi felf\xFCggeszt\xE9s",
+        untimeout: "Felf\xFCggeszt\xE9s felold\xE1sa",
+        kick: "Tag kir\xFAg\xE1sa",
+        ban: "Tag kitilt\xE1sa",
+        unban: "Kitilt\xE1s felold\xE1sa",
+        role_add: "Rang hozz\xE1ad\xE1sa",
+        role_remove: "Rang lev\xE9tele",
+        nickname: "Becen\xE9v m\xF3dos\xEDt\xE1sa"
       };
-      const [title, customId, needsMinutes] = definitions[type];
-      const components = [
-        row(input("mod_user_id", "Felhaszn\xE1l\xF3 azonos\xEDt\xF3ja", TextInputStyle.Short, "P\xE9ld\xE1ul: 123456789012345678", true, 25))
-      ];
-      if (needsMinutes) {
+      const components = [];
+      if (action === "timeout_custom") {
         components.push(row(input("mod_minutes", "Id\u0151tartam percben", TextInputStyle.Short, "1\u201340320 perc", true, 6)));
       }
-      components.push(row(input("mod_reason", "Indokl\xE1s", TextInputStyle.Paragraph, "Mi\xE9rt kapja a b\xFCntet\xE9st?", true, 500)));
-      return new ModalBuilder().setCustomId(customId).setTitle(title).addComponents(...components);
+      if (action === "nickname") {
+        components.push(row(input("mod_nickname", "\xDAj becen\xE9v", TextInputStyle.Short, "A tag \xFAj szerverbeceneve", true, 32)));
+      }
+      components.push(
+        row(input("mod_reason", "K\xF6telez\u0151 indokl\xE1s", TextInputStyle.Paragraph, "Mi\xE9rt t\xF6rt\xE9nik az int\xE9zked\xE9s?", true, 500)),
+        row(input("mod_evidence", "Bizony\xEDt\xE9k vagy k\xE9p linkje", TextInputStyle.Paragraph, "Opcion\xE1lis: \xFCzenet- vagy k\xE9plink", false, 500))
+      );
+      const suffix = extraId ? `:${extraId}` : "";
+      return new ModalBuilder().setCustomId(`mod_submit:${action}:${targetId}${suffix}`).setTitle(titles[action]).addComponents(...components);
     }
     function channelModal() {
       return new ModalBuilder().setCustomId("channel_submit").setTitle("\xDAj csatorna l\xE9trehoz\xE1sa").addComponents(
@@ -188,6 +259,11 @@ var require_panels = __commonJS({
       applicationModal,
       applicationModalPart2,
       moderationModal,
+      moderationActionRows,
+      timeoutChoices,
+      moderationConfirmation,
+      rolePicker,
+      unbanPicker,
       channelModal,
       TGF_QUESTIONS
     };
@@ -371,6 +447,11 @@ var require_interactions = __commonJS({
       applicationModal,
       applicationModalPart2,
       moderationModal,
+      moderationActionRows,
+      timeoutChoices,
+      moderationConfirmation,
+      rolePicker,
+      unbanPicker,
       channelModal,
       TGF_QUESTIONS
     } = require_panels();
@@ -483,12 +564,61 @@ var require_interactions = __commonJS({
         }
         return interaction.showModal(applicationModalPart2());
       }
-      if (id.startsWith("staff_")) {
-        if (!isStaff(interaction.member)) return ephemeralError(interaction, "Ezt csak staff tag haszn\xE1lhatja.");
-        if (id === "staff_warn") return interaction.showModal(moderationModal("warn"));
-        if (id === "staff_timeout") return interaction.showModal(moderationModal("timeout"));
-        if (id === "staff_kick") return interaction.showModal(moderationModal("kick"));
-        if (id === "staff_channel") return interaction.showModal(channelModal());
+      if (id === "staff_channel") {
+        if (!isStaff(interaction.member)) return ephemeralError(interaction, "Ezt csak staff tag vagy adminisztr\xE1tor haszn\xE1lhatja.");
+        return interaction.showModal(channelModal());
+      }
+      if (id === "mod_unban_open") {
+        if (!isStaff(interaction.member)) return ephemeralError(interaction, "Ezt csak staff tag vagy adminisztr\xE1tor haszn\xE1lhatja.");
+        await interaction.deferReply({ flags: EPHEMERAL });
+        const bans = await interaction.guild.bans.fetch().catch(() => null);
+        if (!bans) return interaction.editReply("\u274C Nem siker\xFClt lek\xE9rni a kitiltott felhaszn\xE1l\xF3kat. Ellen\u0151rizd a bot jogosults\xE1gait.");
+        if (!bans.size) return interaction.editReply("\u2705 Jelenleg nincs kitiltott felhaszn\xE1l\xF3.");
+        const visibleBans = [...bans.values()].slice(0, 25);
+        return interaction.editReply({
+          content: bans.size > 25 ? "V\xE1laszd ki, kinek oldod fel a kitilt\xE1s\xE1t. A lista az els\u0151 25 kitiltott felhaszn\xE1l\xF3t mutatja." : "V\xE1laszd ki, kinek oldod fel a kitilt\xE1s\xE1t.",
+          components: [unbanPicker(visibleBans)]
+        });
+      }
+      if (id.startsWith("mod_action:")) {
+        if (!isStaff(interaction.member)) return ephemeralError(interaction, "Ezt csak staff tag vagy adminisztr\xE1tor haszn\xE1lhatja.");
+        const [, action, targetId] = id.split(":");
+        if (action === "timeout") {
+          return interaction.update({
+            content: `V\xE1laszd ki a felf\xFCggeszt\xE9s id\u0151tartam\xE1t <@${targetId}> sz\xE1m\xE1ra:`,
+            embeds: [],
+            components: [timeoutChoices(targetId)]
+          });
+        }
+        if (action === "kick" || action === "ban") {
+          return interaction.update({
+            content: `Biztosan v\xE9grehajtod ezt a m\u0171veletet: **${action === "kick" ? "kir\xFAg\xE1s" : "kitilt\xE1s"}** \u2013 <@${targetId}>?`,
+            embeds: [],
+            components: [moderationConfirmation(action, targetId)]
+          });
+        }
+        if (action === "role_add" || action === "role_remove") {
+          return interaction.update({
+            content: `V\xE1laszd ki a ${action === "role_add" ? "hozz\xE1adand\xF3" : "leveend\u0151"} rangot <@${targetId}> sz\xE1m\xE1ra:`,
+            embeds: [],
+            components: [rolePicker(action, targetId)]
+          });
+        }
+        return interaction.showModal(moderationModal(action, targetId));
+      }
+      if (id.startsWith("mod_timeout:")) {
+        if (!isStaff(interaction.member)) return ephemeralError(interaction, "Ezt csak staff tag vagy adminisztr\xE1tor haszn\xE1lhatja.");
+        const [, duration, targetId] = id.split(":");
+        const action = duration === "custom" ? "timeout_custom" : `timeout_${duration}`;
+        return interaction.showModal(moderationModal(action, targetId));
+      }
+      if (id.startsWith("mod_confirm:")) {
+        if (!isStaff(interaction.member)) return ephemeralError(interaction, "Ezt csak staff tag vagy adminisztr\xE1tor haszn\xE1lhatja.");
+        const [, action, targetId] = id.split(":");
+        return interaction.showModal(moderationModal(action, targetId));
+      }
+      if (id === "mod_cancel") {
+        return interaction.update({ content: "A m\u0171velet megszak\xEDtva.", embeds: [], components: [] });
       }
       if (id === "ticket_claim") {
         if (!isStaff(interaction.member)) return ephemeralError(interaction, "Csak staff tag veheti fel a ticketet.");
@@ -557,6 +687,39 @@ var require_interactions = __commonJS({
         );
       }
     }
+    async function handleSelectMenu(interaction) {
+      if (!isStaff(interaction.member)) {
+        return ephemeralError(interaction, "Ezt csak staff tag vagy adminisztr\xE1tor haszn\xE1lhatja.");
+      }
+      if (interaction.customId === "mod_target_select") {
+        const targetId = interaction.values[0];
+        const target = await interaction.guild.members.fetch(targetId).catch(() => null);
+        if (!target) return ephemeralError(interaction, "Nem tal\xE1lom a kiv\xE1lasztott felhaszn\xE1l\xF3t a szerveren.");
+        return interaction.reply({
+          embeds: [
+            baseEmbed(
+              "\u{1F6E1}\uFE0F Moder\xE1ci\xF3s m\u0171velet kiv\xE1laszt\xE1sa",
+              `**Kiv\xE1lasztott tag:** ${target}
+**Felhaszn\xE1l\xF3n\xE9v:** ${target.user.tag}
+
+V\xE1laszd ki, mit szeretn\xE9l tenni vele.`,
+              COLORS.neutral
+            ).setThumbnail(target.user.displayAvatarURL())
+          ],
+          components: moderationActionRows(targetId),
+          flags: EPHEMERAL
+        });
+      }
+      if (interaction.customId.startsWith("mod_role_select:")) {
+        const [, action, targetId] = interaction.customId.split(":");
+        const roleId = interaction.values[0];
+        return interaction.showModal(moderationModal(action, targetId, roleId));
+      }
+      if (interaction.customId === "mod_unban_select") {
+        const targetId = interaction.values[0];
+        return interaction.showModal(moderationModal("unban", targetId));
+      }
+    }
     async function handleOrderSubmit(interaction) {
       const details = [
         { name: "Szerver t\xEDpusa", value: getText(interaction, "order_type") },
@@ -607,63 +770,137 @@ var require_interactions = __commonJS({
       await sendLog(interaction.guild, baseEmbed("\u{1F4E8} Belv\xE9delmi TGF \xE9rkezett", `${interaction.user.tag} TGF-et k\xFCld\xF6tt.`, COLORS.success));
       return interaction.editReply("\u2705 A Belv\xE9delmi TGF-edet elk\xFCldt\xFCk a vezet\u0151s\xE9gnek.");
     }
-    async function fetchTarget(interaction) {
-      const userId = getText(interaction, "mod_user_id").replace(/\D/g, "");
-      if (!userId) return null;
-      return interaction.guild.members.fetch(userId).catch(() => null);
+    function canActOn(interaction, target) {
+      if (!target || target.id === interaction.user.id || target.id === interaction.guild.ownerId) return false;
+      const actor = interaction.member;
+      const isOwner = actor.id === interaction.guild.ownerId;
+      const isAdmin = actor.permissions.has(PermissionFlagsBits2.Administrator);
+      return isOwner || isAdmin || actor.roles.highest.position > target.roles.highest.position;
     }
-    async function handleWarnSubmit(interaction) {
-      if (!isStaff(interaction.member)) return ephemeralError(interaction, "Ezt csak staff tag haszn\xE1lhatja.");
+    function evidenceFields(evidence) {
+      return evidence ? [{ name: "Bizony\xEDt\xE9k", value: evidence }] : [];
+    }
+    async function sendModerationDM(target, guildName, action, reason, extra = null) {
+      const message = [
+        `\u{1F6E1}\uFE0F Moder\xE1ci\xF3s int\xE9zked\xE9s t\xF6rt\xE9nt veled a **${guildName}** szerveren.`,
+        `**M\u0171velet:** ${action}`,
+        `**Indok:** ${reason}`
+      ];
+      if (extra) message.push(`**R\xE9szletek:** ${extra}`);
+      return target.send(message.join("\n")).then(() => true).catch(() => false);
+    }
+    async function handleModerationSubmit(interaction) {
+      if (!isStaff(interaction.member)) return ephemeralError(interaction, "Ezt csak staff tag vagy adminisztr\xE1tor haszn\xE1lhatja.");
       await interaction.deferReply({ flags: EPHEMERAL });
-      const target = await fetchTarget(interaction);
-      if (!target) return interaction.editReply("\u274C Nem tal\xE1lom ezt a felhaszn\xE1l\xF3t a szerveren.");
+      const [, action, targetId, extraId] = interaction.customId.split(":");
       const reason = getText(interaction, "mod_reason");
-      const embed = baseEmbed("\u26A0\uFE0F Figyelmeztet\xE9s", `${target} figyelmeztet\xE9st kapott.`, COLORS.warning).addFields(
-        { name: "Indok", value: reason },
-        { name: "Staff", value: `${interaction.user.tag} (${interaction.user.id})` }
-      ).setFooter({ text: `NexaBot \u2022 Felhaszn\xE1l\xF3 ID: ${target.id}` });
-      const warningChannel = byName(interaction.guild.channels.cache, NAMES.warningsChannel);
-      await warningChannel?.send({ embeds: [embed] }).catch(() => null);
-      await target.send(`\u26A0\uFE0F Figyelmeztet\xE9st kapt\xE1l a **${interaction.guild.name}** szerveren.
-**Indok:** ${reason}`).catch(() => null);
-      await sendLog(interaction.guild, embed);
-      return interaction.editReply(`\u2705 ${target.user.tag} figyelmeztet\xE9se r\xF6gz\xEDtve.`);
-    }
-    async function handleTimeoutSubmit(interaction) {
-      if (!isStaff(interaction.member)) return ephemeralError(interaction, "Ezt csak staff tag haszn\xE1lhatja.");
-      await interaction.deferReply({ flags: EPHEMERAL });
-      const target = await fetchTarget(interaction);
-      if (!target) return interaction.editReply("\u274C Nem tal\xE1lom ezt a felhaszn\xE1l\xF3t a szerveren.");
-      const minutes = Number.parseInt(getText(interaction, "mod_minutes"), 10);
-      if (!Number.isInteger(minutes) || minutes < 1 || minutes > 40320) {
-        return interaction.editReply("\u274C Az id\u0151tartam 1 \xE9s 40320 perc k\xF6z\xF6tt lehet.");
+      const evidence = getText(interaction, "mod_evidence");
+      const staffText = `${interaction.user.tag} (${interaction.user.id})`;
+      if (action === "unban") {
+        const ban = await interaction.guild.bans.fetch(targetId).catch(() => null);
+        if (!ban) return interaction.editReply("\u274C Ez a felhaszn\xE1l\xF3 m\xE1r nincs a kitilt\xE1si list\xE1n.");
+        await interaction.guild.members.unban(targetId, `${reason} \u2022 ${interaction.user.tag}`);
+        const dmSent2 = await sendModerationDM(ban.user, interaction.guild.name, "Kitilt\xE1s felold\xE1sa", reason);
+        const embed2 = baseEmbed("\u{1F513} Kitilt\xE1s feloldva", `${ban.user.tag} kitilt\xE1sa feloldva.`, COLORS.success).addFields(
+          { name: "Indok", value: reason },
+          ...evidenceFields(evidence),
+          { name: "Staff", value: staffText }
+        );
+        await sendLog(interaction.guild, embed2);
+        return interaction.editReply(`\u2705 ${ban.user.tag} kitilt\xE1sa feloldva.${dmSent2 ? "" : "\n\u26A0\uFE0F A priv\xE1t \xFCzenetet nem siker\xFClt elk\xFCldeni."}`);
       }
-      if (!target.moderatable) return interaction.editReply("\u274C Ezt a tagot a bot rangsorrend vagy jogosults\xE1g miatt nem tudja id\u0151korl\xE1tozni.");
-      const reason = getText(interaction, "mod_reason");
-      await target.timeout(minutes * 6e4, `${reason} \u2022 ${interaction.user.tag}`);
-      await sendLog(
-        interaction.guild,
-        baseEmbed("\u23F1\uFE0F Id\u0151korl\xE1t kiosztva", `${target} \u2022 **${minutes} perc**
-Indok: ${reason}
-Staff: ${interaction.user}`, COLORS.warning)
+      const target = await interaction.guild.members.fetch(targetId).catch(() => null);
+      if (!target) return interaction.editReply("\u274C A kiv\xE1lasztott felhaszn\xE1l\xF3 m\xE1r nincs a szerveren.");
+      if (!canActOn(interaction, target)) {
+        return interaction.editReply("\u274C Magadon, a szervertulajdonoson vagy n\xE1lad magasabb rang\xFA tagon nem hajthatod v\xE9gre ezt a m\u0171veletet.");
+      }
+      const targetTag = target.user.tag;
+      let title;
+      let description;
+      let color = COLORS.warning;
+      let actionLabel;
+      let extraDetails = null;
+      let dmSent = true;
+      if (action === "warn") {
+        title = "\u26A0\uFE0F Figyelmeztet\xE9s";
+        description = `${target} figyelmeztet\xE9st kapott.`;
+        actionLabel = "Figyelmeztet\xE9s";
+      } else if (action.startsWith("timeout_")) {
+        const minutes = action === "timeout_custom" ? Number.parseInt(getText(interaction, "mod_minutes"), 10) : Number.parseInt(action.split("_")[1], 10);
+        if (!Number.isInteger(minutes) || minutes < 1 || minutes > 40320) {
+          return interaction.editReply("\u274C Az id\u0151tartam 1 \xE9s 40320 perc k\xF6z\xF6tt lehet.");
+        }
+        if (!target.moderatable) return interaction.editReply("\u274C A bot rangsorrend vagy jogosults\xE1g miatt nem tudja felf\xFCggeszteni ezt a tagot.");
+        await target.timeout(minutes * 6e4, `${reason} \u2022 ${interaction.user.tag}`);
+        title = "\u23F1\uFE0F Felf\xFCggeszt\xE9s kiosztva";
+        description = `${target} **${minutes} perces** felf\xFCggeszt\xE9st kapott.`;
+        actionLabel = "Felf\xFCggeszt\xE9s / id\u0151korl\xE1t";
+        extraDetails = `${minutes} perc`;
+      } else if (action === "untimeout") {
+        if (!target.moderatable) return interaction.editReply("\u274C A bot rangsorrend vagy jogosults\xE1g miatt nem tudja feloldani a felf\xFCggeszt\xE9st.");
+        await target.timeout(null, `${reason} \u2022 ${interaction.user.tag}`);
+        title = "\u2705 Felf\xFCggeszt\xE9s feloldva";
+        description = `${target} felf\xFCggeszt\xE9se feloldva.`;
+        actionLabel = "Felf\xFCggeszt\xE9s felold\xE1sa";
+        color = COLORS.success;
+      } else if (action === "kick") {
+        if (!target.kickable) return interaction.editReply("\u274C A bot rangsorrend vagy jogosults\xE1g miatt nem tudja kir\xFAgni ezt a tagot.");
+        actionLabel = "Kir\xFAg\xE1s";
+        dmSent = await sendModerationDM(target, interaction.guild.name, actionLabel, reason);
+        await target.kick(`${reason} \u2022 ${interaction.user.tag}`);
+        title = "\u{1F6AA} Tag kir\xFAgva";
+        description = `${targetTag} elt\xE1vol\xEDtva a szerverr\u0151l.`;
+        color = COLORS.danger;
+      } else if (action === "ban") {
+        if (!target.bannable) return interaction.editReply("\u274C A bot rangsorrend vagy jogosults\xE1g miatt nem tudja kitiltani ezt a tagot.");
+        actionLabel = "Kitilt\xE1s";
+        dmSent = await sendModerationDM(target, interaction.guild.name, actionLabel, reason);
+        await target.ban({ reason: `${reason} \u2022 ${interaction.user.tag}` });
+        title = "\u{1F528} Tag kitiltva";
+        description = `${targetTag} kitiltva a szerverr\u0151l.`;
+        color = COLORS.danger;
+      } else if (action === "role_add" || action === "role_remove") {
+        const role = await interaction.guild.roles.fetch(extraId).catch(() => null);
+        if (!role || role.id === interaction.guild.id || role.managed || !role.editable) {
+          return interaction.editReply("\u274C Ezt a rangot a bot nem tudja kezelni. Ellen\u0151rizd a rangsort.");
+        }
+        const actor = interaction.member;
+        const actorCanManage = actor.id === interaction.guild.ownerId || actor.permissions.has(PermissionFlagsBits2.Administrator) || actor.roles.highest.position > role.position;
+        if (!actorCanManage) return interaction.editReply("\u274C N\xE1lad magasabb vagy azonos rangot nem kezelhetsz.");
+        if (action === "role_add") await target.roles.add(role, `${reason} \u2022 ${interaction.user.tag}`);
+        else await target.roles.remove(role, `${reason} \u2022 ${interaction.user.tag}`);
+        actionLabel = action === "role_add" ? "Rang hozz\xE1ad\xE1sa" : "Rang lev\xE9tele";
+        extraDetails = role.name;
+        title = action === "role_add" ? "\u2795 Rang hozz\xE1adva" : "\u2796 Rang lev\xE9ve";
+        description = `${target} \u2022 ${role}`;
+        color = action === "role_add" ? COLORS.success : COLORS.warning;
+      } else if (action === "nickname") {
+        if (!target.manageable) return interaction.editReply("\u274C A bot rangsorrend miatt nem tudja m\xF3dos\xEDtani ezt a tagot.");
+        const nickname = getText(interaction, "mod_nickname");
+        await target.setNickname(nickname, `${reason} \u2022 ${interaction.user.tag}`);
+        actionLabel = "Becen\xE9v m\xF3dos\xEDt\xE1sa";
+        extraDetails = nickname;
+        title = "\u270F\uFE0F Becen\xE9v m\xF3dos\xEDtva";
+        description = `${target} \xFAj beceneve: **${nickname}**`;
+        color = COLORS.success;
+      } else {
+        return interaction.editReply("\u274C Ismeretlen moder\xE1ci\xF3s m\u0171velet.");
+      }
+      if (action !== "kick" && action !== "ban") {
+        dmSent = await sendModerationDM(target, interaction.guild.name, actionLabel, reason, extraDetails);
+      }
+      const embed = baseEmbed(title, description, color).addFields(
+        { name: "Indok", value: reason },
+        ...evidenceFields(evidence),
+        { name: "Staff", value: staffText }
       );
-      return interaction.editReply(`\u2705 ${target.user.tag} ${minutes} perces id\u0151korl\xE1tot kapott.`);
-    }
-    async function handleKickSubmit(interaction) {
-      if (!isStaff(interaction.member)) return ephemeralError(interaction, "Ezt csak staff tag haszn\xE1lhatja.");
-      await interaction.deferReply({ flags: EPHEMERAL });
-      const target = await fetchTarget(interaction);
-      if (!target) return interaction.editReply("\u274C Nem tal\xE1lom ezt a felhaszn\xE1l\xF3t a szerveren.");
-      if (!target.kickable) return interaction.editReply("\u274C Ezt a tagot a bot rangsorrend vagy jogosults\xE1g miatt nem tudja kir\xFAgni.");
-      const reason = getText(interaction, "mod_reason");
-      const tag = target.user.tag;
-      await target.send(`\u{1F6AA} Kir\xFAgtak a **${interaction.guild.name}** szerverr\u0151l.
-**Indok:** ${reason}`).catch(() => null);
-      await target.kick(`${reason} \u2022 ${interaction.user.tag}`);
-      await sendLog(interaction.guild, baseEmbed("\u{1F6AA} Tag kir\xFAgva", `${tag}
-Indok: ${reason}
-Staff: ${interaction.user}`, COLORS.danger));
-      return interaction.editReply(`\u2705 ${tag} elt\xE1vol\xEDtva a szerverr\u0151l.`);
+      if (extraDetails) embed.addFields({ name: "R\xE9szletek", value: extraDetails });
+      if (action === "warn") {
+        const warningChannel = byName(interaction.guild.channels.cache, NAMES.warningsChannel);
+        await warningChannel?.send({ embeds: [embed] }).catch(() => null);
+      }
+      await sendLog(interaction.guild, embed);
+      return interaction.editReply(`\u2705 A m\u0171velet siker\xFClt: **${actionLabel}** \u2013 ${targetTag}.${dmSent ? "" : "\n\u26A0\uFE0F A priv\xE1t \xFCzenetet nem siker\xFClt elk\xFCldeni."}`);
     }
     async function handleChannelSubmit(interaction) {
       if (!isStaff(interaction.member)) return ephemeralError(interaction, "Ezt csak staff tag haszn\xE1lhatja.");
@@ -694,13 +931,13 @@ Staff: ${interaction.user}`, COLORS.danger));
       return interaction.editReply(`\u2705 A csatorna elk\xE9sz\xFClt: ${channel}`);
     }
     async function handleModal(interaction) {
+      if (interaction.customId.startsWith("mod_submit:")) {
+        return handleModerationSubmit(interaction);
+      }
       const handlers = {
         order_submit: handleOrderSubmit,
         application_submit_part1: handleApplicationPart1,
         application_submit_part2: handleApplicationPart2,
-        warn_submit: handleWarnSubmit,
-        timeout_submit: handleTimeoutSubmit,
-        kick_submit: handleKickSubmit,
         channel_submit: handleChannelSubmit
       };
       return handlers[interaction.customId]?.(interaction);
@@ -709,6 +946,9 @@ Staff: ${interaction.user}`, COLORS.danger));
       try {
         if (interaction.isChatInputCommand()) return await handleCommand(interaction);
         if (interaction.isButton()) return await handleButton(interaction);
+        if (interaction.isUserSelectMenu() || interaction.isRoleSelectMenu() || interaction.isStringSelectMenu()) {
+          return await handleSelectMenu(interaction);
+        }
         if (interaction.isModalSubmit()) return await handleModal(interaction);
       } catch (error) {
         console.error("Interakci\xF3s hiba:", error);
