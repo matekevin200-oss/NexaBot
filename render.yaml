@@ -11,7 +11,7 @@ services:
       - key: DISCORD_TOKEN
         sync: false
       - key: CLIENT_ID
-        value: "1554526995083477062"
+        value: "1545426995083477062"
       - key: GUILD_ID
         value: "1517509643734221030"
       - key: NODE_VERSION
