@@ -45,6 +45,18 @@ var require_panels = __commonJS({
       TextInputStyle
     } = require("discord.js");
     var { COLORS } = require_constants();
+    var TGF_QUESTIONS = Object.freeze([
+      "Mi\xE9rt szeretn\xE9l a Belv\xE9delmi Igazgat\xF3s\xE1ghoz csatlakozni?",
+      "Mit gondolsz, mi a Belv\xE9delmi Igazgat\xF3s\xE1g legfontosabb feladata?",
+      "Mit tenn\xE9l, ha szolg\xE1lat k\xF6zben azt l\xE1tn\xE1d, hogy egy rendv\xE9delmi dolgoz\xF3 vissza\xE9l a jogk\xF6r\xE9vel?",
+      "Mit tenn\xE9l, ha egy n\xE1lad magasabb rang\xFA szem\xE9ly olyan utas\xEDt\xE1st adna, amely szerinted szab\xE1lyellenes?",
+      "Mit jelent sz\xE1modra a szolg\xE1lati hierarchia, \xE9s mi\xE9rt fontos annak betart\xE1sa?",
+      "Mit tenn\xE9l, ha egy m\xE1sik Belv\xE9delmi tag bizalmas inform\xE1ci\xF3t adna ki illet\xE9ktelen szem\xE9lynek?",
+      "Hogyan j\xE1rn\xE1l el, ha egy ellen\u0151rz\xE9s sor\xE1n szab\xE1lytalans\xE1got \xE9szleln\xE9l egy m\xE1sik rendv\xE9delmi szervezetn\xE9l?",
+      "Mit jelent a jogk\xF6rrel val\xF3 vissza\xE9l\xE9s? \xCDrj r\xE1 egy p\xE9ld\xE1t!",
+      "Mi\xE9rt fontos a bizony\xEDt\xE9kok \xE9s a szolg\xE1lati int\xE9zked\xE9sek megfelel\u0151 dokument\xE1l\xE1sa?",
+      "Mi\xE9rt gondolod \xFAgy, hogy alkalmas lenn\xE9l a Belv\xE9delmi Igazgat\xF3s\xE1g tagj\xE1nak?"
+    ]);
     function row(...components) {
       return new ActionRowBuilder().addComponents(...components);
     }
@@ -65,11 +77,11 @@ var require_panels = __commonJS({
       return { embeds: [embed], components: [buttons] };
     }
     function applicationPanel() {
-      const embed = new EmbedBuilder().setColor(COLORS.primary).setTitle("\u{1F4CB} Jelentkez\xE9s").setDescription(
-        "Szeretn\xE9l a csapat tagja lenni? A gombra kattintva megny\xEDlik a jelentkez\xE9si lap.\n\n\xCDrj \u0151szint\xE9n \xE9s r\xE9szletesen \u2014 a v\xE1laszaidat csak a staff l\xE1tja."
-      ).setFooter({ text: "NexaBot \u2022 Jelentkez\xE9si rendszer" });
+      const embed = new EmbedBuilder().setColor(COLORS.primary).setTitle("\u{1F3DB}\uFE0F Belv\xE9delmi Igazgat\xF3s\xE1g TGF").setDescription(
+        "**Szeretn\xE9l csatlakozni a Belv\xE9delmi Igazgat\xF3s\xE1ghoz?**\n\n" + TGF_QUESTIONS.map((question, index) => `**${index + 1}.** ${question}`).join("\n\n") + "\n\nA TGF k\xE9t, egyenk\xE9nt 5 k\xE9rd\xE9ses r\xE9szb\u0151l \xE1ll. \xCDrj komoly, \u0151szinte \xE9s r\xE9szletes v\xE1laszokat \u2014 ezeket csak a vezet\u0151s\xE9g \xE9s a staff l\xE1tja."
+      ).setFooter({ text: "NexaBot \u2022 Belv\xE9delmi TGF rendszer" });
       const buttons = row(
-        new ButtonBuilder().setCustomId("application_open").setLabel("Jelentkez\xE9s kit\xF6lt\xE9se").setEmoji("\u{1F4DD}").setStyle(ButtonStyle.Primary)
+        new ButtonBuilder().setCustomId("application_open").setLabel("Belv\xE9delmi TGF megkezd\xE9se").setEmoji("\u{1F4DD}").setStyle(ButtonStyle.Primary)
       );
       return { embeds: [embed], components: [buttons] };
     }
@@ -111,6 +123,11 @@ var require_panels = __commonJS({
         new ButtonBuilder().setCustomId(`application_reject:${userId}`).setLabel("Elutas\xEDt\xE1s").setEmoji("\u274C").setStyle(ButtonStyle.Danger)
       );
     }
+    function applicationContinue(userId) {
+      return row(
+        new ButtonBuilder().setCustomId(`application_continue:${userId}`).setLabel("Folytat\xE1s: 6\u201310. k\xE9rd\xE9s").setEmoji("\u27A1\uFE0F").setStyle(ButtonStyle.Primary)
+      );
+    }
     function orderModal() {
       return new ModalBuilder().setCustomId("order_submit").setTitle("Discord-fejleszt\xE9s rendel\xE9se").addComponents(
         row(input("order_type", "Milyen szervert szeretn\xE9l?", TextInputStyle.Short, "P\xE9ld\xE1ul: RP, gaming, k\xF6z\xF6ss\xE9gi", true, 100)),
@@ -120,12 +137,21 @@ var require_panels = __commonJS({
       );
     }
     function applicationModal() {
-      return new ModalBuilder().setCustomId("application_submit").setTitle("Jelentkez\xE9si lap").addComponents(
-        row(input("app_name", "Neved / beceneved", TextInputStyle.Short, "Ahogy sz\xF3l\xEDthatunk", true, 80)),
-        row(input("app_age", "H\xE1ny \xE9ves vagy?", TextInputStyle.Short, "Csak sz\xE1mot \xEDrj", true, 3)),
-        row(input("app_experience", "Kor\xE1bbi tapasztalatod", TextInputStyle.Paragraph, "Milyen Discord-szervereken dolgozt\xE1l?", true, 700)),
-        row(input("app_motivation", "Mi\xE9rt jelentkezel?", TextInputStyle.Paragraph, "\xCDrd le r\xF6viden a motiv\xE1ci\xF3dat", true, 700)),
-        row(input("app_availability", "Mikor vagy el\xE9rhet\u0151?", TextInputStyle.Short, "P\xE9ld\xE1ul: h\xE9tk\xF6znap 16 \xF3ra ut\xE1n", true, 100))
+      return new ModalBuilder().setCustomId("application_submit_part1").setTitle("Belv\xE9delmi TGF \u2022 1/2").addComponents(
+        row(input("app_q1", "1. Csatlakoz\xE1si motiv\xE1ci\xF3d", TextInputStyle.Paragraph, "Mi\xE9rt szeretn\xE9l csatlakozni?", true, 350)),
+        row(input("app_q2", "2. A Belv\xE9delem f\u0151 feladata", TextInputStyle.Paragraph, "Mi a Belv\xE9delmi Igazgat\xF3s\xE1g legfontosabb feladata?", true, 350)),
+        row(input("app_q3", "3. Jogk\xF6rrel val\xF3 vissza\xE9l\xE9s", TextInputStyle.Paragraph, "Mit tenn\xE9l, ha vissza\xE9l\xE9st l\xE1tn\xE1l?", true, 350)),
+        row(input("app_q4", "4. Szab\xE1lyellenes utas\xEDt\xE1s", TextInputStyle.Paragraph, "Mit tenn\xE9l szab\xE1lyellenes utas\xEDt\xE1s eset\xE9n?", true, 350)),
+        row(input("app_q5", "5. Szolg\xE1lati hierarchia", TextInputStyle.Paragraph, "Mit jelent, \xE9s mi\xE9rt fontos betartani?", true, 350))
+      );
+    }
+    function applicationModalPart2() {
+      return new ModalBuilder().setCustomId("application_submit_part2").setTitle("Belv\xE9delmi TGF \u2022 2/2").addComponents(
+        row(input("app_q6", "6. Bizalmas inform\xE1ci\xF3 kiad\xE1sa", TextInputStyle.Paragraph, "Mit tenn\xE9l inform\xE1ci\xF3 kisziv\xE1rogtat\xE1sakor?", true, 350)),
+        row(input("app_q7", "7. M\xE1s szervezet szab\xE1lytalans\xE1ga", TextInputStyle.Paragraph, "Hogyan j\xE1rn\xE1l el az ellen\u0151rz\xE9s sor\xE1n?", true, 350)),
+        row(input("app_q8", "8. Jogk\xF6rrel val\xF3 vissza\xE9l\xE9s p\xE9ld\xE1ja", TextInputStyle.Paragraph, "\xCDrd le a jelent\xE9s\xE9t \xE9s egy p\xE9ld\xE1t!", true, 350)),
+        row(input("app_q9", "9. Dokument\xE1l\xE1s fontoss\xE1ga", TextInputStyle.Paragraph, "Mi\xE9rt fontos mindent megfelel\u0151en dokument\xE1lni?", true, 350)),
+        row(input("app_q10", "10. Mi\xE9rt lenn\xE9l alkalmas?", TextInputStyle.Paragraph, "Mi\xE9rt lenn\xE9l alkalmas Belv\xE9delmi tagnak?", true, 350))
       );
     }
     function moderationModal(type) {
@@ -159,10 +185,13 @@ var require_panels = __commonJS({
       closeConfirmation,
       deleteTicketButton,
       applicationControls,
+      applicationContinue,
       orderModal,
       applicationModal,
+      applicationModalPart2,
       moderationModal,
-      channelModal
+      channelModal,
+      TGF_QUESTIONS
     };
   }
 });
@@ -339,10 +368,13 @@ var require_interactions = __commonJS({
       closeConfirmation,
       deleteTicketButton,
       applicationControls,
+      applicationContinue,
       orderModal,
       applicationModal,
+      applicationModalPart2,
       moderationModal,
-      channelModal
+      channelModal,
+      TGF_QUESTIONS
     } = require_panels();
     var {
       byName,
@@ -355,6 +387,10 @@ var require_interactions = __commonJS({
     } = require_utils();
     var { setupServer } = require_setup();
     var EPHEMERAL = MessageFlags.Ephemeral;
+    var applicationDrafts = /* @__PURE__ */ new Map();
+    function applicationDraftKey(interaction) {
+      return `${interaction.guildId}:${interaction.user.id}`;
+    }
     function ticketOwner(channel) {
       const parts = channel?.topic?.split("|");
       return parts?.[0] === "nexabot-ticket" ? parts[1] : null;
@@ -439,6 +475,16 @@ var require_interactions = __commonJS({
       if (id === "ticket_support") return createTicket(interaction, "support");
       if (id === "ticket_order") return interaction.showModal(orderModal());
       if (id === "application_open") return interaction.showModal(applicationModal());
+      if (id.startsWith("application_continue:")) {
+        const applicantId = id.split(":")[1];
+        if (applicantId !== interaction.user.id) {
+          return ephemeralError(interaction, "Ezt a TGF-et csak a jelentkez\u0151 folytathatja.");
+        }
+        if (!applicationDrafts.has(applicationDraftKey(interaction))) {
+          return ephemeralError(interaction, "Az els\u0151 r\xE9sz lej\xE1rt. Kezdd \xFAjra a TGF-et a jelentkez\xE9si csatorn\xE1ban.");
+        }
+        return interaction.showModal(applicationModalPart2());
+      }
       if (id.startsWith("staff_")) {
         if (!isStaff(interaction.member)) return ephemeralError(interaction, "Ezt csak staff tag haszn\xE1lhatja.");
         if (id === "staff_warn") return interaction.showModal(moderationModal("warn"));
@@ -504,7 +550,7 @@ var require_interactions = __commonJS({
           if (acceptedRole) await member.roles.add(acceptedRole, "Elfogadott NexaBot jelentkez\xE9s").catch(() => null);
         }
         await member?.send(
-          accepted ? `\u2705 A **${interaction.guild.name}** szerveren elfogadt\xE1k a jelentkez\xE9sedet!` : `\u274C A **${interaction.guild.name}** szerveren most nem fogadt\xE1k el a jelentkez\xE9sedet.`
+          accepted ? `\u2705 A **${interaction.guild.name}** szerveren elfogadt\xE1k a Belv\xE9delmi TGF-edet! Keresd a vezet\u0151s\xE9get a tov\xE1bbi teend\u0151k\xE9rt.` : `\u274C A **${interaction.guild.name}** szerveren most nem fogadt\xE1k el a Belv\xE9delmi TGF-edet.`
         ).catch(() => null);
         await interaction.update({ embeds: [embed], components: [] });
         return sendLog(
@@ -522,23 +568,46 @@ var require_interactions = __commonJS({
       ];
       return createTicket(interaction, "order", details);
     }
-    async function handleApplicationSubmit(interaction) {
+    async function handleApplicationPart1(interaction) {
+      const answers = TGF_QUESTIONS.slice(0, 5).map(
+        (_question, index) => getText(interaction, `app_q${index + 1}`)
+      );
+      applicationDrafts.set(applicationDraftKey(interaction), {
+        answers,
+        createdAt: Date.now()
+      });
+      return interaction.reply({
+        content: "\u2705 Az els\u0151 5 v\xE1laszodat elmentettem. Nyomd meg a **Folytat\xE1s** gombot a 6\u201310. k\xE9rd\xE9shez.",
+        components: [applicationContinue(interaction.user.id)],
+        flags: EPHEMERAL
+      });
+    }
+    async function handleApplicationPart2(interaction) {
       await interaction.deferReply({ flags: EPHEMERAL });
       const reviewChannel = byName(interaction.guild.channels.cache, NAMES.applicationReviewChannel);
       if (!reviewChannel?.isTextBased()) {
         return interaction.editReply("A jelentkez\xE9si csatorna m\xE9g nincs be\xE1ll\xEDtva. Egy admin haszn\xE1lja a **/telepites** parancsot.");
       }
-      const embed = baseEmbed("\u{1F4CB} \xDAj jelentkez\xE9s", `${interaction.user} \xFAj jelentkez\xE9st k\xFCld\xF6tt.`).setThumbnail(interaction.user.displayAvatarURL()).addFields(
-        { name: "N\xE9v / becen\xE9v", value: getText(interaction, "app_name"), inline: true },
-        { name: "\xC9letkor", value: getText(interaction, "app_age"), inline: true },
-        { name: "Tapasztalat", value: getText(interaction, "app_experience") },
-        { name: "Motiv\xE1ci\xF3", value: getText(interaction, "app_motivation") },
-        { name: "El\xE9rhet\u0151s\xE9g", value: getText(interaction, "app_availability") },
-        { name: "Felhaszn\xE1l\xF3", value: `${interaction.user.tag} (${interaction.user.id})` }
+      const key = applicationDraftKey(interaction);
+      const draft = applicationDrafts.get(key);
+      if (!draft) {
+        return interaction.editReply("\u274C Az els\u0151 r\xE9sz nem tal\xE1lhat\xF3. Kezdd \xFAjra a TGF-et a jelentkez\xE9si csatorn\xE1ban.");
+      }
+      const answers = [
+        ...draft.answers,
+        ...TGF_QUESTIONS.slice(5).map((_question, index) => getText(interaction, `app_q${index + 6}`))
+      ];
+      const embed = baseEmbed("\u{1F3DB}\uFE0F \xDAj Belv\xE9delmi TGF", `${interaction.user} \xFAj Belv\xE9delmi TGF-et k\xFCld\xF6tt.`).setThumbnail(interaction.user.displayAvatarURL()).addFields(
+        ...TGF_QUESTIONS.map((question, index) => ({
+          name: `${index + 1}. ${question}`,
+          value: answers[index]
+        })),
+        { name: "Discord-felhaszn\xE1l\xF3", value: `${interaction.user.tag} (${interaction.user.id})` }
       );
       await reviewChannel.send({ embeds: [embed], components: [applicationControls(interaction.user.id)] });
-      await sendLog(interaction.guild, baseEmbed("\u{1F4E8} Jelentkez\xE9s \xE9rkezett", `${interaction.user.tag} jelentkez\xE9st k\xFCld\xF6tt.`, COLORS.success));
-      return interaction.editReply("\u2705 A jelentkez\xE9sedet elk\xFCldt\xFCk a staffnak.");
+      applicationDrafts.delete(key);
+      await sendLog(interaction.guild, baseEmbed("\u{1F4E8} Belv\xE9delmi TGF \xE9rkezett", `${interaction.user.tag} TGF-et k\xFCld\xF6tt.`, COLORS.success));
+      return interaction.editReply("\u2705 A Belv\xE9delmi TGF-edet elk\xFCldt\xFCk a vezet\u0151s\xE9gnek.");
     }
     async function fetchTarget(interaction) {
       const userId = getText(interaction, "mod_user_id").replace(/\D/g, "");
@@ -629,7 +698,8 @@ Staff: ${interaction.user}`, COLORS.danger));
     async function handleModal(interaction) {
       const handlers = {
         order_submit: handleOrderSubmit,
-        application_submit: handleApplicationSubmit,
+        application_submit_part1: handleApplicationPart1,
+        application_submit_part2: handleApplicationPart2,
         warn_submit: handleWarnSubmit,
         timeout_submit: handleTimeoutSubmit,
         kick_submit: handleKickSubmit,
