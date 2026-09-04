@@ -64,15 +64,13 @@ var require_panels = __commonJS({
       return new TextInputBuilder().setCustomId(customId).setLabel(label).setStyle(style).setPlaceholder(placeholder).setRequired(required).setMaxLength(maxLength);
     }
     function ticketPanel() {
-      const embed = new EmbedBuilder().setColor(COLORS.primary).setTitle("\u{1F3AB} \xDCgyint\xE9z\xE9s \xE9s rendel\xE9s").setDescription(
-        "**Seg\xEDts\xE9gre van sz\xFCks\xE9ged vagy Discord-szervert rendeln\xE9l?**\n\nV\xE1laszd ki a megfelel\u0151 gombot. A bot l\xE9trehoz neked egy priv\xE1t csatorn\xE1t, amelyet csak te \xE9s a staff l\xE1t."
+      const embed = new EmbedBuilder().setColor(COLORS.primary).setTitle("\u{1F3AB} Seg\xEDts\xE9gk\xE9r\xE9s").setDescription(
+        "**Seg\xEDts\xE9gre van sz\xFCks\xE9ged?**\n\nNyomd meg az al\xE1bbi gombot. A bot l\xE9trehoz neked egy priv\xE1t seg\xEDts\xE9gk\xE9r\u0151 csatorn\xE1t, amelyet csak te \xE9s a staff l\xE1t."
       ).addFields(
-        { name: "\u{1F4AC} Seg\xEDts\xE9g", value: "K\xE9rd\xE9s, hiba vagy \xE1ltal\xE1nos \xFCgyint\xE9z\xE9s.", inline: true },
-        { name: "\u{1F6D2} Rendel\xE9s", value: "Discord-szerverfejleszt\xE9s megrendel\xE9se.", inline: true }
+        { name: "\u{1F4AC} Miben k\xE9rhetsz seg\xEDts\xE9get?", value: "K\xE9rd\xE9s, probl\xE9ma, bejelent\xE9s vagy \xE1ltal\xE1nos \xFCgyint\xE9z\xE9s." }
       ).setFooter({ text: "NexaBot \u2022 Egyszerre csak egy akt\xEDv ticketed lehet." });
       const buttons = row(
-        new ButtonBuilder().setCustomId("ticket_support").setLabel("Seg\xEDts\xE9get k\xE9rek").setEmoji("\u{1F4AC}").setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId("ticket_order").setLabel("Rendel\xE9st adok le").setEmoji("\u{1F6D2}").setStyle(ButtonStyle.Primary)
+        new ButtonBuilder().setCustomId("ticket_support").setLabel("Seg\xEDts\xE9gk\xE9r\xE9s l\xE9trehoz\xE1sa").setEmoji("\u{1F4AC}").setStyle(ButtonStyle.Primary)
       );
       return { embeds: [embed], components: [buttons] };
     }
