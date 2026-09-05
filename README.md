@@ -1,4 +1,4 @@
-# NEXA Bot 5.0
+# NEXA Bot 5.1
 
 Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Az opcionális RP- és dokumentumrendszert kizárólag a bot tulajdonosa vagy az általa kijelölt Owner-kezelő kapcsolhatja be egy kiválasztott szerveren.
 
@@ -6,6 +6,7 @@
 
 - szerverenként külön mentett modulok, csatornák, rangok, nyelv és arculat;
 - magyar alapnyelv, szerverenként választható angol Discord-felület;
+- professzionális, kétnyelvű publikus bemutatóoldal élő szerver-, tagszám-, ping-, uptime- és adatbázis-állapottal;
 - Discord OAuth2 dashboard tulajdonos, admin és egy kijelölt kezelői rang részére;
 - külön Owner Center: szerverhálózat, uptime, ping, memória, adatbázis, használat, hibák és audit;
 - owner-kezelők, AI-engedélylista, user/guild blacklist, maintenance és globális modul-vészkapcsoló;
@@ -126,7 +127,7 @@ npm test
 A sikeres logban ez jelenik meg:
 
 ```text
-A NEXA Bot 5.0 management platform használatra kész.
+A NEXA Bot 5.1 management platform használatra kész.
 ```
 
 ## Használat

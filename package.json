@@ -1,8 +1,8 @@
 {
   "name": "nexabot",
-  "version": "5.0.0",
+  "version": "5.1.0",
   "private": true,
-  "description": "NEXA Bot 5.0 több szerveres Discord operations platform Owner által kezelt csomagokkal",
+  "description": "NEXA Bot 5.1 több szerveres Discord operations platform professzionális kétnyelvű weboldallal",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
