@@ -1,4 +1,4 @@
-# NexaBot 3.0
+# NexaBot 3.1
 
 Professzionális, több szerveres Discord-bot modern webes vezérlőpulttal. A zenei modul szándékosan nincs benne.
 
@@ -15,6 +15,9 @@ Professzionális, több szerveres Discord-bot modern webes vezérlőpulttal. A z
 - automatikusan létrejövő és kiürüléskor törlődő hangcsatornák;
 - Shift Management: szolgálat, szünet, napló, heti/havi statisztika és ranglista;
 - Nexa AI szervermemóriával és külön engedélyhez kötött személyes memóriával;
+- teljes, gombos Discord Control Center, ezért az alapfunkciókhoz nem kell parancsot beírni;
+- kijelölhető AI-csatorna, ahol a bot a normál üzenetekre válaszol;
+- elkülönített privát Nexa AI-beszélgetés a bot közvetlen üzeneteiben;
 - teljes RP jelentkezési, ügyintézési és dokumentumrendszer a kijelölt fő RP-szerveren.
 
 ## Webes Control Center
@@ -37,7 +40,11 @@ A vezérlőpulton módosítható:
 - védelem érzékenysége és büntetései;
 - a vezérlőpult neve, két fő színe és logója.
 
-## Discord-parancsok
+A **NexaBot fő vezérlőpanel** csatorna mentésekor a bot automatikusan kihelyezi vagy frissíti a Discord-panelt. Az **Nexa AI beszélgetőcsatornában** minden nem-bot szöveges üzenetre válaszol. A panel AI-gombjáról kérdés, személyes memória és privát AI is indítható.
+
+## Tartalék Discord-parancsok
+
+A fő funkciók a gombos panelről használhatók. A parancsok visszafelé kompatibilis tartalékként megmaradtak:
 
 - `/beallitas` – webes Control Center;
 - `/vedelem statusz|feloldas` – védelmi állapot és raidlezárás feloldása;
@@ -94,8 +101,9 @@ A csomag Node.js 22 vagy újabb verziót használ. A `render.yaml` közvetlen Re
 
 ## AI-adatvédelem
 
-- A személyes memória alapból csak külön `/nexa beleegyezes` után használható.
+- A személyes memória alapból csak a felhasználó külön beleegyezése után használható; ez az AI-panelen gombbal be- és kikapcsolható.
 - A beleegyezés visszavonásakor a bot törli a személyes emlékeket és beszélgetési előzményeket.
 - A szervermemóriát csak Staff kezelheti, teljes törlését csak admin végezheti.
 - Token, jelszó, API-kulcs és hasonló titkos adat nem menthető memóriába.
 - Az AI funkció szerverenként bármikor kikapcsolható.
+- A privát AI nem olvassa és nem keveri össze a különböző Discord-szerverek memóriáit.

@@ -1,8 +1,8 @@
 {
   "name": "nexabot",
-  "version": "3.0.1",
+  "version": "3.1.0",
   "private": true,
-  "description": "NexaBot 3.0 több szerveres Discord Control Center AI-val, szolgálatkezeléssel, közösségi modulokkal és aktív védelemmel",
+  "description": "NexaBot 3.1 teljes Discord Control Centerrel, privát és csatornaalapú AI-val, szolgálatkezeléssel és aktív védelemmel",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {

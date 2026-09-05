@@ -1,4 +1,4 @@
-// NexaBot 3.0 single-file release — generated automatically.
+// NexaBot 3.1 single-file release — generated automatically.
 const __nativeRequire = require;
 const __path = __nativeRequire('node:path').posix;
 const __modules = {
@@ -20,6 +20,7 @@ const memoryFallback = new Map();
 const consentFallback = new Map();
 const historyFallback = new Map();
 const cooldowns = new Map();
+const privateHistory = new Map();
 
 function buildAiCommand() {
   return new SlashCommandBuilder()
@@ -180,6 +181,46 @@ async function deleteMemories(guildId, userId) {
   if (!result) memoryFallback.delete(memoryKey(guildId, userId));
 }
 
+async function setPersonalMemoryConsent(guildId, userId, allowed) {
+  const config = getGuildConfig(guildId);
+  if (!config.modules.ai || (allowed && !config.ai.personalMemory)) {
+    throw new Error('A személyes AI-memória ezen a szerveren ki van kapcsolva.');
+  }
+  await setConsent(guildId, userId, allowed);
+  if (!allowed) {
+    await deleteMemories(guildId, userId);
+    await dbQuery('DELETE FROM nexabot_ai_messages WHERE guild_id = $1 AND user_id = $2', [guildId, userId]);
+    historyFallback.delete(memoryKey(guildId, userId));
+  }
+}
+
+async function rememberPersonal(guildId, userId, content) {
+  const config = getGuildConfig(guildId);
+  if (looksSensitive(content)) throw new Error('Token, jelszó, API-kulcs vagy más titkos adat nem menthető.');
+  if (!config.modules.ai || !config.ai.personalMemory || !(await consentAllowed(guildId, userId))) {
+    throw new Error('Előbb kapcsold be a személyes memóriát az AI-panelen.');
+  }
+  await addMemory(guildId, userId, String(content).trim(), userId, config.ai.maxMemories);
+}
+
+async function rememberServer(guildId, userId, content) {
+  const config = getGuildConfig(guildId);
+  if (looksSensitive(content)) throw new Error('Token, jelszó, API-kulcs vagy más titkos adat nem menthető.');
+  if (!config.modules.ai || !config.ai.serverMemory) throw new Error('A szervermemória ki van kapcsolva.');
+  await addMemory(guildId, null, String(content).trim(), userId, config.ai.maxMemories);
+}
+
+async function personalMemories(guildId, userId) {
+  const config = getGuildConfig(guildId);
+  return getMemories(guildId, userId, config.ai.maxMemories);
+}
+
+async function clearPersonalMemories(guildId, userId) {
+  await deleteMemories(guildId, userId);
+  await dbQuery('DELETE FROM nexabot_ai_messages WHERE guild_id = $1 AND user_id = $2', [guildId, userId]);
+  historyFallback.delete(memoryKey(guildId, userId));
+}
+
 async function historyFor(guildId, userId) {
   const result = await dbQuery(
     `SELECT role, content FROM nexabot_ai_messages
@@ -252,6 +293,90 @@ async function askOpenAi({ question, guild, user, config, serverMemories, person
   return answer;
 }
 
+function takeCooldown(key, milliseconds = 10_000) {
+  const now = Date.now();
+  if ((cooldowns.get(key) || 0) > now) return false;
+  cooldowns.set(key, now + milliseconds);
+  return true;
+}
+
+async function answerGuildAi(guild, user, question) {
+  if (!guild || !moduleEnabled(guild.id, 'ai')) {
+    throw new Error('A Nexa AI ezen a szerveren ki van kapcsolva.');
+  }
+  const cleanQuestion = String(question || '').trim().slice(0, 1500);
+  if (!cleanQuestion) throw new Error('Írj be egy kérdést.');
+  if (!takeCooldown(memoryKey(guild.id, user.id))) {
+    throw new Error('Várj néhány másodpercet a következő AI-kérdés előtt.');
+  }
+  const config = getGuildConfig(guild.id);
+  const personalAllowed = config.ai.personalMemory && await consentAllowed(guild.id, user.id);
+  const [serverMemories, personalMemories, history] = await Promise.all([
+    config.ai.serverMemory ? getMemories(guild.id, null, config.ai.maxMemories) : [],
+    personalAllowed ? getMemories(guild.id, user.id, config.ai.maxMemories) : [],
+    personalAllowed ? historyFor(guild.id, user.id) : []
+  ]);
+  const answer = await askOpenAi({
+    question: cleanQuestion,
+    guild,
+    user,
+    config,
+    serverMemories,
+    personalMemories,
+    history
+  });
+  if (personalAllowed) {
+    await addHistory(guild.id, user.id, 'user', cleanQuestion);
+    await addHistory(guild.id, user.id, 'assistant', answer);
+  }
+  return answer;
+}
+
+async function answerPrivateAi(user, question) {
+  const cleanQuestion = String(question || '').trim().slice(0, 1500);
+  if (!cleanQuestion) throw new Error('Írj be egy kérdést.');
+  const key = `dm:${user.id}`;
+  if (!takeCooldown(key, 5_000)) {
+    throw new Error('Várj néhány másodpercet a következő AI-kérdés előtt.');
+  }
+  const history = (privateHistory.get(key) || []).slice(-8);
+  const config = {
+    ai: {
+      systemPrompt: 'Segítőkész, tömör, magyar nyelvű Nexa AI asszisztens vagy. A privát beszélgetésben ne feltételezz semmit a felhasználó Discord-szervereiről.'
+    }
+  };
+  const answer = await askOpenAi({
+    question: cleanQuestion,
+    guild: { name: 'Privát Nexa AI beszélgetés' },
+    user,
+    config,
+    serverMemories: [],
+    personalMemories: [],
+    history
+  });
+  privateHistory.set(key, [...history, { role: 'user', content: cleanQuestion }, { role: 'assistant', content: answer }].slice(-8));
+  return answer;
+}
+
+async function handleAiMessage(message) {
+  if (message.author.bot || !message.content?.trim()) return;
+  const isPrivate = !message.guild;
+  if (!isPrivate) {
+    const config = getGuildConfig(message.guild.id);
+    if (!config.modules.ai || !config.channels.ai || message.channel.id !== config.channels.ai) return;
+  }
+  await message.channel.sendTyping().catch(() => null);
+  try {
+    const answer = isPrivate
+      ? await answerPrivateAi(message.author, message.content)
+      : await answerGuildAi(message.guild, message.author, message.content);
+    await message.reply(`✨ **Nexa AI**\n${answer.slice(0, 1850)}`);
+  } catch (error) {
+    console.error('Nexa AI üzenethiba:', error.message);
+    await message.reply(`❌ ${String(error.message).slice(0, 1800)}`).catch(() => null);
+  }
+}
+
 async function handleAiCommand(interaction) {
   if (!moduleEnabled(interaction.guildId, 'ai')) {
     return interaction.reply({ content: '❌ A Nexa AI ezen a szerveren ki van kapcsolva.', flags: EPHEMERAL });
@@ -313,36 +438,12 @@ async function handleAiCommand(interaction) {
     return interaction.reply({ content: '✅ A kiválasztott memória törölve.', flags: EPHEMERAL });
   }
 
-  const now = Date.now();
-  const cooldownKey = memoryKey(interaction.guildId, interaction.user.id);
-  if ((cooldowns.get(cooldownKey) || 0) > now) {
-    return interaction.reply({ content: '⏳ Várj néhány másodpercet a következő AI-kérdés előtt.', flags: EPHEMERAL });
-  }
-  cooldowns.set(cooldownKey, now + 10_000);
   await interaction.deferReply();
   try {
-    const personalAllowed = config.ai.personalMemory && await consentAllowed(interaction.guildId, interaction.user.id);
-    const [serverMemories, personalMemories, history] = await Promise.all([
-      config.ai.serverMemory ? getMemories(interaction.guildId, null, config.ai.maxMemories) : [],
-      personalAllowed ? getMemories(interaction.guildId, interaction.user.id, config.ai.maxMemories) : [],
-      personalAllowed ? historyFor(interaction.guildId, interaction.user.id) : []
-    ]);
     const question = subcommand === 'dokumentum'
       ? `Készíts ${interaction.options.getString('tipus', true)} típusú, azonnal használható magyar szöveget. Csak a kész szöveget add meg. Részletek: ${interaction.options.getString('reszletek', true)}`
       : interaction.options.getString('szoveg', true);
-    const answer = await askOpenAi({
-      question,
-      guild: interaction.guild,
-      user: interaction.user,
-      config,
-      serverMemories,
-      personalMemories,
-      history
-    });
-    if (personalAllowed) {
-      await addHistory(interaction.guildId, interaction.user.id, 'user', question);
-      await addHistory(interaction.guildId, interaction.user.id, 'assistant', answer);
-    }
+    const answer = await answerGuildAi(interaction.guild, interaction.user, question);
     return interaction.editReply(`✨ **Nexa AI**\n${answer.slice(0, 1900)}`);
   } catch (error) {
     console.error('Nexa AI hiba:', error.message);
@@ -353,6 +454,14 @@ async function handleAiCommand(interaction) {
 module.exports = {
   buildAiCommand,
   handleAiCommand,
+  handleAiMessage,
+  answerGuildAi,
+  answerPrivateAi,
+  setPersonalMemoryConsent,
+  rememberPersonal,
+  rememberServer,
+  personalMemories,
+  clearPersonalMemories,
   looksSensitive,
   extractResponseText
 };
@@ -479,6 +588,7 @@ async function xpLeaderboard(guildId, limit = 10) {
 async function handleMessageXp(message) {
   if (!message.guild || message.author.bot || !moduleEnabled(message.guild.id, 'levels')) return;
   const config = getGuildConfig(message.guild.id);
+  if (config.channels.ai && message.channel.id === config.channels.ai) return;
   const key = xpKey(message.guild.id, message.author.id);
   const now = Date.now();
   if ((xpCooldowns.get(key) || 0) > now) return;
@@ -520,6 +630,43 @@ function pollEmojis(index) {
   return ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'][index];
 }
 
+async function createSuggestion(guild, user, text) {
+  const channel = configuredChannel(guild, 'suggestions');
+  if (!channel?.isTextBased()) throw new Error('Az ötletcsatorna nincs beállítva a webpanelen.');
+  const message = await channel.send({ embeds: [baseEmbed('💡 Új közösségi ötlet', text, COLORS.primary).addFields({ name: 'Beküldte', value: `${user}` })] });
+  await message.react('👍');
+  await message.react('👎');
+  return message;
+}
+
+async function createPoll(channel, user, question, answerText) {
+  const answers = String(answerText).split('|').map((item) => item.trim()).filter(Boolean).slice(0, 10);
+  if (answers.length < 2) throw new Error('Legalább két választ adj meg `|` jellel elválasztva.');
+  const embed = baseEmbed('📊 Szavazás', question, COLORS.primary)
+    .addFields({ name: 'Lehetőségek', value: answers.map((answer, index) => `${pollEmojis(index)} ${answer}`).join('\n') }, { name: 'Indította', value: `${user}` });
+  const message = await channel.send({ embeds: [embed] });
+  for (let index = 0; index < answers.length; index += 1) await message.react(pollEmojis(index));
+  return message;
+}
+
+async function createAnnouncement(guild, fallbackChannel, user, title, text, image = null) {
+  const channel = configuredChannel(guild, 'announcements') || fallbackChannel;
+  if (!channel?.isTextBased()) throw new Error('A bejelentési csatorna nincs beállítva.');
+  if (image && !/^https:\/\//i.test(image)) throw new Error('A képhez teljes HTTPS-hivatkozást adj meg.');
+  const embed = baseEmbed(title, text, COLORS.primary).addFields({ name: 'Közzétette', value: `${user}` });
+  if (image) embed.setImage(image);
+  await channel.send({ embeds: [embed] });
+  return channel;
+}
+
+async function startGiveaway(client, guildId, channel, prize, minutes, winners = 1) {
+  const endsAt = new Date(Date.now() + Number(minutes) * 60_000);
+  const message = await channel.send(giveawayPayload(prize, endsAt, winners, false));
+  await saveGiveaway({ messageId: message.id, guildId, channelId: channel.id, prize, winners, endsAt, entrants: [] });
+  scheduleGiveaway(client, message.id, endsAt);
+  return message;
+}
+
 async function handleCommunityCommand(interaction) {
   const name = interaction.commandName;
   if (['szint', 'szint-ranglista'].includes(name)) {
@@ -547,11 +694,7 @@ async function handleCommunityCommand(interaction) {
   }
 
   if (name === 'otlet') {
-    const channel = configuredChannel(interaction.guild, 'suggestions');
-    if (!channel?.isTextBased()) return interaction.reply({ content: '❌ Az ötletcsatorna nincs beállítva a webpanelen.', flags: EPHEMERAL });
-    const message = await channel.send({ embeds: [baseEmbed('💡 Új közösségi ötlet', interaction.options.getString('szoveg', true), COLORS.primary).addFields({ name: 'Beküldte', value: `${interaction.user}` })] });
-    await message.react('👍');
-    await message.react('👎');
+    const message = await createSuggestion(interaction.guild, interaction.user, interaction.options.getString('szoveg', true));
     return interaction.reply({ content: `✅ Az ötleted megjelent itt: ${message.url}`, flags: EPHEMERAL });
   }
 
@@ -568,23 +711,13 @@ async function handleCommunityCommand(interaction) {
   if (denied) return denied;
 
   if (name === 'szavazas') {
-    const answers = interaction.options.getString('valaszok', true).split('|').map((item) => item.trim()).filter(Boolean).slice(0, 10);
-    if (answers.length < 2) return interaction.reply({ content: '❌ Legalább két választ adj meg `|` jellel elválasztva.', flags: EPHEMERAL });
-    const embed = baseEmbed('📊 Szavazás', interaction.options.getString('kerdes', true), COLORS.primary)
-      .addFields({ name: 'Lehetőségek', value: answers.map((answer, index) => `${pollEmojis(index)} ${answer}`).join('\n') }, { name: 'Indította', value: `${interaction.user}` });
-    const message = await interaction.channel.send({ embeds: [embed] });
-    for (let index = 0; index < answers.length; index += 1) await message.react(pollEmojis(index));
+    await createPoll(interaction.channel, interaction.user, interaction.options.getString('kerdes', true), interaction.options.getString('valaszok', true));
     return interaction.reply({ content: '✅ A szavazás elindult.', flags: EPHEMERAL });
   }
 
   if (name === 'bejelentes') {
-    const channel = configuredChannel(interaction.guild, 'announcements') || interaction.channel;
     const image = interaction.options.getString('kep');
-    if (image && !/^https:\/\//i.test(image)) return interaction.reply({ content: '❌ A képhez teljes HTTPS-hivatkozást adj meg.', flags: EPHEMERAL });
-    const embed = baseEmbed(interaction.options.getString('cim', true), interaction.options.getString('szoveg', true), COLORS.primary)
-      .addFields({ name: 'Közzétette', value: `${interaction.user}` });
-    if (image) embed.setImage(image);
-    await channel.send({ embeds: [embed] });
+    const channel = await createAnnouncement(interaction.guild, interaction.channel, interaction.user, interaction.options.getString('cim', true), interaction.options.getString('szoveg', true), image);
     return interaction.reply({ content: `✅ A bejelentés megjelent itt: ${channel}`, flags: EPHEMERAL });
   }
 
@@ -592,11 +725,7 @@ async function handleCommunityCommand(interaction) {
     const minutes = interaction.options.getInteger('percek', true);
     const prize = interaction.options.getString('nyeremeny', true);
     const winners = interaction.options.getInteger('nyertesek') || 1;
-    const endsAt = new Date(Date.now() + minutes * 60_000);
-    const payload = giveawayPayload(prize, endsAt, winners, false);
-    const message = await interaction.channel.send(payload);
-    await saveGiveaway({ messageId: message.id, guildId: interaction.guildId, channelId: interaction.channelId, prize, winners, endsAt, entrants: [] });
-    scheduleGiveaway(interaction.client, message.id, endsAt);
+    await startGiveaway(interaction.client, interaction.guildId, interaction.channel, prize, minutes, winners);
     return interaction.reply({ content: '✅ A nyereményjáték elindult.', flags: EPHEMERAL });
   }
 }
@@ -736,7 +865,14 @@ module.exports = {
   restoreGiveaways,
   levelForXp,
   xpForNextLevel,
-  randomWinners
+  randomWinners,
+  rolePanel,
+  userXp,
+  xpLeaderboard,
+  createSuggestion,
+  createPoll,
+  createAnnouncement,
+  startGiveaway
 };
 
 },
@@ -764,6 +900,8 @@ const MODULE_KEYS = Object.freeze([
 const CHANNEL_KEYS = Object.freeze([
   'securityLogs',
   'logs',
+  'controlCenter',
+  'ai',
   'ticketPanel',
   'ticketCategory',
   'moderationPanel',
@@ -1158,6 +1296,196 @@ const COLORS = Object.freeze({
 module.exports = { NAMES, COLORS };
 
 },
+"src/control-center.js": function(module, exports, require) {
+const {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle
+} = require('discord.js');
+const { COLORS } = require('./constants');
+
+function row(...components) {
+  return new ActionRowBuilder().addComponents(...components);
+}
+
+function button(customId, label, emoji, style = ButtonStyle.Secondary, disabled = false) {
+  return new ButtonBuilder()
+    .setCustomId(customId)
+    .setLabel(label)
+    .setEmoji(emoji)
+    .setStyle(style)
+    .setDisabled(disabled);
+}
+
+function controlCenterPanel(config, webUrl) {
+  const title = config.branding?.title || 'NexaBot Control Center';
+  const embed = new EmbedBuilder()
+    .setColor(config.branding?.primary || COLORS.primary)
+    .setTitle(`🎛️ ${title}`)
+    .setDescription(
+      '**Minden fontos funkció egy helyen — parancsok beírása nélkül.**\n\n' +
+      'Válassz az alábbi gombok közül. A személyes adatlapok és kezelőpanelek csak neked jelennek meg.'
+    )
+    .addFields(
+      { name: '✨ Nexa AI', value: 'Kérdezz itt vagy beszélgess a bottal privát üzenetben.', inline: true },
+      { name: '🛡️ Kezelés', value: 'Moderáció, védelem, szolgálat és RP-rendszer.', inline: true },
+      { name: '⭐ Közösség', value: 'Profil, rangok, ötletek, szavazások és nyereményjáték.', inline: true }
+    )
+    .setFooter({ text: 'NexaBot • Biztonságos, gombos vezérlés' });
+  if (config.branding?.logoUrl) embed.setThumbnail(config.branding.logoUrl);
+
+  const components = [
+    row(
+      button('center_ai', 'Nexa AI', '✨', ButtonStyle.Primary, !config.modules.ai),
+      button('center_ai_dm', 'Privát AI', '💬', ButtonStyle.Primary, !config.modules.ai),
+      button('center_ticket', 'Segítségkérés', '🎫', ButtonStyle.Success, !config.modules.tickets),
+      button('center_profile', 'Saját profil', '👤', ButtonStyle.Secondary),
+      button('center_roles', 'Rangjaim', '🏷️', ButtonStyle.Secondary)
+    ),
+    row(
+      button('center_shift', 'Szolgálat', '🕒', ButtonStyle.Success, !config.modules.shift),
+      button('center_moderation', 'Moderáció', '🛡️', ButtonStyle.Danger, !config.modules.moderation),
+      button('center_community', 'Közösség', '⭐', ButtonStyle.Primary, !config.modules.suggestions),
+      button('center_security', 'Védelem', '🔒', ButtonStyle.Secondary, !config.modules.protection),
+      button('center_rp', 'RP-rendszer', '🎭', ButtonStyle.Secondary, !config.modules.bvi)
+    )
+  ];
+  if (webUrl) {
+    components.push(row(
+      new ButtonBuilder().setLabel('Webes vezérlőpult').setEmoji('⚙️').setStyle(ButtonStyle.Link).setURL(webUrl)
+    ));
+  }
+  return { embeds: [embed], components };
+}
+
+function communityPanel() {
+  return {
+    embeds: [new EmbedBuilder()
+      .setColor(COLORS.primary)
+      .setTitle('⭐ Közösségi központ')
+      .setDescription('Válaszd ki, mit szeretnél létrehozni. A Staff-funkciókat csak jogosult tag használhatja.')],
+    components: [
+      row(
+        button('center_suggestion', 'Ötlet beküldése', '💡', ButtonStyle.Primary),
+        button('center_poll', 'Szavazás', '📊', ButtonStyle.Secondary),
+        button('center_announce', 'Bejelentés', '📣', ButtonStyle.Secondary),
+        button('center_giveaway', 'Nyereményjáték', '🎁', ButtonStyle.Success)
+      )
+    ]
+  };
+}
+
+function aiPanel() {
+  return {
+    embeds: [new EmbedBuilder()
+      .setColor(COLORS.primary)
+      .setTitle('✨ Nexa AI központ')
+      .setDescription('Kérdezz, kezeld a saját engedélyezett memóriádat, vagy indíts elkülönített privát beszélgetést — parancsok nélkül.')],
+    components: [
+      row(
+        button('center_ai_ask', 'Kérdés', '✨', ButtonStyle.Primary),
+        button('center_ai_dm', 'Privát AI', '💬', ButtonStyle.Primary),
+        button('center_ai_consent_on', 'Memória be', '🧠', ButtonStyle.Success),
+        button('center_ai_consent_off', 'Memória ki', '🔕', ButtonStyle.Secondary)
+      ),
+      row(
+        button('center_ai_memory_add', 'Emlék hozzáadása', '➕', ButtonStyle.Secondary),
+        button('center_ai_memory_view', 'Emlékeim', '📖', ButtonStyle.Secondary),
+        button('center_ai_memory_clear', 'Emlékek törlése', '🗑️', ButtonStyle.Danger),
+        button('center_ai_server_add', 'Szerverismeret', '🏢', ButtonStyle.Secondary)
+      )
+    ]
+  };
+}
+
+function textInput(customId, label, style, placeholder, required = true, maxLength = 1000) {
+  return new TextInputBuilder()
+    .setCustomId(customId)
+    .setLabel(label)
+    .setStyle(style)
+    .setPlaceholder(placeholder)
+    .setRequired(required)
+    .setMaxLength(maxLength);
+}
+
+function aiModal() {
+  return new ModalBuilder()
+    .setCustomId('center_ai_submit')
+    .setTitle('Nexa AI kérdés')
+    .addComponents(row(textInput('center_ai_question', 'Mit szeretnél kérdezni?', TextInputStyle.Paragraph, 'Írd le részletesen a kérdésed…', true, 1500)));
+}
+
+function aiMemoryModal(scope = 'personal') {
+  const server = scope === 'server';
+  return new ModalBuilder()
+    .setCustomId(server ? 'center_ai_server_add_submit' : 'center_ai_memory_add_submit')
+    .setTitle(server ? 'Szerverismeret hozzáadása' : 'Személyes emlék hozzáadása')
+    .addComponents(row(textInput(
+      'center_ai_memory_text',
+      server ? 'Mit tudjon a szerverről?' : 'Mit jegyezzen meg rólad?',
+      TextInputStyle.Paragraph,
+      'Ne adj meg jelszót, tokent vagy más titkos adatot.',
+      true,
+      1000
+    )));
+}
+
+function suggestionModal() {
+  return new ModalBuilder()
+    .setCustomId('center_suggestion_submit')
+    .setTitle('Ötlet beküldése')
+    .addComponents(row(textInput('center_suggestion_text', 'Az ötleted', TextInputStyle.Paragraph, 'Írd le az ötleted…', true, 1500)));
+}
+
+function pollModal() {
+  return new ModalBuilder()
+    .setCustomId('center_poll_submit')
+    .setTitle('Új szavazás')
+    .addComponents(
+      row(textInput('center_poll_question', 'Kérdés', TextInputStyle.Short, 'Miről szavazzanak?', true, 250)),
+      row(textInput('center_poll_answers', 'Válaszok | jellel elválasztva', TextInputStyle.Paragraph, 'Igen | Nem | Tartózkodom', true, 1000))
+    );
+}
+
+function announcementModal() {
+  return new ModalBuilder()
+    .setCustomId('center_announce_submit')
+    .setTitle('Új bejelentés')
+    .addComponents(
+      row(textInput('center_announce_title', 'Cím', TextInputStyle.Short, 'A bejelentés címe', true, 250)),
+      row(textInput('center_announce_text', 'Szöveg', TextInputStyle.Paragraph, 'A teljes bejelentés…', true, 3500)),
+      row(textInput('center_announce_image', 'Kép HTTPS-linkje (nem kötelező)', TextInputStyle.Short, 'https://…', false, 500))
+    );
+}
+
+function giveawayModal() {
+  return new ModalBuilder()
+    .setCustomId('center_giveaway_submit')
+    .setTitle('Új nyereményjáték')
+    .addComponents(
+      row(textInput('center_giveaway_prize', 'Nyeremény', TextInputStyle.Short, 'Mit lehet nyerni?', true, 250)),
+      row(textInput('center_giveaway_minutes', 'Időtartam percben', TextInputStyle.Short, 'Például: 60', true, 6)),
+      row(textInput('center_giveaway_winners', 'Nyertesek száma', TextInputStyle.Short, '1–10', true, 2))
+    );
+}
+
+module.exports = {
+  controlCenterPanel,
+  communityPanel,
+  aiPanel,
+  aiModal,
+  aiMemoryModal,
+  suggestionModal,
+  pollModal,
+  announcementModal,
+  giveawayModal
+};
+
+},
 "src/dashboard.js": function(module, exports, require) {
 const crypto = require('node:crypto');
 const { ChannelType, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
@@ -1171,6 +1499,7 @@ const {
   inviteUrl
 } = require('./config');
 const { ticketPanel, staffPanel } = require('./panels');
+const { controlCenterPanel } = require('./control-center');
 
 const sessions = new Map();
 const oauthStates = new Map();
@@ -1372,7 +1701,7 @@ ${saved ? '<div class="notice">✅ A NexaBot 3.0 beállításai és a kiválaszt
 <form method="post" action="/dashboard/guild/${escapeHtml(guild.id)}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="settings">
 <section id="modules" class="card section"><div class="section-kicker">Alaprendszer</div><h2 class="section-title">⬡ Modulok</h2><div class="module-grid">${check('module_protection','Védelem és linkszűrés',config.modules.protection,'Spam, raid, link és botvédelem.')}${check('module_moderation','Moderáció és teljes naplózás',config.modules.moderation,'Tagválasztós moderációs panel.')}${check('module_tickets','Ticket és segítségkérés',config.modules.tickets,'Privát ügyintézési csatornák.')}${check('module_welcome','Üdvözlés, búcsúzás és autorang',config.modules.welcome)}${check('module_levels','XP és szintrendszer',config.modules.levels)}${check('module_suggestions','Közösségi extrák',config.modules.suggestions,'Ötletek, szavazás, rangpanel és nyereményjáték.')}${check('module_shift','Shift Management',config.modules.shift,'Szolgálat, szünet, statisztika és napló.')}${check('module_ai','Nexa AI és memória',config.modules.ai,'OpenAI API-kulcs szükséges hozzá.')}${check('module_tempVoice','Ideiglenes hangcsatornák',config.modules.tempVoice)}${bvi ? check('module_bvi','RP jelentkezési és dokumentumrendszer',config.modules.bvi,'A kijelölt fő RP-szerveren érhető el.') : '<div class="switch"><span>🎭 <b>RP dokumentumrendszer</b><div class="help">A kijelölt fő RP-szerveren használható.</div></span></div>'}</div></section>
 
-<section id="channels" class="card section"><div class="section-kicker">Útvonalak</div><h2 class="section-title"># Csatornák és kategóriák</h2><div class="field-grid">${selectField('channel_securityLogs','Biztonsági napló',textChannels(config.channels.securityLogs),'Például: minden-log')}${selectField('channel_logs','Moderációs napló',textChannels(config.channels.logs))}${selectField('channel_warnings','Figyelmeztetések',textChannels(config.channels.warnings))}${selectField('channel_moderationPanel','Moderációs panel',textChannels(config.channels.moderationPanel))}${selectField('channel_ticketPanel','Segítségkérő panel',textChannels(config.channels.ticketPanel))}${selectField('channel_ticketCategory','Ticket kategória',categories(config.channels.ticketCategory))}${selectField('channel_welcome','Üdvözlőcsatorna',textChannels(config.channels.welcome))}${selectField('channel_goodbye','Búcsúzócsatorna',textChannels(config.channels.goodbye))}${selectField('channel_levels','Szintlépési értesítések',textChannels(config.channels.levels),'Ha nincs kiválasztva, az aktuális csatornába ír.')}${selectField('channel_suggestions','Ötletek csatornája',textChannels(config.channels.suggestions))}${selectField('channel_shiftLogs','Szolgálati napló',textChannels(config.channels.shiftLogs))}${selectField('channel_announcements','Bejelentések csatornája',textChannels(config.channels.announcements))}${selectField('channel_tempVoiceLobby','Ideiglenes hangszoba belépő',voiceChannels(config.channels.tempVoiceLobby))}${selectField('channel_tempVoiceCategory','Ideiglenes hangszobák kategóriája',categories(config.channels.tempVoiceCategory))}</div></section>
+<section id="channels" class="card section"><div class="section-kicker">Útvonalak</div><h2 class="section-title"># Csatornák és kategóriák</h2><div class="field-grid">${selectField('channel_controlCenter','NexaBot fő vezérlőpanel',textChannels(config.channels.controlCenter),'Ide kerül a teljes gombos Discord-panel.')}${selectField('channel_ai','Nexa AI beszélgetőcsatorna',textChannels(config.channels.ai),'Itt minden nem-bot üzenetre válaszol a Nexa AI.')}${selectField('channel_securityLogs','Biztonsági napló',textChannels(config.channels.securityLogs),'Például: minden-log')}${selectField('channel_logs','Moderációs napló',textChannels(config.channels.logs))}${selectField('channel_warnings','Figyelmeztetések',textChannels(config.channels.warnings))}${selectField('channel_moderationPanel','Moderációs panel',textChannels(config.channels.moderationPanel))}${selectField('channel_ticketPanel','Segítségkérő panel',textChannels(config.channels.ticketPanel))}${selectField('channel_ticketCategory','Ticket kategória',categories(config.channels.ticketCategory))}${selectField('channel_welcome','Üdvözlőcsatorna',textChannels(config.channels.welcome))}${selectField('channel_goodbye','Búcsúzócsatorna',textChannels(config.channels.goodbye))}${selectField('channel_levels','Szintlépési értesítések',textChannels(config.channels.levels),'Ha nincs kiválasztva, az aktuális csatornába ír.')}${selectField('channel_suggestions','Ötletek csatornája',textChannels(config.channels.suggestions))}${selectField('channel_shiftLogs','Szolgálati napló',textChannels(config.channels.shiftLogs))}${selectField('channel_announcements','Bejelentések csatornája',textChannels(config.channels.announcements))}${selectField('channel_tempVoiceLobby','Ideiglenes hangszoba belépő',voiceChannels(config.channels.tempVoiceLobby))}${selectField('channel_tempVoiceCategory','Ideiglenes hangszobák kategóriája',categories(config.channels.tempVoiceCategory))}</div></section>
 
 <section id="roles" class="card section"><div class="section-kicker">Jogosultságok</div><h2 class="section-title">◇ Rangok és hozzáférés</h2><div class="field-grid">${selectField('role_staff','Staff rang',roles(config.roles.staff),'Moderáció, linkküldés és ticketkezelés.')}${selectField('role_auto','Automatikusan kiosztott rang',roles(config.roles.auto))}${selectField('role_dashboard','Webes kezelői rang',roles(config.roles.dashboard),'A tulajdonos és adminok mellett ez az egy rang léphet be.')}${selectField('role_shift','Szolgálati rang',roles(config.roles.shift),'Ez a rang használhatja a Shift Management panelt.')}<div><label for="role_selfRoles">Önkiszolgáló rangok</label><select id="role_selfRoles" name="role_selfRoles" multiple size="7">${roleOptionsMulti(guild, config.community.selfRoles)}</select><div class="help">Legfeljebb 10 rang. Telefonon tartsd nyomva a több kijelöléshez.</div></div></div></section>
 
@@ -1380,7 +1709,7 @@ ${saved ? '<div class="notice">✅ A NexaBot 3.0 beállításai és a kiválaszt
 
 <section id="community" class="card section"><div class="section-kicker">Aktivitás</div><h2 class="section-title">★ Közösségi rendszer</h2><div class="field-grid"><div><label for="community_xpCooldownSeconds">XP-időkorlát másodpercben</label><input id="community_xpCooldownSeconds" name="community_xpCooldownSeconds" type="number" min="15" max="300" value="${config.community.xpCooldownSeconds}"></div><div><label for="community_xpMin">Minimum XP üzenetenként</label><input id="community_xpMin" name="community_xpMin" type="number" min="1" max="50" value="${config.community.xpMin}"></div><div><label for="community_xpMax">Maximum XP üzenetenként</label><input id="community_xpMax" name="community_xpMax" type="number" min="1" max="100" value="${config.community.xpMax}"></div></div></section>
 
-<section id="shift" class="card section"><div class="section-kicker">Állománykezelés</div><h2 class="section-title">◷ Shift Management</h2><div class="module-grid">${check('shift_trackBreaks','Szünetek követése',config.shift.trackBreaks,'A szünet nem számít bele az aktív szolgálatba.')}${check('shift_showLeaderboard','Havi szolgálati ranglista',config.shift.showLeaderboard,'A /szolgalat ranglista paranccsal látható.')}</div><div class="help">A panelt a Discordon a <b>/szolgalat panel</b> paranccsal helyezheted ki.</div></section>
+<section id="shift" class="card section"><div class="section-kicker">Állománykezelés</div><h2 class="section-title">◷ Shift Management</h2><div class="module-grid">${check('shift_trackBreaks','Szünetek követése',config.shift.trackBreaks,'A szünet nem számít bele az aktív szolgálatba.')}${check('shift_showLeaderboard','Havi szolgálati ranglista',config.shift.showLeaderboard,'A saját profilban és a szolgálati rendszerben látható.')}</div><div class="help">A szolgálat a Discord fő vezérlőpaneljéről, gombokkal kezelhető.</div></section>
 
 <section id="ai" class="card section"><div class="section-kicker">Intelligens asszisztens</div><h2 class="section-title">✦ Nexa AI memória</h2><div class="module-grid">${check('ai_serverMemory','Szerverismeretek tárolása',config.ai.serverMemory,'Csak Staff adhat hozzá szerverinformációt.')}${check('ai_personalMemory','Beleegyezéses személyes memória',config.ai.personalMemory,'A tag külön engedélye nélkül semmit nem tárol róla.')}</div><div class="field-grid"><div><label for="ai_maxMemories">Memóriák száma típusonként</label><input id="ai_maxMemories" name="ai_maxMemories" type="number" min="5" max="100" value="${config.ai.maxMemories}"></div><div><label for="ai_systemPrompt">Nexa AI szerverutasítása</label><textarea id="ai_systemPrompt" name="ai_systemPrompt">${escapeHtml(config.ai.systemPrompt)}</textarea><div class="help">Titkos kulcsot ide se írj. Az OPENAI_API_KEY csak a Render Environmentbe kerülhet.</div></div></div></section>
 
@@ -1438,6 +1767,8 @@ function configFromForm(guild, form) {
       bvi: isBviGuild(guild.id) && form.has('module_bvi')
     },
     channels: {
+      controlCenter: validChannelId(guild, form.get('channel_controlCenter')),
+      ai: validChannelId(guild, form.get('channel_ai')),
       securityLogs: validChannelId(guild, form.get('channel_securityLogs')),
       logs: validChannelId(guild, form.get('channel_logs')),
       ticketPanel: validChannelId(guild, form.get('channel_ticketPanel')),
@@ -1535,6 +1866,15 @@ async function upsertPanel(channel, botId, titlePrefix, payload) {
 }
 
 async function syncConfiguredPanels(guild, config, botUser) {
+  if (config.channels.controlCenter) {
+    const channel = guild.channels.cache.get(config.channels.controlCenter);
+    await upsertPanel(
+      channel,
+      botUser.id,
+      '🎛️',
+      controlCenterPanel(config, dashboardUrl(guild.id))
+    );
+  }
   if (config.modules.tickets && config.channels.ticketPanel) {
     const channel = guild.channels.cache.get(config.channels.ticketPanel);
     await upsertPanel(channel, botUser.id, '🎫 Segítségkérés', ticketPanel(config.messages.ticket));
@@ -2398,6 +2738,7 @@ const {
   dashboardUrl
 } = require('./config');
 const { handleMessageXp, handleTempVoice } = require('./community');
+const { handleAiMessage } = require('./ai');
 
 function registerEvents(client) {
   client.on(Events.GuildMemberAdd, async (member) => {
@@ -2452,6 +2793,7 @@ function registerEvents(client) {
   });
 
   client.on(Events.MessageCreate, handleMessageXp);
+  client.on(Events.MessageCreate, handleAiMessage);
   client.on(Events.VoiceStateUpdate, handleTempVoice);
 
   client.on(Events.MessageDelete, async (message) => {
@@ -2563,6 +2905,7 @@ const client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildModeration,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.DirectMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildVoiceStates
   ],
@@ -2672,6 +3015,7 @@ const {
   moderationConfirmation,
   rolePicker,
   unbanPicker,
+  staffPanel,
   channelModal,
   TGF_QUESTIONS
 } = require('./panels');
@@ -2697,17 +3041,43 @@ const {
 const {
   configuredChannel,
   configuredRole,
+  getGuildConfig,
   moduleEnabled,
   isBviGuild,
   dashboardUrl
 } = require('./config');
-const { handleAiCommand } = require('./ai');
-const { handleShiftButton, handleShiftCommand } = require('./shifts');
+const {
+  handleAiCommand,
+  answerGuildAi,
+  setPersonalMemoryConsent,
+  rememberPersonal,
+  rememberServer,
+  personalMemories,
+  clearPersonalMemories
+} = require('./ai');
+const { handleShiftButton, handleShiftCommand, shiftPanel, shiftStats, formatDuration } = require('./shifts');
 const {
   handleCommunityCommand,
   handleGiveawayButton,
-  handleSelfRoleSelect
+  handleSelfRoleSelect,
+  rolePanel,
+  userXp,
+  levelForXp,
+  createSuggestion,
+  createPoll,
+  createAnnouncement,
+  startGiveaway
 } = require('./community');
+const {
+  communityPanel,
+  aiPanel,
+  aiModal,
+  aiMemoryModal,
+  suggestionModal,
+  pollModal,
+  announcementModal,
+  giveawayModal
+} = require('./control-center');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const applicationDrafts = new Map();
@@ -2843,6 +3213,105 @@ async function handleCommand(interaction) {
 
 async function handleButton(interaction) {
   const id = interaction.customId;
+
+  if (id === 'center_ai') {
+    if (!moduleEnabled(interaction.guildId, 'ai')) return ephemeralError(interaction, 'A Nexa AI ezen a szerveren ki van kapcsolva.');
+    return interaction.reply({ ...aiPanel(), flags: EPHEMERAL });
+  }
+  if (id === 'center_ai_ask') return interaction.showModal(aiModal());
+  if (id === 'center_ai_dm') {
+    if (!moduleEnabled(interaction.guildId, 'ai')) return ephemeralError(interaction, 'A Nexa AI ezen a szerveren ki van kapcsolva.');
+    const sent = await interaction.user.send(
+      '✨ **Nexa AI privát beszélgetés**\n\nÍrj ide bármilyen kérdést, és normál üzenetben válaszolok. A privát beszélgetést elkülönítve kezelem a szerverek adataitól.'
+    ).then(() => true).catch(() => false);
+    return interaction.reply({
+      content: sent ? '✅ Írtam neked privátban. Nyisd meg a NexaBot üzenetét!' : '❌ Nem tudtam privát üzenetet küldeni. Engedélyezd a szervertagoktól érkező privát üzeneteket.',
+      flags: EPHEMERAL
+    });
+  }
+  if (id === 'center_ai_consent_on' || id === 'center_ai_consent_off') {
+    const allowed = id.endsWith('_on');
+    await setPersonalMemoryConsent(interaction.guildId, interaction.user.id, allowed);
+    return interaction.reply({
+      content: allowed
+        ? '✅ A személyes AI-memóriád be van kapcsolva ezen a szerveren.'
+        : '✅ A személyes memória kikapcsolva; az emlékeidet és előzményeidet töröltem.',
+      flags: EPHEMERAL
+    });
+  }
+  if (id === 'center_ai_memory_add') return interaction.showModal(aiMemoryModal('personal'));
+  if (id === 'center_ai_server_add') {
+    if (!isStaff(interaction.member)) return ephemeralError(interaction, 'Szerverismeretet csak Staff vagy adminisztrátor adhat hozzá.');
+    return interaction.showModal(aiMemoryModal('server'));
+  }
+  if (id === 'center_ai_memory_view') {
+    const memories = await personalMemories(interaction.guildId, interaction.user.id);
+    const list = memories.map((item, index) => `${index + 1}. ${item.content}`).join('\n').slice(0, 1800);
+    return interaction.reply({ content: list ? `🧠 **Személyes emlékeid:**\n${list}` : '🧠 Nincs elmentett személyes emléked.', flags: EPHEMERAL });
+  }
+  if (id === 'center_ai_memory_clear') {
+    await clearPersonalMemories(interaction.guildId, interaction.user.id);
+    return interaction.reply({ content: '✅ A személyes AI-emlékeidet és előzményeidet töröltem.', flags: EPHEMERAL });
+  }
+  if (id === 'center_ticket') return createTicket(interaction, 'support');
+  if (id === 'center_shift') {
+    if (!moduleEnabled(interaction.guildId, 'shift')) return ephemeralError(interaction, 'A szolgálatkezelő ezen a szerveren ki van kapcsolva.');
+    return interaction.reply({ ...shiftPanel(), flags: EPHEMERAL });
+  }
+  if (id === 'center_moderation') {
+    if (!moduleEnabled(interaction.guildId, 'moderation')) return ephemeralError(interaction, 'A moderációs rendszer ki van kapcsolva.');
+    if (!isStaff(interaction.member)) return ephemeralError(interaction, 'Ezt csak Staff vagy adminisztrátor használhatja.');
+    const staffRole = configuredRole(interaction.guild, 'staff', NAMES.staffRole);
+    return interaction.reply({ ...staffPanel(staffRole?.name || 'Staff'), flags: EPHEMERAL });
+  }
+  if (id === 'center_community') {
+    if (!moduleEnabled(interaction.guildId, 'suggestions')) return ephemeralError(interaction, 'A közösségi funkciók ezen a szerveren ki vannak kapcsolva.');
+    return interaction.reply({ ...communityPanel(), flags: EPHEMERAL });
+  }
+  if (id === 'center_profile') {
+    const config = getGuildConfig(interaction.guildId);
+    const [xp, monthly] = await Promise.all([
+      userXp(interaction.guildId, interaction.user.id),
+      shiftStats(interaction.guildId, interaction.user.id, 30)
+    ]);
+    return interaction.reply({
+      embeds: [baseEmbed('👤 Saját NexaBot-profil', `${interaction.user}`, COLORS.primary)
+        .setThumbnail(interaction.user.displayAvatarURL())
+        .addFields(
+          { name: 'Közösségi szint', value: config.modules.levels ? `${levelForXp(xp)}. szint • ${xp} XP` : 'Kikapcsolva', inline: true },
+          { name: 'Szolgálat • 30 nap', value: config.modules.shift ? `${formatDuration(monthly.seconds)} • ${monthly.shifts} műszak` : 'Kikapcsolva', inline: true }
+        )],
+      flags: EPHEMERAL
+    });
+  }
+  if (id === 'center_roles') {
+    const roleIds = getGuildConfig(interaction.guildId).community.selfRoles;
+    if (!roleIds.length) return ephemeralError(interaction, 'Ezen a szerveren még nincsenek választható rangok beállítva.');
+    return interaction.reply({ ...rolePanel(interaction.guild, roleIds), flags: EPHEMERAL });
+  }
+  if (id === 'center_security') {
+    const config = getGuildConfig(interaction.guildId);
+    if (!config.modules.protection) return ephemeralError(interaction, 'A szervervédelem ki van kapcsolva.');
+    const sensitivity = { strict: 'Szigorú', medium: 'Közepes', relaxed: 'Enyhe' }[config.protection.sensitivity] || 'Közepes';
+    return interaction.reply({
+      embeds: [baseEmbed('🔒 NexaBot védelem', `**Állapot:** 🟢 aktív\n**Érzékenység:** ${sensitivity}\n\nSpam-, raid-, link-, meghívó-, frissfiók- és jogosulatlanbot-védelem.`, COLORS.success)],
+      flags: EPHEMERAL
+    });
+  }
+  if (id === 'center_rp') {
+    if (!isBviGuild(interaction.guildId) || !moduleEnabled(interaction.guildId, 'bvi')) return ephemeralError(interaction, 'Az RP-rendszer csak a kijelölt fő RP-szerveren használható.');
+    return interaction.reply({
+      embeds: [baseEmbed('🎭 RP ügyintézési rendszer', 'A jelentkezési, vizsgálati, fegyelmi és irattári adatlapokat a hozzájuk tartozó meglévő csatornák gombos paneljein éred el.', COLORS.primary)],
+      flags: EPHEMERAL
+    });
+  }
+  if (id === 'center_suggestion') return interaction.showModal(suggestionModal());
+  if (['center_poll', 'center_announce', 'center_giveaway'].includes(id)) {
+    if (!isStaff(interaction.member)) return ephemeralError(interaction, 'Ezt csak Staff vagy adminisztrátor használhatja.');
+    if (id === 'center_poll') return interaction.showModal(pollModal());
+    if (id === 'center_announce') return interaction.showModal(announcementModal());
+    return interaction.showModal(giveawayModal());
+  }
 
   if (id.startsWith('shift_')) return handleShiftButton(interaction);
   if (id === 'giveaway_join') return handleGiveawayButton(interaction);
@@ -3298,7 +3767,77 @@ async function handleChannelSubmit(interaction) {
   return interaction.editReply(`✅ A csatorna elkészült: ${channel}`);
 }
 
+async function handleControlCenterModal(interaction) {
+  const id = interaction.customId;
+  if (!interaction.guild) return ephemeralError(interaction, 'Ezt a panelt egy Discord-szerveren használd.');
+  if (id === 'center_ai_submit') {
+    await interaction.deferReply({ flags: EPHEMERAL });
+    try {
+      const answer = await answerGuildAi(interaction.guild, interaction.user, getText(interaction, 'center_ai_question'));
+      return interaction.editReply(`✨ **Nexa AI**\n${answer.slice(0, 1900)}`);
+    } catch (error) {
+      return interaction.editReply(`❌ ${error.message}`);
+    }
+  }
+  if (id === 'center_ai_memory_add_submit' || id === 'center_ai_server_add_submit') {
+    await interaction.deferReply({ flags: EPHEMERAL });
+    try {
+      const content = getText(interaction, 'center_ai_memory_text');
+      if (id === 'center_ai_server_add_submit') {
+        if (!isStaff(interaction.member)) return interaction.editReply('❌ Szerverismeretet csak Staff vagy adminisztrátor adhat hozzá.');
+        await rememberServer(interaction.guildId, interaction.user.id, content);
+      } else {
+        await rememberPersonal(interaction.guildId, interaction.user.id, content);
+      }
+      return interaction.editReply('✅ A Nexa AI elmentette az emléket.');
+    } catch (error) {
+      return interaction.editReply(`❌ ${error.message}`);
+    }
+  }
+  if (id === 'center_suggestion_submit') {
+    if (!moduleEnabled(interaction.guildId, 'suggestions')) return ephemeralError(interaction, 'A közösségi funkciók ki vannak kapcsolva.');
+    await interaction.deferReply({ flags: EPHEMERAL });
+    try {
+      const message = await createSuggestion(interaction.guild, interaction.user, getText(interaction, 'center_suggestion_text'));
+      return interaction.editReply(`✅ Az ötleted megjelent itt: ${message.url}`);
+    } catch (error) {
+      return interaction.editReply(`❌ ${error.message}`);
+    }
+  }
+  if (['center_poll_submit', 'center_announce_submit', 'center_giveaway_submit'].includes(id)) {
+    if (!isStaff(interaction.member)) return ephemeralError(interaction, 'Ezt csak Staff vagy adminisztrátor használhatja.');
+    if (!moduleEnabled(interaction.guildId, 'suggestions')) return ephemeralError(interaction, 'A közösségi funkciók ki vannak kapcsolva.');
+    await interaction.deferReply({ flags: EPHEMERAL });
+    try {
+      if (id === 'center_poll_submit') {
+        await createPoll(interaction.channel, interaction.user, getText(interaction, 'center_poll_question'), getText(interaction, 'center_poll_answers'));
+        return interaction.editReply('✅ A szavazás elindult.');
+      }
+      if (id === 'center_announce_submit') {
+        const channel = await createAnnouncement(
+          interaction.guild,
+          interaction.channel,
+          interaction.user,
+          getText(interaction, 'center_announce_title'),
+          getText(interaction, 'center_announce_text'),
+          getText(interaction, 'center_announce_image') || null
+        );
+        return interaction.editReply(`✅ A bejelentés megjelent itt: ${channel}`);
+      }
+      const minutes = Number.parseInt(getText(interaction, 'center_giveaway_minutes'), 10);
+      const winners = Number.parseInt(getText(interaction, 'center_giveaway_winners'), 10);
+      if (!Number.isInteger(minutes) || minutes < 1 || minutes > 10080) throw new Error('Az időtartam 1 és 10080 perc közötti szám legyen.');
+      if (!Number.isInteger(winners) || winners < 1 || winners > 10) throw new Error('A nyertesek száma 1 és 10 közötti szám legyen.');
+      await startGiveaway(interaction.client, interaction.guildId, interaction.channel, getText(interaction, 'center_giveaway_prize'), minutes, winners);
+      return interaction.editReply('✅ A nyereményjáték elindult.');
+    } catch (error) {
+      return interaction.editReply(`❌ ${error.message}`);
+    }
+  }
+}
+
 async function handleModal(interaction) {
+  if (interaction.customId.startsWith('center_')) return handleControlCenterModal(interaction);
   if (interaction.customId.startsWith('doc_')) {
     if (!isBviGuild(interaction.guildId) || !moduleEnabled(interaction.guildId, 'bvi')) {
       return ephemeralError(interaction, 'Az RP dokumentumrendszer itt nem használható.');
