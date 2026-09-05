@@ -1,18 +1,20 @@
 {
   "name": "nexabot",
-  "version": "1.0.0",
+  "version": "3.0.0",
   "private": true,
-  "description": "NexaDev gombos Discord ügyintéző és moderációs bot – telefonos feltöltéshez",
+  "description": "NexaBot 3.0 több szerveres Discord Control Center AI-val, szolgálatkezeléssel, közösségi modulokkal és aktív védelemmel",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=22"
   },
   "dependencies": {
     "discord.js": "14.27.0",
-    "dotenv": "16.6.1"
+    "dotenv": "16.6.1",
+    "pg": "^8.23.0"
   }
 }

@@ -6,13 +6,23 @@ services:
     region: frankfurt
     buildCommand: npm ci
     startCommand: npm start
-    healthCheckPath: /
+    healthCheckPath: /health
     envVars:
       - key: DISCORD_TOKEN
         sync: false
       - key: CLIENT_ID
-        value: "1545426995083477062"
+        sync: false
       - key: GUILD_ID
-        value: "1517509643734221030"
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_SSL
+        value: "true"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: "gpt-5-mini"
       - key: NODE_VERSION
         value: "22"
