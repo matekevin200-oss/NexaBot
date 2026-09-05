@@ -15,7 +15,7 @@ Professzionális, több szerveres Discord-bot modern webes vezérlőpulttal. A z
 - automatikusan létrejövő és kiürüléskor törlődő hangcsatornák;
 - Shift Management: szolgálat, szünet, napló, heti/havi statisztika és ranglista;
 - Nexa AI szervermemóriával és külön engedélyhez kötött személyes memóriával;
-- teljes BVI TGF- és dokumentumrendszer kizárólag a kijelölt Belvédelmi szerveren.
+- teljes RP jelentkezési, ügyintézési és dokumentumrendszer a kijelölt fő RP-szerveren.
 
 ## Webes Control Center
 
@@ -45,7 +45,7 @@ A vezérlőpulton módosítható:
 - `/szolgalat panel|statisztika|ranglista|szabadsag|beosztas` – szolgálatkezelés;
 - `/szint`, `/szint-ranglista` – XP-rendszer;
 - `/otlet`, `/szavazas`, `/bejelentes`, `/rangpanel`, `/nyeremenyjatek` – közösségi funkciók;
-- `/telepites`, `/dokumentum-panelek` – kizárólag a BVI-szerveren.
+- `/telepites`, `/dokumentum-panelek` – a kijelölt fő RP-szerveren.
 
 ## Render környezeti változók
 
@@ -53,7 +53,7 @@ Kötelező:
 
 - `DISCORD_TOKEN` – Discord-bot token;
 - `CLIENT_ID` – Discord Application ID;
-- `GUILD_ID` – a Belvédelmi Discord-szerver ID-je;
+- `GUILD_ID` – a teljes RP-rendszert használó fő Discord-szerver ID-je;
 - `DISCORD_CLIENT_SECRET` – Discord OAuth2 Client Secret;
 - `DATABASE_URL` – Render PostgreSQL belső kapcsolati címe.
 

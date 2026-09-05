@@ -1266,7 +1266,7 @@ function layout(title, content, session = null, branding = null) {
 }
 
 function landing(session) {
-  const content = `<section class="hero"><div class="eyebrow">✦ NexaBot 3.0 • Többszerveres rendszer</div><h1 class="gradient">Egy bot. Teljes irányítás a szervered felett.</h1><p class="lead">Professzionális védelem, moderáció, ticketek, közösségi szintrendszer, szolgálatkezelés és saját, emlékező Nexa AI — egy látványos mobilbarát vezérlőpulton.</p><div class="actions"><a class="btn" href="${session ? '/dashboard' : '/login'}">${session ? 'Vezérlőpult megnyitása' : 'Belépés Discorddal'} →</a><a class="btn secondary" href="${escapeHtml(inviteUrl())}">NexaBot meghívása</a></div></section><section class="grid bento"><article class="card"><div class="feature-icon">🛡️</div><h2>Aktív szervervédelem</h2><p class="muted">Raid, spam, tiltott linkek, friss fiókok és jogosulatlan botok elleni automatikus védelem.</p></article><article class="card"><div class="feature-icon">✨</div><h2>Nexa AI memória</h2><p class="muted">Szerverenkénti tudás, beleegyezéses személyes memória és teljes adminisztrátori törlés.</p></article><article class="card"><div class="feature-icon">🕒</div><h2>Shift Management</h2><p class="muted">Szolgálat, szünet, automatikus napló, heti-havi statisztika és ranglista.</p></article><article class="card"><div class="feature-icon">⭐</div><h2>Közösségi rendszer</h2><p class="muted">XP és szintek, rangpanelek, ötletek, szavazások, bejelentések és nyereményjátékok.</p></article><article class="card"><div class="feature-icon">🎫</div><h2>Ügyintézés</h2><p class="muted">Ticketek, tagválasztós moderáció és a teljes BVI dokumentációs rendszer.</p></article><article class="card"><div class="feature-icon">⚙️</div><h2>Egyedi vezérlőpult</h2><p class="muted">Minden szerveren külön modulok, rangok, csatornák, szövegek, színek és védelem.</p></article></section>`;
+  const content = `<section class="hero"><div class="eyebrow">✦ NexaBot 3.0 • Többszerveres rendszer</div><h1 class="gradient">Egy bot. Teljes irányítás a szervered felett.</h1><p class="lead">Professzionális védelem, moderáció, ticketek, közösségi szintrendszer, szolgálatkezelés és saját, emlékező Nexa AI — egy látványos mobilbarát vezérlőpulton.</p><div class="actions"><a class="btn" href="${session ? '/dashboard' : '/login'}">${session ? 'Vezérlőpult megnyitása' : 'Belépés Discorddal'} →</a><a class="btn secondary" href="${escapeHtml(inviteUrl())}">NexaBot meghívása</a></div></section><section class="grid bento"><article class="card"><div class="feature-icon">🛡️</div><h2>Aktív szervervédelem</h2><p class="muted">Raid, spam, tiltott linkek, friss fiókok és jogosulatlan botok elleni automatikus védelem.</p></article><article class="card"><div class="feature-icon">✨</div><h2>Nexa AI memória</h2><p class="muted">Szerverenkénti tudás, beleegyezéses személyes memória és teljes adminisztrátori törlés.</p></article><article class="card"><div class="feature-icon">🕒</div><h2>Shift Management</h2><p class="muted">Szolgálat, szünet, automatikus napló, heti-havi statisztika és ranglista.</p></article><article class="card"><div class="feature-icon">⭐</div><h2>Közösségi rendszer</h2><p class="muted">XP és szintek, rangpanelek, ötletek, szavazások, bejelentések és nyereményjátékok.</p></article><article class="card"><div class="feature-icon">🎭</div><h2>RP ügyintézés</h2><p class="muted">Ticketek, tagválasztós moderáció, RP jelentkezések és részletes dokumentációs rendszer.</p></article><article class="card"><div class="feature-icon">⚙️</div><h2>Egyedi vezérlőpult</h2><p class="muted">Minden szerveren külön modulok, rangok, csatornák, szövegek, színek és védelem.</p></article></section>`;
   return layout('Kezdőlap', content, session);
 }
 
@@ -1370,7 +1370,7 @@ function settingsPage(guild, config, session, saved = false) {
 <div class="stats"><div class="stat"><div class="stat-value">${guild.memberCount}</div><div class="stat-label">Tag</div></div><div class="stat"><div class="stat-value">${guild.channels.cache.size}</div><div class="stat-label">Csatorna</div></div><div class="stat"><div class="stat-value">${guild.roles.cache.size}</div><div class="stat-label">Rang</div></div><div class="stat"><div class="stat-value">${enabledModules}</div><div class="stat-label">Aktív modul</div></div></div>
 ${saved ? '<div class="notice">✅ A NexaBot 3.0 beállításai és a kiválasztott panelek frissültek.</div>' : ''}${!isPersistentStore() ? '<div class="notice warn">⚠️ Az adatbázis még nincs beállítva, ezért az AI-memória, XP és szolgálati statisztika újraindításkor elveszhet.</div>' : ''}
 <form method="post" action="/dashboard/guild/${escapeHtml(guild.id)}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="settings">
-<section id="modules" class="card section"><div class="section-kicker">Alaprendszer</div><h2 class="section-title">⬡ Modulok</h2><div class="module-grid">${check('module_protection','Védelem és linkszűrés',config.modules.protection,'Spam, raid, link és botvédelem.')}${check('module_moderation','Moderáció és teljes naplózás',config.modules.moderation,'Tagválasztós moderációs panel.')}${check('module_tickets','Ticket és segítségkérés',config.modules.tickets,'Privát ügyintézési csatornák.')}${check('module_welcome','Üdvözlés, búcsúzás és autorang',config.modules.welcome)}${check('module_levels','XP és szintrendszer',config.modules.levels)}${check('module_suggestions','Közösségi extrák',config.modules.suggestions,'Ötletek, szavazás, rangpanel és nyereményjáték.')}${check('module_shift','Shift Management',config.modules.shift,'Szolgálat, szünet, statisztika és napló.')}${check('module_ai','Nexa AI és memória',config.modules.ai,'OpenAI API-kulcs szükséges hozzá.')}${check('module_tempVoice','Ideiglenes hangcsatornák',config.modules.tempVoice)}${bvi ? check('module_bvi','TGF és BVI dokumentumrendszer',config.modules.bvi,'Csak a Belvédelmi szerveren érhető el.') : '<div class="switch"><span>🏛️ <b>BVI/TGF</b><div class="help">Kizárólag a kijelölt Belvédelmi szerveren működik.</div></span></div>'}</div></section>
+<section id="modules" class="card section"><div class="section-kicker">Alaprendszer</div><h2 class="section-title">⬡ Modulok</h2><div class="module-grid">${check('module_protection','Védelem és linkszűrés',config.modules.protection,'Spam, raid, link és botvédelem.')}${check('module_moderation','Moderáció és teljes naplózás',config.modules.moderation,'Tagválasztós moderációs panel.')}${check('module_tickets','Ticket és segítségkérés',config.modules.tickets,'Privát ügyintézési csatornák.')}${check('module_welcome','Üdvözlés, búcsúzás és autorang',config.modules.welcome)}${check('module_levels','XP és szintrendszer',config.modules.levels)}${check('module_suggestions','Közösségi extrák',config.modules.suggestions,'Ötletek, szavazás, rangpanel és nyereményjáték.')}${check('module_shift','Shift Management',config.modules.shift,'Szolgálat, szünet, statisztika és napló.')}${check('module_ai','Nexa AI és memória',config.modules.ai,'OpenAI API-kulcs szükséges hozzá.')}${check('module_tempVoice','Ideiglenes hangcsatornák',config.modules.tempVoice)}${bvi ? check('module_bvi','RP jelentkezési és dokumentumrendszer',config.modules.bvi,'A kijelölt fő RP-szerveren érhető el.') : '<div class="switch"><span>🎭 <b>RP dokumentumrendszer</b><div class="help">A kijelölt fő RP-szerveren használható.</div></span></div>'}</div></section>
 
 <section id="channels" class="card section"><div class="section-kicker">Útvonalak</div><h2 class="section-title"># Csatornák és kategóriák</h2><div class="field-grid">${selectField('channel_securityLogs','Biztonsági napló',textChannels(config.channels.securityLogs),'Például: minden-log')}${selectField('channel_logs','Moderációs napló',textChannels(config.channels.logs))}${selectField('channel_warnings','Figyelmeztetések',textChannels(config.channels.warnings))}${selectField('channel_moderationPanel','Moderációs panel',textChannels(config.channels.moderationPanel))}${selectField('channel_ticketPanel','Segítségkérő panel',textChannels(config.channels.ticketPanel))}${selectField('channel_ticketCategory','Ticket kategória',categories(config.channels.ticketCategory))}${selectField('channel_welcome','Üdvözlőcsatorna',textChannels(config.channels.welcome))}${selectField('channel_goodbye','Búcsúzócsatorna',textChannels(config.channels.goodbye))}${selectField('channel_levels','Szintlépési értesítések',textChannels(config.channels.levels),'Ha nincs kiválasztva, az aktuális csatornába ír.')}${selectField('channel_suggestions','Ötletek csatornája',textChannels(config.channels.suggestions))}${selectField('channel_shiftLogs','Szolgálati napló',textChannels(config.channels.shiftLogs))}${selectField('channel_announcements','Bejelentések csatornája',textChannels(config.channels.announcements))}${selectField('channel_tempVoiceLobby','Ideiglenes hangszoba belépő',voiceChannels(config.channels.tempVoiceLobby))}${selectField('channel_tempVoiceCategory','Ideiglenes hangszobák kategóriája',categories(config.channels.tempVoiceCategory))}</div></section>
 
@@ -1973,7 +1973,7 @@ const DOCUMENT_TYPES = Object.freeze([
     key: 'case_documents', channel: 'ügyiratok-dokumentumban', parent: 'ellenőrzés', title: 'Ügyirati dokumentum', emoji: '📁', approval: true,
     fields: [
       short('document', 'Dokumentum megnevezése', 'Az irat címe'),
-      short('reference', 'Kapcsolódó ügy vagy ügyszám', 'BVI-... vagy ügy megnevezése'),
+      short('reference', 'Kapcsolódó ügy vagy ügyszám', 'RP-... vagy ügy megnevezése'),
       short('date', 'Dokumentum dátuma', 'ÉÉÉÉ.HH.NN.'),
       paragraph('description', 'Dokumentum tartalma', 'Részletes összefoglalás'),
       paragraph('link', 'Dokumentum vagy melléklet linkje', 'Opcionális hivatkozás', false, 500)
@@ -2092,7 +2092,7 @@ const DOCUMENT_TYPES = Object.freeze([
   {
     key: 'bomo_reports', channel: 'jelentések', parent: 'bomo', title: 'BOMO-jelentés', emoji: '📝', approval: true,
     fields: [
-      short('code', 'Kapcsolódó művelet vagy ügy', 'Kódnév vagy BVI-ügyszám'),
+      short('code', 'Kapcsolódó művelet vagy ügy', 'Kódnév vagy RP-ügyszám'),
       short('reporter', 'Jelentést tevő', 'Név, beosztás, hívójel'),
       short('time_place', 'Időpont és helyszín', 'Mikor és hol történt?'),
       paragraph('events', 'Események részletesen', 'Időrendi jelentés'),
@@ -2223,7 +2223,7 @@ function bviCaseNumber(date = new Date()) {
     year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
     hourCycle: 'h23'
   }).formatToParts(date).reduce((result, part) => ({ ...result, [part.type]: part.value }), {});
-  return `BVI-${parts.year}${parts.month}${parts.day}-${parts.hour}${parts.minute}`;
+  return `RP-${parts.year}${parts.month}${parts.day}-${parts.hour}${parts.minute}`;
 }
 
 function documentEmbed(type, interaction, caseNumber, status) {
@@ -2577,7 +2577,7 @@ const command = new SlashCommandBuilder()
 
 const documentCommand = new SlashCommandBuilder()
   .setName('dokumentum-panelek')
-  .setDescription('Paneleket tesz a meglévő BVI dokumentumcsatornákba, új csatorna nélkül.')
+  .setDescription('Paneleket tesz a meglévő RP dokumentumcsatornákba, új csatorna nélkül.')
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .setDMPermission(false);
 
@@ -2612,7 +2612,7 @@ client.once(Events.ClientReady, async (readyClient) => {
     await registerCommands();
     console.log(`NexaBot elindult: ${readyClient.user.tag}`);
     await restoreGiveaways(readyClient);
-    console.log('A NexaBot 3.0 globális parancsai és a BVI-rendszer használatra készek.');
+    console.log('A NexaBot 3.0 globális parancsai és az RP-rendszer használatra készek.');
   } catch (error) {
     console.error('A parancs regisztrálása nem sikerült:', error);
   }
@@ -2808,7 +2808,7 @@ async function handleCommand(interaction) {
 
   if (interaction.commandName === 'dokumentum-panelek') {
     if (!isBviGuild(interaction.guildId) || !moduleEnabled(interaction.guildId, 'bvi')) {
-      return ephemeralError(interaction, 'A BVI dokumentumrendszer csak a Belvédelmi szerveren használható, ha be van kapcsolva.');
+      return ephemeralError(interaction, 'Az RP dokumentumrendszer csak a kijelölt fő RP-szerveren használható, ha be van kapcsolva.');
     }
     await interaction.deferReply({ flags: EPHEMERAL });
     try {
@@ -2827,7 +2827,7 @@ async function handleCommand(interaction) {
 
   if (interaction.commandName !== 'telepites') return;
   if (!isBviGuild(interaction.guildId)) {
-    return ephemeralError(interaction, 'A /telepites BVI-rendszere csak a Belvédelmi szerveren használható. Más szervereket a /beallitas webes panelen állíts be.');
+    return ephemeralError(interaction, 'A /telepites teljes RP-rendszere csak a kijelölt fő RP-szerveren használható. Más szervereket a /beallitas webes panelen állíts be.');
   }
   await interaction.deferReply({ flags: EPHEMERAL });
   try {
@@ -2849,7 +2849,7 @@ async function handleButton(interaction) {
   if (id.startsWith('security_raid_')) return handleRaidDecision(interaction);
   if (id.startsWith('doc_')) {
     if (!isBviGuild(interaction.guildId) || !moduleEnabled(interaction.guildId, 'bvi')) {
-      return ephemeralError(interaction, 'A BVI dokumentumrendszer itt nem használható.');
+      return ephemeralError(interaction, 'Az RP dokumentumrendszer itt nem használható.');
     }
     return handleDocumentButton(interaction);
   }
@@ -2858,7 +2858,7 @@ async function handleButton(interaction) {
   if (id === 'ticket_order') return interaction.showModal(orderModal());
   if (id === 'application_open') {
     if (!isBviGuild(interaction.guildId) || !moduleEnabled(interaction.guildId, 'bvi')) {
-      return ephemeralError(interaction, 'A BVI TGF jelenleg nem használható.');
+      return ephemeralError(interaction, 'Az RP jelentkezési rendszer jelenleg nem használható.');
     }
     return interaction.showModal(applicationModal());
   }
@@ -3007,8 +3007,8 @@ async function handleButton(interaction) {
     }
     await member?.send(
       accepted
-        ? `✅ A **${interaction.guild.name}** szerveren elfogadták a Belvédelmi TGF-edet! Keresd a vezetőséget a további teendőkért.`
-        : `❌ A **${interaction.guild.name}** szerveren most nem fogadták el a Belvédelmi TGF-edet.`
+        ? `✅ A **${interaction.guild.name}** szerveren elfogadták az RP jelentkezésedet! Keresd a vezetőséget a további teendőkért.`
+        : `❌ A **${interaction.guild.name}** szerveren most nem fogadták el az RP jelentkezésedet.`
     ).catch(() => null);
     await interaction.update({ embeds: [embed], components: [] });
     return sendLog(
@@ -3068,7 +3068,7 @@ async function handleOrderSubmit(interaction) {
 
 async function handleApplicationPart1(interaction) {
   if (!isBviGuild(interaction.guildId) || !moduleEnabled(interaction.guildId, 'bvi')) {
-    return ephemeralError(interaction, 'A BVI TGF jelenleg nem használható.');
+    return ephemeralError(interaction, 'Az RP jelentkezési rendszer jelenleg nem használható.');
   }
   const answers = TGF_QUESTIONS.slice(0, 5).map((_question, index) =>
     getText(interaction, `app_q${index + 1}`)
@@ -3087,7 +3087,7 @@ async function handleApplicationPart1(interaction) {
 async function handleApplicationPart2(interaction) {
   await interaction.deferReply({ flags: EPHEMERAL });
   if (!isBviGuild(interaction.guildId) || !moduleEnabled(interaction.guildId, 'bvi')) {
-    return interaction.editReply('❌ A BVI TGF jelenleg nem használható.');
+    return interaction.editReply('❌ Az RP jelentkezési rendszer jelenleg nem használható.');
   }
   const reviewChannel = byName(interaction.guild.channels.cache, NAMES.applicationReviewChannel);
   if (!reviewChannel?.isTextBased()) {
@@ -3104,7 +3104,7 @@ async function handleApplicationPart2(interaction) {
     ...TGF_QUESTIONS.slice(5).map((_question, index) => getText(interaction, `app_q${index + 6}`))
   ];
 
-  const embed = baseEmbed('🏛️ Új Belvédelmi TGF', `${interaction.user} új Belvédelmi TGF-et küldött.`)
+  const embed = baseEmbed('🎭 Új RP jelentkezés', `${interaction.user} új RP jelentkezést küldött.`)
     .setThumbnail(interaction.user.displayAvatarURL())
     .addFields(
       ...TGF_QUESTIONS.map((question, index) => ({
@@ -3115,8 +3115,8 @@ async function handleApplicationPart2(interaction) {
     );
   await reviewChannel.send({ embeds: [embed], components: [applicationControls(interaction.user.id)] });
   applicationDrafts.delete(key);
-  await sendLog(interaction.guild, baseEmbed('📨 Belvédelmi TGF érkezett', `${interaction.user.tag} TGF-et küldött.`, COLORS.success));
-  return interaction.editReply('✅ A Belvédelmi TGF-edet elküldtük a vezetőségnek.');
+  await sendLog(interaction.guild, baseEmbed('📨 RP jelentkezés érkezett', `${interaction.user.tag} jelentkezést küldött.`, COLORS.success));
+  return interaction.editReply('✅ Az RP jelentkezésedet elküldtük a vezetőségnek.');
 }
 
 function canActOn(interaction, target) {
@@ -3301,7 +3301,7 @@ async function handleChannelSubmit(interaction) {
 async function handleModal(interaction) {
   if (interaction.customId.startsWith('doc_')) {
     if (!isBviGuild(interaction.guildId) || !moduleEnabled(interaction.guildId, 'bvi')) {
-      return ephemeralError(interaction, 'A BVI dokumentumrendszer itt nem használható.');
+      return ephemeralError(interaction, 'Az RP dokumentumrendszer itt nem használható.');
     }
     return handleDocumentModal(interaction);
   }
@@ -3350,16 +3350,16 @@ const {
 const { COLORS } = require('./constants');
 
 const TGF_QUESTIONS = Object.freeze([
-  'Miért szeretnél a Belvédelmi Igazgatósághoz csatlakozni?',
-  'Mit gondolsz, mi a Belvédelmi Igazgatóság legfontosabb feladata?',
+  'Miért szeretnél csatlakozni ehhez az RP szervezethez?',
+  'Mit gondolsz, mi az RP szervezet legfontosabb feladata?',
   'Mit tennél, ha szolgálat közben azt látnád, hogy egy rendvédelmi dolgozó visszaél a jogkörével?',
   'Mit tennél, ha egy nálad magasabb rangú személy olyan utasítást adna, amely szerinted szabályellenes?',
   'Mit jelent számodra a szolgálati hierarchia, és miért fontos annak betartása?',
-  'Mit tennél, ha egy másik Belvédelmi tag bizalmas információt adna ki illetéktelen személynek?',
+  'Mit tennél, ha egy másik szervezeti tag bizalmas információt adna ki illetéktelen személynek?',
   'Hogyan járnál el, ha egy ellenőrzés során szabálytalanságot észlelnél egy másik rendvédelmi szervezetnél?',
   'Mit jelent a jogkörrel való visszaélés? Írj rá egy példát!',
   'Miért fontos a bizonyítékok és a szolgálati intézkedések megfelelő dokumentálása?',
-  'Miért gondolod úgy, hogy alkalmas lennél a Belvédelmi Igazgatóság tagjának?'
+  'Miért gondolod úgy, hogy alkalmas lennél az RP szervezet tagjának?'
 ]);
 
 function row(...components) {
@@ -3400,16 +3400,16 @@ function ticketPanel(customDescription = null) {
 function applicationPanel() {
   const embed = new EmbedBuilder()
     .setColor(COLORS.primary)
-    .setTitle('🏛️ Belvédelmi Igazgatóság TGF')
+    .setTitle('🎭 RP szervezeti jelentkezés')
     .setDescription(
-      '**Szeretnél csatlakozni a Belvédelmi Igazgatósághoz?**\n\n' +
+      '**Szeretnél csatlakozni az RP szervezethez?**\n\n' +
       TGF_QUESTIONS.map((question, index) => `**${index + 1}.** ${question}`).join('\n\n') +
       '\n\nA TGF két, egyenként 5 kérdéses részből áll. Írj komoly, őszinte és részletes válaszokat — ezeket csak a vezetőség és a staff látja.'
     )
-    .setFooter({ text: 'NexaBot • Belvédelmi TGF rendszer' });
+    .setFooter({ text: 'NexaBot • RP jelentkezési rendszer' });
 
   const buttons = row(
-    new ButtonBuilder().setCustomId('application_open').setLabel('Belvédelmi TGF megkezdése').setEmoji('📝').setStyle(ButtonStyle.Primary)
+    new ButtonBuilder().setCustomId('application_open').setLabel('RP jelentkezés megkezdése').setEmoji('📝').setStyle(ButtonStyle.Primary)
   );
   return { embeds: [embed], components: [buttons] };
 }
@@ -3557,10 +3557,10 @@ function orderModal() {
 function applicationModal() {
   return new ModalBuilder()
     .setCustomId('application_submit_part1')
-    .setTitle('Belvédelmi TGF • 1/2')
+    .setTitle('RP jelentkezés • 1/2')
     .addComponents(
       row(input('app_q1', '1. Csatlakozási motivációd', TextInputStyle.Paragraph, 'Miért szeretnél csatlakozni?', true, 350)),
-      row(input('app_q2', '2. A Belvédelem fő feladata', TextInputStyle.Paragraph, 'Mi a Belvédelmi Igazgatóság legfontosabb feladata?', true, 350)),
+      row(input('app_q2', '2. Az RP szervezet feladata', TextInputStyle.Paragraph, 'Mi az RP szervezet legfontosabb feladata?', true, 350)),
       row(input('app_q3', '3. Jogkörrel való visszaélés', TextInputStyle.Paragraph, 'Mit tennél, ha visszaélést látnál?', true, 350)),
       row(input('app_q4', '4. Szabályellenes utasítás', TextInputStyle.Paragraph, 'Mit tennél szabályellenes utasítás esetén?', true, 350)),
       row(input('app_q5', '5. Szolgálati hierarchia', TextInputStyle.Paragraph, 'Mit jelent, és miért fontos betartani?', true, 350))
@@ -3570,13 +3570,13 @@ function applicationModal() {
 function applicationModalPart2() {
   return new ModalBuilder()
     .setCustomId('application_submit_part2')
-    .setTitle('Belvédelmi TGF • 2/2')
+    .setTitle('RP jelentkezés • 2/2')
     .addComponents(
       row(input('app_q6', '6. Bizalmas információ kiadása', TextInputStyle.Paragraph, 'Mit tennél információ kiszivárogtatásakor?', true, 350)),
       row(input('app_q7', '7. Más szervezet szabálytalansága', TextInputStyle.Paragraph, 'Hogyan járnál el az ellenőrzés során?', true, 350)),
       row(input('app_q8', '8. Jogkörrel való visszaélés példája', TextInputStyle.Paragraph, 'Írd le a jelentését és egy példát!', true, 350)),
       row(input('app_q9', '9. Dokumentálás fontossága', TextInputStyle.Paragraph, 'Miért fontos mindent megfelelően dokumentálni?', true, 350)),
-      row(input('app_q10', '10. Miért lennél alkalmas?', TextInputStyle.Paragraph, 'Miért lennél alkalmas Belvédelmi tagnak?', true, 350))
+      row(input('app_q10', '10. Miért lennél alkalmas?', TextInputStyle.Paragraph, 'Miért lennél alkalmas az RP szervezetbe?', true, 350))
     );
 }
 
