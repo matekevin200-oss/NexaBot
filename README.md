@@ -1,4 +1,4 @@
-# NEXA Bot 4.1
+# NEXA Bot 5.0
 
 Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Az opcionális RP- és dokumentumrendszert kizárólag a bot tulajdonosa vagy az általa kijelölt Owner-kezelő kapcsolhatja be egy kiválasztott szerveren.
 
@@ -8,7 +8,8 @@
 - magyar alapnyelv, szerverenként választható angol Discord-felület;
 - Discord OAuth2 dashboard tulajdonos, admin és egy kijelölt kezelői rang részére;
 - külön Owner Center: szerverhálózat, uptime, ping, memória, adatbázis, használat, hibák és audit;
-- owner-kezelők, AI-engedélylista, user/guild blacklist, maintenance, globális modul-vészkapcsoló és premium;
+- owner-kezelők, AI-engedélylista, user/guild blacklist, maintenance és globális modul-vészkapcsoló;
+- Owner által ingyen kiosztható Free, Pro és Ultimate jogosultsági csomagok, megadható lejárattal vagy korlátlan időre;
 - Owner-only RP modul: szerverenkénti engedélyezés, TGF, részletes dokumentumpanelek, vezetői jóváhagyás és automatikus RP-ügyszám;
 - moderációs Case ID és adatbázis: ban, unban, kick, timeout, untimeout, warn, warnings, clearwarns, clear, slowmode, lock, unlock és nick;
 - Automod: spam/flood, ismétlés, mass mention, invite, link, scam, tiltott szavak, caps és emoji spam;
@@ -25,13 +26,25 @@
 - automatikus Discord sharding, korlátozott cache, sweeperek, adatbázis-pool és háttérfeladatok;
 - központi error handler, audit-, command-, dashboard- és AI használati napló.
 
+## Owner által kezelt csomagok
+
+Nincs bankkártyás fizetés és nincs automatikus előfizetés. A szerverek csomagját kizárólag a bot tulajdonosa vagy az általa engedélyezett Owner-kezelő módosíthatja az Owner Centerben.
+
+| Csomag | Elérhető rendszerek |
+|---|---|
+| Free | Moderáció, welcome/autorole, ticket és részletes naplózás |
+| Pro | Minden Free funkció, Automod, XP, rangpanelek, giveaway, custom commands, közösségi és shift modulok |
+| Ultimate | Minden Pro funkció, Nexa AI, teljes Anti-Nuke, raid detection és automatikus szerverlezárás |
+
+Az Owner által RP-re engedélyezett szerver automatikusan Ultimate hozzáférést kap. A régi `premium` adatbázis-bejegyzéseket az induló migráció Ultimate csomagra alakítja.
+
 ## Könyvtárstruktúra
 
 ```text
 src/
   index.js             Discord kliens és automatikus sharding
   config.js            PostgreSQL, migrációk, szerver- és owner-beállítás
-  dashboard.js         OAuth2 dashboard, Owner Center, publikus oldalak
+  dashboard.js         OAuth2 Command Deck, Owner Center, publikus oldalak
   interactions.js      gombok, select menük, modalok és ticket workflow
   moderation.js        slash moderáció és Case ID
   security.js          Automod, raidvédelem és Anti-Nuke
@@ -113,7 +126,7 @@ npm test
 A sikeres logban ez jelenik meg:
 
 ```text
-A NEXA Bot 4.1 management platform használatra kész.
+A NEXA Bot 5.0 management platform használatra kész.
 ```
 
 ## Használat
@@ -125,6 +138,7 @@ A NEXA Bot 4.1 management platform használatra kész.
 - a bot mentéskor frissíti a Discord-paneleket;
 - Custom Commands: nyisd meg a szerver **Custom Command kezelő** oldalát;
 - Owner Center: a `BOT_OWNER_ID` fiókkal belépve automatikusan megnyílik.
+- Csomag kiosztása: az Owner Center **Ingyenes csomag kiosztása** részében válaszd ki a Pro vagy Ultimate csomagot és a lejáratot; a szerverkártyán egy mozdulattal visszaállítható Free-re.
 - RP-rendszer: az Owner Center szerverlistáján nyomd meg az **RP bekapcsolása** gombot. Ezután Discordon a `/telepites` a teljes alap RP-rendszert, a `/dokumentum-panelek` pedig a már meglévő dokumentumcsatornák paneljeit telepíti.
 
 ## Biztonság

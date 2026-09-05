@@ -1,4 +1,4 @@
-// NEXA Bot 4.1 single-file release — generated automatically.
+// NEXA Bot 5.0 single-file release — generated automatically.
 const __nativeRequire = require;
 const __path = __nativeRequire('node:path').posix;
 const __modules = {
@@ -387,7 +387,7 @@ async function handleAiMessage(message) {
   const isPrivate = !message.guild;
   if (!isPrivate) {
     const config = getGuildConfig(message.guild.id);
-    if (!config.modules.ai || !config.channels.ai || message.channel.id !== config.channels.ai) return;
+    if (!moduleEnabled(message.guild.id, 'ai') || !config.channels.ai || message.channel.id !== config.channels.ai) return;
   }
   if (!isAiAllowedUser(message.author.id)) {
     if (isPrivate) await message.reply('🔒 A Nexa AI használatához a bot tulajdonosának engedélye szükséges.').catch(() => null);
@@ -1056,6 +1056,7 @@ const { PermissionFlagsBits } = require('discord.js');
 const { NAMES } = require('./constants');
 
 const cache = new Map();
+const premiumCache = new Map();
 let ownerSettings = {
   aiAllowedUsers: [],
   ownerUsers: [],
@@ -1105,6 +1106,69 @@ const CHANNEL_KEYS = Object.freeze([
 ]);
 const ROLE_KEYS = Object.freeze(['staff', 'auto', 'human', 'bot', 'dashboard', 'shift']);
 const LOG_KEYS = Object.freeze(['messageDelete', 'messageEdit', 'memberJoin', 'memberLeave', 'ban', 'timeout', 'roleUpdate', 'channelUpdate', 'voiceJoin', 'voiceLeave', 'nicknameChange', 'invite', 'moderation', 'automod', 'security']);
+
+const PLAN_LEVELS = Object.freeze({ free: 0, pro: 1, ultimate: 2 });
+const MODULE_MINIMUM_PLAN = Object.freeze({
+  protection: 'pro',
+  moderation: 'free',
+  tickets: 'free',
+  welcome: 'free',
+  levels: 'pro',
+  suggestions: 'pro',
+  customCommands: 'pro',
+  reactionRoles: 'pro',
+  giveaways: 'pro',
+  logging: 'free',
+  shift: 'pro',
+  ai: 'ultimate',
+  tempVoice: 'pro',
+  bvi: 'ultimate'
+});
+
+function normalizePlan(value) {
+  const plan = String(value || '').toLowerCase();
+  if (plan === 'premium') return 'ultimate';
+  return Object.hasOwn(PLAN_LEVELS, plan) ? plan : 'free';
+}
+
+function getGuildEntitlement(guildId) {
+  const id = String(guildId || '');
+  if (isBviGuild(id)) return { guildId: id, plan: 'ultimate', source: 'owner_rp', expiresAt: null, status: 'active' };
+  const record = premiumCache.get(id);
+  if (!record || record.status !== 'active') return { guildId: id, plan: 'free', source: 'default', expiresAt: null, status: 'active' };
+  if (record.expiresAt && record.expiresAt.getTime() <= Date.now()) {
+    premiumCache.delete(id);
+    return { guildId: id, plan: 'free', source: 'expired', expiresAt: record.expiresAt, status: 'expired' };
+  }
+  return { ...record, plan: normalizePlan(record.plan) };
+}
+
+function getGuildPlan(guildId) {
+  return getGuildEntitlement(guildId).plan;
+}
+
+function planAllows(guildId, requiredPlan = 'free') {
+  return PLAN_LEVELS[getGuildPlan(guildId)] >= PLAN_LEVELS[normalizePlan(requiredPlan)];
+}
+
+function planAllowsModule(guildId, moduleKey) {
+  if (moduleKey === 'bvi') return isBviGuild(guildId);
+  return planAllows(guildId, MODULE_MINIMUM_PLAN[moduleKey] || 'free');
+}
+
+function cachePremiumRow(row) {
+  if (!row?.guild_id) return;
+  premiumCache.set(String(row.guild_id), {
+    guildId: String(row.guild_id),
+    plan: normalizePlan(row.premium_type),
+    source: String(row.source || 'owner_gift'),
+    status: String(row.status || 'active'),
+    startsAt: row.starts_at ? new Date(row.starts_at) : new Date(),
+    expiresAt: row.expires_at ? new Date(row.expires_at) : null,
+    grantedBy: String(row.granted_by || ''),
+    note: String(row.note || '')
+  });
+}
 
 function isBviGuild(guildId) {
   const id = String(guildId || '');
@@ -1520,6 +1584,11 @@ async function initConfigStore() {
         expires_at TIMESTAMPTZ,
         granted_by TEXT NOT NULL
       );
+      ALTER TABLE nexabot_premium ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+      ALTER TABLE nexabot_premium ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'owner_gift';
+      ALTER TABLE nexabot_premium ADD COLUMN IF NOT EXISTS note TEXT;
+      ALTER TABLE nexabot_premium ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+      UPDATE nexabot_premium SET premium_type = 'ultimate' WHERE premium_type NOT IN ('pro', 'ultimate');
       CREATE INDEX IF NOT EXISTS nexabot_premium_expiry
         ON nexabot_premium (expires_at);
       CREATE TABLE IF NOT EXISTS nexabot_custom_commands (
@@ -1548,6 +1617,11 @@ async function initConfigStore() {
     for (const row of result.rows) cache.set(row.guild_id, mergeStoredConfig(row.guild_id, row.config));
     const ownerResult = await pool.query("SELECT settings FROM nexabot_owner_settings WHERE settings_key = 'global'");
     ownerSettings = sanitizeOwnerSettings(ownerResult.rows[0]?.settings);
+    const premiumResult = await pool.query(
+      "SELECT guild_id, premium_type, starts_at, expires_at, granted_by, status, source, note FROM nexabot_premium WHERE status = 'active' AND (expires_at IS NULL OR expires_at > NOW())"
+    );
+    premiumCache.clear();
+    for (const row of premiumResult.rows) cachePremiumRow(row);
     persistent = true;
     console.log(`${result.rowCount} szerver beállításai betöltve az adatbázisból.`);
     return true;
@@ -1600,6 +1674,63 @@ async function dbQuery(text, values = []) {
   return pool.query(text, values);
 }
 
+async function grantGuildPlan(guildId, plan, options = {}) {
+  const id = sanitizeId(guildId);
+  const normalizedPlan = normalizePlan(plan);
+  if (!id) throw new Error('Érvénytelen Discord szerver ID.');
+  if (normalizedPlan === 'free') return revokeGuildPlan(id);
+  const daysValue = options.days === null || options.days === undefined || options.days === ''
+    ? null
+    : Math.min(3650, Math.max(1, Number.parseInt(options.days, 10) || 30));
+  const startsAt = new Date();
+  const expiresAt = daysValue ? new Date(startsAt.getTime() + daysValue * 86_400_000) : null;
+  const record = {
+    guildId: id,
+    plan: normalizedPlan,
+    source: 'owner_gift',
+    status: 'active',
+    startsAt,
+    expiresAt,
+    grantedBy: String(options.grantedBy || 'owner'),
+    note: String(options.note || '').trim().slice(0, 300)
+  };
+  if (pool) {
+    await pool.query(
+      `INSERT INTO nexabot_premium
+        (guild_id, premium_type, starts_at, expires_at, granted_by, status, source, note, updated_at)
+       VALUES ($1, $2, NOW(), $3, $4, 'active', 'owner_gift', $5, NOW())
+       ON CONFLICT (guild_id) DO UPDATE SET
+        premium_type = EXCLUDED.premium_type,
+        starts_at = NOW(),
+        expires_at = EXCLUDED.expires_at,
+        granted_by = EXCLUDED.granted_by,
+        status = 'active',
+        source = 'owner_gift',
+        note = EXCLUDED.note,
+        updated_at = NOW()`,
+      [id, normalizedPlan, expiresAt, record.grantedBy, record.note || null]
+    );
+  }
+  premiumCache.set(id, record);
+  return getGuildEntitlement(id);
+}
+
+async function revokeGuildPlan(guildId) {
+  const id = sanitizeId(guildId);
+  if (!id) throw new Error('Érvénytelen Discord szerver ID.');
+  if (pool) await pool.query('DELETE FROM nexabot_premium WHERE guild_id = $1', [id]);
+  premiumCache.delete(id);
+  return getGuildEntitlement(id);
+}
+
+async function pruneExpiredPremium() {
+  const now = Date.now();
+  for (const [guildId, record] of premiumCache) {
+    if (record.expiresAt && record.expiresAt.getTime() <= now) premiumCache.delete(guildId);
+  }
+  if (pool) await pool.query('DELETE FROM nexabot_premium WHERE expires_at IS NOT NULL AND expires_at <= NOW()');
+}
+
 function configuredChannel(guild, key, fallbackName = null) {
   const id = getGuildConfig(guild.id).channels[key];
   const selected = id ? guild.channels.cache.get(id) : null;
@@ -1616,7 +1747,9 @@ function configuredRole(guild, key, fallbackName = null) {
 
 function moduleEnabled(guildId, key) {
   if (key === 'bvi') return isBviGuild(guildId);
-  return Boolean(getGuildConfig(guildId).modules[key]) && !ownerSettings.remoteDisabledModules.includes(key);
+  return Boolean(getGuildConfig(guildId).modules[key]) &&
+    planAllowsModule(guildId, key) &&
+    !ownerSettings.remoteDisabledModules.includes(key);
 }
 
 function logEnabled(guildId, key) {
@@ -1656,6 +1789,8 @@ module.exports = {
   CHANNEL_KEYS,
   ROLE_KEYS,
   LOG_KEYS,
+  PLAN_LEVELS,
+  MODULE_MINIMUM_PLAN,
   defaultConfig,
   sanitizeConfig,
   initConfigStore,
@@ -1665,6 +1800,13 @@ module.exports = {
   setOwnerSettings,
   isPersistentStore,
   dbQuery,
+  getGuildPlan,
+  getGuildEntitlement,
+  planAllows,
+  planAllowsModule,
+  grantGuildPlan,
+  revokeGuildPlan,
+  pruneExpiredPremium,
   configuredChannel,
   configuredRole,
   moduleEnabled,
@@ -2007,6 +2149,13 @@ const {
   isOwnerUser,
   isBviGuild,
   moduleEnabled,
+  getGuildPlan,
+  getGuildEntitlement,
+  planAllows,
+  planAllowsModule,
+  grantGuildPlan,
+  revokeGuildPlan,
+  MODULE_MINIMUM_PLAN,
   dbQuery,
   MODULE_KEYS,
   dashboardUrl,
@@ -2129,13 +2278,15 @@ function layout(title, content, session = null, branding = null) {
   return `<!doctype html>
 <html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#070911"><title>${escapeHtml(title)} • NexaBot</title><style>
-:root{color-scheme:dark;--bg:#070911;--panel:#0d111c;--card:#111725;--card2:#171e2e;--line:#263047;--text:#f8f9ff;--muted:#98a2b8;--primary:${primary};--accent:${accent};--red:#ff6174;--gold:#ffca64;--shadow:0 24px 70px rgba(0,0,0,.32)}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(900px 520px at 75% -10%,color-mix(in srgb,var(--primary) 28%,transparent),transparent 70%),radial-gradient(700px 430px at -5% 25%,rgba(82,224,164,.1),transparent 72%),var(--bg);color:var(--text);font:15px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;min-height:100vh}a{color:inherit}.topbar{position:sticky;top:0;z-index:20;height:72px;background:rgba(7,9,17,.76);backdrop-filter:blur(22px);border-bottom:1px solid rgba(255,255,255,.07)}.topbar-inner{height:100%;padding:0 24px;display:flex;align-items:center;gap:14px}.brand{display:flex;align-items:center;gap:11px;font-size:19px;font-weight:900;text-decoration:none;letter-spacing:-.4px}.brand-mark{width:38px;height:38px;display:grid;place-items:center;border-radius:13px;background:linear-gradient(145deg,var(--primary),color-mix(in srgb,var(--primary) 55%,#141927));box-shadow:0 10px 28px color-mix(in srgb,var(--primary) 30%,transparent)}.brand span{color:var(--accent)}.live-pill{display:flex;align-items:center;gap:7px;border:1px solid rgba(82,224,164,.25);background:rgba(82,224,164,.07);color:#b8f8df;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:800}.live-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}.spacer{flex:1}.user{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:13px}.avatar{width:38px;height:38px;border-radius:13px;background:var(--card2);border:1px solid var(--line)}.app{display:grid;grid-template-columns:245px minmax(0,1fr);min-height:calc(100vh - 72px)}.sidebar{position:sticky;top:72px;height:calc(100vh - 72px);padding:24px 16px;border-right:1px solid rgba(255,255,255,.07);background:rgba(9,12,20,.55)}.side-label{padding:8px 12px;color:#65708a;font-size:11px;font-weight:900;letter-spacing:1.5px;text-transform:uppercase}.side-link{display:flex;align-items:center;gap:10px;margin:3px 0;padding:11px 12px;border-radius:11px;color:var(--muted);font-weight:700;text-decoration:none}.side-link:hover,.side-link.active{color:#fff;background:linear-gradient(90deg,color-mix(in srgb,var(--primary) 23%,transparent),rgba(255,255,255,.02));box-shadow:inset 3px 0 var(--primary)}main{width:100%;max-width:1240px;margin:0 auto;padding:34px 30px 90px}.public-main{max-width:1180px}.hero{padding:72px 0 48px}.eyebrow{display:inline-flex;align-items:center;gap:8px;padding:7px 11px;border:1px solid color-mix(in srgb,var(--primary) 35%,transparent);border-radius:999px;background:color-mix(in srgb,var(--primary) 9%,transparent);color:#d6ceff;font-size:12px;font-weight:900;letter-spacing:.7px;text-transform:uppercase}.hero h1{max-width:900px;font-size:clamp(42px,8vw,82px);line-height:.98;margin:20px 0;letter-spacing:-3.5px}.gradient{background:linear-gradient(105deg,#fff 18%,color-mix(in srgb,var(--primary) 65%,#fff) 58%,var(--accent));-webkit-background-clip:text;color:transparent}.lead{color:var(--muted);max-width:760px;font-size:clamp(17px,2vw,21px)}.actions{display:flex;flex-wrap:wrap;gap:11px;margin-top:28px}.btn{border:0;border-radius:11px;background:linear-gradient(135deg,var(--primary),color-mix(in srgb,var(--primary) 65%,#2b225d));color:#fff;padding:12px 17px;font:inherit;font-weight:850;text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 10px 25px color-mix(in srgb,var(--primary) 22%,transparent);transition:.18s transform,.18s border-color}.btn:hover{transform:translateY(-1px)}.btn.secondary{background:rgba(255,255,255,.035);border:1px solid var(--line);box-shadow:none}.btn.green{background:linear-gradient(135deg,#168b64,#11634b);box-shadow:0 10px 25px rgba(22,139,100,.18)}.btn.small{padding:8px 11px;font-size:12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:15px}.bento{grid-template-columns:repeat(12,1fr)}.bento .card{grid-column:span 4}.card{position:relative;overflow:hidden;background:linear-gradient(145deg,rgba(20,27,43,.94),rgba(12,16,27,.94));border:1px solid rgba(255,255,255,.085);border-radius:18px;padding:21px;box-shadow:var(--shadow)}.card::before{content:"";position:absolute;width:180px;height:180px;border-radius:50%;background:color-mix(in srgb,var(--primary) 8%,transparent);filter:blur(50px);right:-90px;top:-100px;pointer-events:none}.card h2,.card h3{position:relative;margin:0 0 8px;letter-spacing:-.3px}.feature-icon{width:45px;height:45px;display:grid;place-items:center;border:1px solid color-mix(in srgb,var(--primary) 28%,transparent);border-radius:14px;background:color-mix(in srgb,var(--primary) 12%,transparent);font-size:22px;margin-bottom:16px}.muted{color:var(--muted)}.notice{padding:13px 15px;border-radius:12px;margin:0 0 18px;background:rgba(82,224,164,.08);border:1px solid rgba(82,224,164,.25);color:#bdf7df}.warn{background:rgba(244,185,66,.08);border-color:rgba(244,185,66,.26);color:#ffe2a5}.error{background:rgba(239,91,108,.09);border-color:rgba(239,91,108,.28);color:#ffc0ca}.server{display:flex;align-items:center;gap:14px}.server img,.server-icon{width:56px;height:56px;border-radius:17px;background:var(--card2);display:grid;place-items:center;font-size:20px;font-weight:900;border:1px solid var(--line)}.server-body{min-width:0;flex:1}.server-body h1,.server-body h3{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0}.page-head{display:flex;align-items:center;gap:15px;margin-bottom:24px}.page-head h1{font-size:clamp(28px,5vw,44px);letter-spacing:-1.4px}.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:20px 0}.stat{padding:16px;border:1px solid var(--line);border-radius:15px;background:rgba(255,255,255,.025)}.stat-value{font-size:24px;font-weight:900}.stat-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px}.section{scroll-margin-top:94px}.section-title{display:flex;align-items:center;gap:9px;margin:0 0 14px;font-size:21px}.section-kicker{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--primary);font-weight:900}.settings{display:grid;grid-template-columns:1fr;gap:16px}.field-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(225px,1fr));gap:14px}.module-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}label{display:block;font-weight:750;margin-bottom:6px}.switch{display:flex;align-items:flex-start;gap:11px;background:rgba(255,255,255,.025);border:1px solid var(--line);border-radius:13px;padding:13px;margin:0;min-height:58px}.switch:hover{border-color:color-mix(in srgb,var(--primary) 45%,var(--line))}.switch input{width:20px;height:20px;accent-color:var(--primary);flex:0 0 auto;margin-top:2px}select,textarea,input[type=text],input[type=number],input[type=url],input[type=color]{width:100%;border:1px solid var(--line);border-radius:10px;background:#090d16;color:#fff;padding:11px;font:inherit;outline:none}select:focus,textarea:focus,input:focus{border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 14%,transparent)}input[type=color]{height:46px;padding:5px}textarea{min-height:105px;resize:vertical}.help{font-size:12px;color:var(--muted);margin-top:5px}.savebar{position:sticky;bottom:12px;z-index:8;background:rgba(17,23,37,.93);backdrop-filter:blur(18px);border:1px solid var(--line);border-radius:15px;padding:11px 13px;display:flex;align-items:center;gap:12px;box-shadow:0 16px 50px #000}.savebar .btn{margin-left:auto}.footer-note{text-align:center;color:#59647a;font-size:12px;margin-top:42px}@media(max-width:900px){.app{grid-template-columns:1fr}.sidebar{display:none}.bento .card{grid-column:span 6}.stats{grid-template-columns:repeat(2,1fr)}main{padding:26px 18px 82px}}@media(max-width:600px){.topbar{height:64px}.topbar-inner{padding:0 14px}.brand-text,.user span,.live-pill{display:none}.app{min-height:calc(100vh - 64px)}main{padding:22px 13px 78px}.hero{padding-top:42px}.hero h1{letter-spacing:-2.4px}.bento{display:grid;grid-template-columns:1fr}.bento .card{grid-column:auto}.card{padding:16px;border-radius:15px}.stats{grid-template-columns:1fr 1fr}.stat{padding:13px}.stat-value{font-size:20px}.savebar{bottom:7px}.savebar .muted{font-size:11px}.page-head{align-items:flex-start}}
-.badge{display:inline-block;padding:3px 7px;border-radius:999px;background:rgba(82,224,164,.12);color:var(--accent);font-size:10px;letter-spacing:.7px;vertical-align:middle}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:9px 6px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.7px}
-</style></head><body><header class="topbar"><div class="topbar-inner"><a class="brand" href="/"><span class="brand-mark">N</span><span class="brand-text">Nexa<span>Bot</span></span></a><div class="live-pill"><i class="live-dot"></i> RENDSZER ONLINE</div><div class="spacer"></div>${user ? `<div class="user"><span>${escapeHtml(user.username)}</span>${user.avatar ? `<img class="avatar" alt="" src="https://cdn.discordapp.com/avatars/${escapeHtml(user.id)}/${escapeHtml(user.avatar)}.png">` : ''}<a class="btn secondary small" href="/logout">Kilépés</a></div>` : ''}</div></header>${user ? `<div class="app"><aside class="sidebar"><div class="side-label">Vezérlőpult</div><a class="side-link active" href="/dashboard">◈ Áttekintés</a>${isOwnerUser(user.id) ? '<a class="side-link" href="/owner">⌾ Owner Center</a>' : ''}<a class="side-link" href="#modules">⬡ Modulok</a><a class="side-link" href="#channels"># Csatornák</a><a class="side-link" href="#roles">◇ Rangok</a><div class="side-label">Rendszerek</div><a class="side-link" href="#community">★ Közösség</a><a class="side-link" href="#shift">◷ Szolgálat</a><a class="side-link" href="#ai">✦ Nexa AI</a><a class="side-link" href="#protection">⬢ Védelem</a><div class="footer-note">${escapeHtml(productName)}<br>NEXA Bot 4.1</div></aside><main>${content}</main></div>` : `<main class="public-main">${content}</main>`}</body></html>`;
+:root{color-scheme:dark;--bg:#05070d;--panel:#0b0f19;--card:#101725;--card2:#171f31;--line:#29344c;--text:#f8f9ff;--muted:#9ca8bf;--primary:${primary};--accent:${accent};--cyan:#54d7ff;--red:#ff6174;--gold:#ffca64;--shadow:0 28px 90px rgba(0,0,0,.42)}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(1100px 650px at 78% -10%,color-mix(in srgb,var(--primary) 29%,transparent),transparent 70%),radial-gradient(760px 520px at -8% 28%,rgba(84,215,255,.10),transparent 72%),linear-gradient(180deg,#060812 0,var(--bg) 42%);color:var(--text);font:16px/1.58 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;min-height:100vh}a{color:inherit}.topbar{position:sticky;top:0;z-index:20;height:72px;background:rgba(5,7,13,.76);backdrop-filter:blur(24px);border-bottom:1px solid rgba(255,255,255,.075)}.topbar-inner{height:100%;padding:0 24px;display:flex;align-items:center;gap:14px}.brand{display:flex;align-items:center;gap:11px;font-size:19px;font-weight:900;text-decoration:none;letter-spacing:-.4px}.brand-mark{width:40px;height:40px;display:grid;place-items:center;border-radius:14px;background:linear-gradient(145deg,var(--primary),#2b1f70);box-shadow:0 0 0 1px rgba(255,255,255,.14),0 12px 34px color-mix(in srgb,var(--primary) 38%,transparent);position:relative}.brand-mark::after{content:"";position:absolute;inset:5px;border:1px solid rgba(255,255,255,.22);border-radius:10px}.brand span{color:var(--accent)}.live-pill{display:flex;align-items:center;gap:7px;border:1px solid rgba(82,224,164,.25);background:rgba(82,224,164,.07);color:#b8f8df;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:800}.live-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}.spacer{flex:1}.user{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:13px}.avatar{width:38px;height:38px;border-radius:13px;background:var(--card2);border:1px solid var(--line)}.app{display:grid;grid-template-columns:260px minmax(0,1fr);min-height:calc(100vh - 72px)}.sidebar{position:sticky;top:72px;height:calc(100vh - 72px);padding:24px 16px;border-right:1px solid rgba(255,255,255,.07);background:linear-gradient(180deg,rgba(11,15,25,.92),rgba(7,10,17,.62))}.side-label{padding:8px 12px;color:#65708a;font-size:11px;font-weight:900;letter-spacing:1.5px;text-transform:uppercase}.side-link{display:flex;align-items:center;gap:10px;margin:3px 0;padding:11px 12px;border-radius:11px;color:var(--muted);font-weight:700;text-decoration:none}.side-link:hover,.side-link.active{color:#fff;background:linear-gradient(90deg,color-mix(in srgb,var(--primary) 26%,transparent),rgba(84,215,255,.035));box-shadow:inset 3px 0 var(--primary)}main{width:100%;max-width:1320px;margin:0 auto;padding:36px 32px 96px}.public-main{max-width:1240px}.hero{padding:80px 0 52px}.eyebrow{display:inline-flex;align-items:center;gap:8px;padding:7px 11px;border:1px solid color-mix(in srgb,var(--primary) 35%,transparent);border-radius:999px;background:color-mix(in srgb,var(--primary) 9%,transparent);color:#d6ceff;font-size:12px;font-weight:900;letter-spacing:.7px;text-transform:uppercase}.hero h1{max-width:960px;font-size:clamp(44px,8vw,88px);line-height:.96;margin:22px 0;letter-spacing:-4px}.gradient{background:linear-gradient(105deg,#fff 18%,color-mix(in srgb,var(--primary) 65%,#fff) 57%,var(--cyan));-webkit-background-clip:text;color:transparent}.lead{color:var(--muted);max-width:780px;font-size:clamp(17px,2vw,21px)}.actions{display:flex;flex-wrap:wrap;gap:11px;margin-top:28px}.btn{border:0;border-radius:12px;background:linear-gradient(135deg,var(--primary),color-mix(in srgb,var(--primary) 65%,#221c54));color:#fff;padding:12px 17px;font:inherit;font-weight:850;text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 10px 28px color-mix(in srgb,var(--primary) 25%,transparent);transition:.18s transform,.18s border-color,.18s filter}.btn:hover{transform:translateY(-2px);filter:brightness(1.08)}.btn.secondary{background:rgba(255,255,255,.035);border:1px solid var(--line);box-shadow:none}.btn.green{background:linear-gradient(135deg,#168b64,#11634b);box-shadow:0 10px 25px rgba(22,139,100,.18)}.btn.small{padding:8px 11px;font-size:12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:15px}.bento{grid-template-columns:repeat(12,1fr)}.bento .card{grid-column:span 4}.card{position:relative;overflow:hidden;background:linear-gradient(145deg,rgba(19,27,43,.96),rgba(10,14,24,.96));border:1px solid rgba(255,255,255,.09);border-radius:20px;padding:22px;box-shadow:var(--shadow)}.card::before{content:"";position:absolute;width:190px;height:190px;border-radius:50%;background:color-mix(in srgb,var(--primary) 9%,transparent);filter:blur(52px);right:-90px;top:-100px;pointer-events:none}.card h2,.card h3{position:relative;margin:0 0 8px;letter-spacing:-.3px}.feature-icon{width:46px;height:46px;display:grid;place-items:center;border:1px solid color-mix(in srgb,var(--primary) 28%,transparent);border-radius:14px;background:color-mix(in srgb,var(--primary) 12%,transparent);font-size:22px;margin-bottom:16px}.muted{color:var(--muted)}.notice{padding:13px 15px;border-radius:12px;margin:0 0 18px;background:rgba(82,224,164,.08);border:1px solid rgba(82,224,164,.25);color:#bdf7df}.warn{background:rgba(244,185,66,.08);border-color:rgba(244,185,66,.26);color:#ffe2a5}.error{background:rgba(239,91,108,.09);border-color:rgba(239,91,108,.28);color:#ffc0ca}.server{display:flex;align-items:center;gap:14px}.server img,.server-icon{width:56px;height:56px;border-radius:17px;background:var(--card2);display:grid;place-items:center;font-size:20px;font-weight:900;border:1px solid var(--line)}.server-body{min-width:0;flex:1}.server-body h1,.server-body h3{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0}.page-head{display:flex;align-items:center;gap:15px;margin-bottom:24px}.page-head h1{font-size:clamp(30px,5vw,46px);letter-spacing:-1.5px}.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:20px 0}.stat{padding:17px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(145deg,rgba(255,255,255,.035),rgba(255,255,255,.012))}.stat-value{font-size:25px;font-weight:900}.stat-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px}.section{scroll-margin-top:94px}.section-title{display:flex;align-items:center;gap:9px;margin:0 0 14px;font-size:22px}.section-kicker{font-size:11px;text-transform:uppercase;letter-spacing:1.15px;color:#a99cff;font-weight:900}.settings{display:grid;grid-template-columns:1fr;gap:17px}.field-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(225px,1fr));gap:14px}.module-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}label{display:block;font-weight:750;margin-bottom:6px}.switch{display:flex;align-items:flex-start;gap:11px;background:rgba(255,255,255,.026);border:1px solid var(--line);border-radius:14px;padding:13px;margin:0;min-height:60px}.switch:hover{border-color:color-mix(in srgb,var(--primary) 45%,var(--line))}.switch input{width:20px;height:20px;accent-color:var(--primary);flex:0 0 auto;margin-top:2px}.switch.locked{opacity:.64;border-style:dashed;background:rgba(255,255,255,.014)}.plan-tag{display:inline-flex;margin-left:6px;padding:2px 7px;border-radius:999px;background:linear-gradient(135deg,#6950ff,#294d86);font-size:10px;letter-spacing:.8px;color:#fff}select,textarea,input[type=text],input[type=number],input[type=url],input[type=color]{width:100%;border:1px solid var(--line);border-radius:11px;background:#080c15;color:#fff;padding:11px;font:inherit;outline:none}select:focus,textarea:focus,input:focus{border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 14%,transparent)}input[type=color]{height:46px;padding:5px}textarea{min-height:105px;resize:vertical}.help{font-size:12px;color:var(--muted);margin-top:5px}.savebar{position:sticky;bottom:12px;z-index:8;background:rgba(15,21,34,.94);backdrop-filter:blur(20px);border:1px solid var(--line);border-radius:16px;padding:11px 13px;display:flex;align-items:center;gap:12px;box-shadow:0 18px 58px #000}.savebar .btn{margin-left:auto}.footer-note{text-align:center;color:#59647a;font-size:12px;margin-top:42px}@media(max-width:900px){.app{grid-template-columns:1fr}.sidebar{display:none}.bento .card{grid-column:span 6}.stats{grid-template-columns:repeat(2,1fr)}main{padding:26px 18px 82px}}@media(max-width:600px){.topbar{height:64px}.topbar-inner{padding:0 14px}.brand-text,.user span,.live-pill{display:none}.app{min-height:calc(100vh - 64px)}main{padding:22px 13px 78px}.hero{padding-top:42px}.hero h1{letter-spacing:-2.4px}.bento{display:grid;grid-template-columns:1fr}.bento .card{grid-column:auto}.card{padding:16px;border-radius:15px}.stats{grid-template-columns:1fr 1fr}.stat{padding:13px}.stat-value{font-size:20px}.savebar{bottom:7px}.savebar .muted{font-size:11px}.page-head{align-items:flex-start}}
+.badge{display:inline-block;padding:3px 8px;border-radius:999px;background:rgba(82,224,164,.12);color:var(--accent);font-size:10px;font-weight:900;letter-spacing:.7px;vertical-align:middle}.badge.pro{background:rgba(124,92,255,.16);color:#c9c0ff}.badge.ultimate{background:linear-gradient(135deg,rgba(124,92,255,.25),rgba(84,215,255,.14));color:#dcd8ff}.command-deck{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(320px,.88fr);gap:18px;align-items:stretch}.deck-panel{min-height:390px;background:linear-gradient(145deg,rgba(16,23,38,.97),rgba(7,11,20,.98));border:1px solid rgba(255,255,255,.1);border-radius:24px;padding:20px;box-shadow:0 36px 110px rgba(0,0,0,.48);position:relative;overflow:hidden}.deck-panel::after{content:"";position:absolute;inset:auto -80px -110px auto;width:280px;height:280px;border-radius:50%;background:color-mix(in srgb,var(--cyan) 13%,transparent);filter:blur(50px)}.deck-top{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:16px}.deck-row{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;padding:13px;border:1px solid rgba(255,255,255,.07);border-radius:14px;background:rgba(255,255,255,.022);margin:9px 0}.deck-row strong{display:block}.pulse{width:9px;height:9px;background:var(--accent);border-radius:50%;box-shadow:0 0 0 6px rgba(82,224,164,.08),0 0 18px var(--accent)}.metric-orbit{display:grid;place-items:center;min-height:390px}.orbit{width:min(320px,78vw);aspect-ratio:1;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at center,#111a2c 0 37%,transparent 38%),conic-gradient(from 20deg,var(--primary),var(--cyan),var(--accent),var(--primary));padding:2px;box-shadow:0 0 90px color-mix(in srgb,var(--primary) 20%,transparent)}.orbit-core{width:76%;height:76%;border-radius:50%;background:#090e19;display:grid;place-items:center;text-align:center;border:1px solid rgba(255,255,255,.1)}.orbit-core strong{font-size:52px;line-height:1}.eyeline{height:1px;background:linear-gradient(90deg,transparent,var(--primary),var(--cyan),transparent);margin:58px 0 32px}.feature-wide{grid-column:span 8!important}.feature-narrow{grid-column:span 4!important}.navlinks{display:flex;gap:6px}.navlinks a{color:var(--muted);text-decoration:none;font-size:13px;font-weight:750;padding:8px 10px;border-radius:9px}.navlinks a:hover{color:#fff;background:rgba(255,255,255,.05)}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:9px 6px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.7px}@media(max-width:900px){.command-deck{grid-template-columns:1fr}.feature-wide,.feature-narrow{grid-column:span 6!important}.navlinks{display:none}}@media(max-width:600px){.feature-wide,.feature-narrow{grid-column:auto!important}.deck-panel,.metric-orbit{min-height:330px}}
+</style></head><body><header class="topbar"><div class="topbar-inner"><a class="brand" href="/"><span class="brand-mark">N</span><span class="brand-text">Nexa<span>Bot</span></span></a><div class="live-pill"><i class="live-dot"></i> NEXA CORE ONLINE</div><nav class="navlinks"><a href="/#platform">Platform</a><a href="/commands">Parancsok</a><a href="/privacy">Adatvédelem</a></nav><div class="spacer"></div>${user ? `<div class="user"><span>${escapeHtml(user.username)}</span>${user.avatar ? `<img class="avatar" alt="" src="https://cdn.discordapp.com/avatars/${escapeHtml(user.id)}/${escapeHtml(user.avatar)}.png">` : ''}<a class="btn secondary small" href="/logout">Kilépés</a></div>` : `<a class="btn small" href="/login">Belépés</a>`}</div></header>${user ? `<div class="app"><aside class="sidebar"><div class="side-label">Command Deck</div><a class="side-link active" href="/dashboard">◈ Áttekintés</a>${isOwnerUser(user.id) ? '<a class="side-link" href="/owner">⌾ Owner Center</a>' : ''}<a class="side-link" href="#modules">⬡ Modulok</a><a class="side-link" href="#channels"># Csatornák</a><a class="side-link" href="#roles">◇ Rangok</a><div class="side-label">Rendszerek</div><a class="side-link" href="#community">★ Közösség</a><a class="side-link" href="#shift">◷ Szolgálat</a><a class="side-link" href="#ai">✦ Nexa AI</a><a class="side-link" href="#protection">⬢ Védelem</a><div class="footer-note">${escapeHtml(productName)}<br>NEXA Bot 5.0</div></aside><main>${content}</main></div>` : `<main class="public-main">${content}</main>`}</body></html>`;
 }
 
 function landing(session) {
-  const content = `<section class="hero"><div class="eyebrow">✦ NEXA Bot 4.1 • Discord Management Platform</div><h1 class="gradient">The next generation Discord management bot.</h1><p class="lead">Professzionális moderáció, Automod, Anti-Nuke, ticketek, közösségi rendszerek és engedélyezett Nexa AI — több szerveren, egy prémium vezérlőpulton.</p><div class="actions"><a class="btn" href="${session ? '/dashboard' : '/login'}">${session ? 'Dashboard megnyitása' : 'Belépés Discorddal'} →</a><a class="btn secondary" href="${escapeHtml(inviteUrl())}">NEXA Bot meghívása</a><a class="btn secondary" href="/commands">Parancsok</a></div></section><section class="grid bento"><article class="card"><div class="feature-icon">🛡️</div><h2>Automod & Anti-Nuke</h2><p class="muted">Raid, spam, mass mention, tiltott linkek, friss fiókok és veszélyes szerverműveletek elleni védelem.</p></article><article class="card"><div class="feature-icon">✨</div><h2>Nexa AI</h2><p class="muted">Engedélyezett privát és csatornaalapú asszisztens, biztonságos szerver- és személyes memóriával.</p></article><article class="card"><div class="feature-icon">🎫</div><h2>Support platform</h2><p class="muted">Kategóriás ticketek, claim, jogosultságkezelés és automatikus HTML transcript.</p></article><article class="card"><div class="feature-icon">⭐</div><h2>Közösségi rendszer</h2><p class="muted">XP, rangpanelek, ötletek, szavazások, bejelentések és nyereményjátékok.</p></article><article class="card"><div class="feature-icon">📊</div><h2>Owner Center</h2><p class="muted">Élő infrastruktúra, teljes szerverlista, audit, hiba-, használati-, blacklist- és premium-kezelés.</p></article><article class="card"><div class="feature-icon">⚙️</div><h2>Szerverenkénti vezérlés</h2><p class="muted">Minden szerveren külön modulok, rangok, csatornák, szövegek, arculat és biztonság.</p></article></section><div class="actions" style="justify-content:center"><a href="/privacy">Adatvédelem</a><a href="/terms">Felhasználási feltételek</a></div>`;
+  const content = `<section class="hero"><div class="eyebrow">✦ NEXA 5.0 • Discord Operations Platform</div><h1 class="gradient">Egy vezérlőközpont.<br>Minden szerverrendszer.</h1><p class="lead">Moderáció, Automod, ticketek, közösség, naplózás, mesterséges intelligencia és nagy szerverekre tervezett védelem — egyetlen gyors, biztonságos platformban.</p><div class="actions"><a class="btn" href="${session ? '/dashboard' : '/login'}">${session ? 'Vezérlőpult megnyitása' : 'Belépés Discorddal'} →</a><a class="btn secondary" href="${escapeHtml(inviteUrl())}">NEXA Bot meghívása</a><a class="btn secondary" href="/commands">Funkciók felfedezése</a></div></section>
+  <section class="command-deck" aria-label="NEXA vezérlőközpont előnézet"><div class="deck-panel"><div class="deck-top"><div><div class="section-kicker">Live command deck</div><h2>NEXA Core</h2></div><span class="badge ultimate">MINDEN RENDSZER ONLINE</span></div><div class="deck-row"><div><strong>Automod hálózat</strong><span class="muted">Spam, link és tartalomvédelem</span></div><i class="pulse"></i></div><div class="deck-row"><div><strong>Biztonsági pajzs</strong><span class="muted">Audit-alapú Anti-Nuke figyelés</span></div><span class="badge">AKTÍV</span></div><div class="deck-row"><div><strong>Support pipeline</strong><span class="muted">Ticket, claim és HTML transcript</span></div><span class="muted">0 várakozó</span></div><div class="deck-row"><div><strong>Nexa AI</strong><span class="muted">Engedélyezett szerver- és privát asszisztens</span></div><span class="badge pro">PRIVÁT</span></div></div><div class="deck-panel metric-orbit"><div class="orbit"><div class="orbit-core"><div><strong>24/7</strong><div class="muted">folyamatos felügyelet</div></div></div></div></div></section>
+  <div class="eyeline"></div><section id="platform" class="grid bento"><article class="card feature-wide"><div class="feature-icon">🛡️</div><h2>Adaptív védelem, nem vak automatizmus</h2><p class="muted">Külön kapcsolható spam-, flood-, meghívó-, scam-, raid- és frissfiók-védelem. A súlyos raid-döntés vezetői jóváhagyással működik, minden művelet auditálható.</p></article><article class="card feature-narrow"><div class="feature-icon">🎫</div><h2>Support, végig követhetően</h2><p class="muted">Kategóriás ticketek, claim, résztvevőkezelés, átnevezés és visszanézhető HTML transcript.</p></article><article class="card feature-narrow"><div class="feature-icon">✨</div><h2>Nexa AI</h2><p class="muted">Csatornában és privátban is használható, engedélyhez és beleegyezéshez kötött memóriával.</p></article><article class="card feature-wide"><div class="feature-icon">⌾</div><h2>Owner szintű hálózati irányítás</h2><p class="muted">Valós idejű szerverlista, üzemállapot, audit, hibaközpont, blacklist, távoli modulkapcsolók és Owner által kiosztható Free / Pro / Ultimate hozzáférés — fizetési rendszer nélkül.</p></article></section><div class="actions" style="justify-content:center;margin-top:48px"><a href="/privacy">Adatvédelem</a><a href="/terms">Felhasználási feltételek</a><span class="muted">NEXA Bot 5.0</span></div>`;
   return layout('Kezdőlap', content, session);
 }
 
@@ -2151,7 +2302,7 @@ function publicInfoPage(kind, session) {
     terms: ['Felhasználási feltételek', 'A NEXA Bot szerveradminisztrációs segédeszköz. A szervertulajdonos felel a jogosultságok, Automod-büntetések és a helyi szabályzat jogszerű beállításáért. Visszaélés, API-terhelés vagy biztonsági kockázat esetén a hozzáférés felfüggeszthető.', []]
   };
   const [title, description, sections] = pages[kind] || pages.commands;
-  return layout(title, `<section class="hero"><div class="eyebrow">NEXA Bot 4.1</div><h1>${escapeHtml(title)}</h1><p class="lead">${escapeHtml(description)}</p><div class="actions"><a class="btn secondary" href="/">← Kezdőlap</a><a class="btn" href="${escapeHtml(inviteUrl())}">Bot meghívása</a></div></section><div class="grid">${sections.map(([name, body]) => `<article class="card"><h2>${escapeHtml(name)}</h2><p class="muted">${escapeHtml(body)}</p></article>`).join('')}</div>`, session);
+  return layout(title, `<section class="hero"><div class="eyebrow">NEXA Bot 5.0</div><h1>${escapeHtml(title)}</h1><p class="lead">${escapeHtml(description)}</p><div class="actions"><a class="btn secondary" href="/">← Kezdőlap</a><a class="btn" href="${escapeHtml(inviteUrl())}">Bot meghívása</a></div></section><div class="grid">${sections.map(([name, body]) => `<article class="card"><h2>${escapeHtml(name)}</h2><p class="muted">${escapeHtml(body)}</p></article>`).join('')}</div>`, session);
 }
 
 function errorPage(title, message, session = null) {
@@ -2213,10 +2364,12 @@ async function ownerDashboard(client, session, saved = false) {
     usageSummary(),
     recentEvents('errors', 8),
     recentEvents('audit', 8),
-    dbQuery('SELECT guild_id, premium_type, starts_at, expires_at FROM nexabot_premium ORDER BY starts_at DESC LIMIT 100').catch(() => null)
+    dbQuery('SELECT guild_id, premium_type, starts_at, expires_at, granted_by, source, note FROM nexabot_premium ORDER BY starts_at DESC LIMIT 250').catch(() => null)
   ]);
   const runtime = runtimeStats(client);
-  const premium = new Map((premiumResult?.rows || []).map((row) => [row.guild_id, row]));
+  const packageRows = (premiumResult?.rows || []).length
+    ? premiumResult.rows.map((row) => `<tr><td>${escapeHtml(row.guild_id)}</td><td><span class="badge ${escapeHtml(row.premium_type)}">${planName(row.premium_type)}</span></td><td>${row.expires_at ? escapeHtml(new Date(row.expires_at).toLocaleDateString('hu-HU')) : 'Korlátlan'}</td><td>${escapeHtml(row.note || 'Owner által kiosztva')}</td></tr>`).join('')
+    : '<tr><td colspan="4" class="muted">Még nincs külön kiosztott csomag.</td></tr>';
   const serverCards = guilds.length ? guilds.map((guild) => {
     const activeModules = Object.entries(getGuildConfig(guild.id).modules)
       .filter(([key, enabled]) => key !== 'bvi' && enabled)
@@ -2225,23 +2378,25 @@ async function ownerDashboard(client, session, saved = false) {
     if (rpActive) activeModules.push('owner-rp');
     const owner = client.users.cache.get(guild.ownerId);
     const disabled = settings.blacklistedGuilds.includes(guild.id);
-    const plan = premium.get(guild.id);
+    const entitlement = getGuildEntitlement(guild.id);
+    const plan = entitlement.plan;
     const joined = guild.members.me?.joinedAt ? guild.members.me.joinedAt.toLocaleDateString('hu-HU') : 'ismeretlen';
     const permissions = guild.members.me?.permissions?.toArray?.().length || 0;
-    return `<article class="card server">${guildIcon(guild)}<div class="server-body"><h3>${escapeHtml(guild.name)} ${plan ? '<span class="badge">PREMIUM</span>' : ''} ${rpActive ? '<span class="badge">OWNER RP AKTÍV</span>' : ''}</h3><div class="muted">ID: ${escapeHtml(guild.id)}</div><div class="muted">👥 ${Number(guild.memberCount || 0)} tag • # ${guild.channels.cache.size} csatorna • ◇ ${guild.roles.cache.size} rang</div><div class="muted">Tulajdonos: ${escapeHtml(owner?.tag || guild.ownerId)} • Bot belépett: ${escapeHtml(joined)} • ${permissions} jogosultság</div><div class="muted">Aktív modul: ${activeModules.length} ${disabled ? '• ⛔ BLACKLIST' : ''}</div></div><div class="actions"><a class="btn" href="/dashboard/guild/${escapeHtml(guild.id)}">Kezelés</a><form method="post" action="/owner/rp-toggle"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="guild_id" value="${escapeHtml(guild.id)}"><button class="btn ${rpActive ? 'secondary' : 'green'}" type="submit">${rpActive ? 'RP kikapcsolása' : 'RP bekapcsolása'}</button></form></div></article>`;
+    return `<article class="card server">${guildIcon(guild)}<div class="server-body"><h3>${escapeHtml(guild.name)} <span class="badge ${plan}">${planName(plan)}</span> ${rpActive ? '<span class="badge ultimate">OWNER RP AKTÍV</span>' : ''}</h3><div class="muted">ID: ${escapeHtml(guild.id)}</div><div class="muted">👥 ${Number(guild.memberCount || 0)} tag • # ${guild.channels.cache.size} csatorna • ◇ ${guild.roles.cache.size} rang</div><div class="muted">Tulajdonos: ${escapeHtml(owner?.tag || guild.ownerId)} • Bot belépett: ${escapeHtml(joined)} • ${permissions} jogosultság</div><div class="muted">Aktív modul: ${activeModules.length} ${disabled ? '• ⛔ BLACKLIST' : ''}</div></div><div class="actions"><a class="btn" href="/dashboard/guild/${escapeHtml(guild.id)}">Kezelés</a><form method="post" action="/owner/global"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="premium_guild" value="${escapeHtml(guild.id)}"><select name="premium_plan" aria-label="Csomag"><option value="free"${plan === 'free' ? ' selected' : ''}>FREE</option><option value="pro"${plan === 'pro' ? ' selected' : ''}>PRO</option><option value="ultimate"${plan === 'ultimate' ? ' selected' : ''}>ULTIMATE</option></select><button class="btn secondary" name="operation" value="package_set" type="submit">Csomag mentése</button></form><form method="post" action="/owner/rp-toggle"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="guild_id" value="${escapeHtml(guild.id)}"><button class="btn ${rpActive ? 'secondary' : 'green'}" type="submit">${rpActive ? 'RP kikapcsolása' : 'RP bekapcsolása'}</button></form></div></article>`;
   }).join('') : '<div class="card"><h2>A bot még nincs szerveren</h2><p class="muted">Hívd meg a NexaBotot az első szerverre.</p></div>';
   const accessCards = allowedUsers.length ? allowedUsers.map((user) => `<article class="card"><h3>${escapeHtml(user.label)}</h3><p class="muted">Discord ID: ${escapeHtml(user.id)}</p><form method="post" action="/owner/ai-access/remove"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="user_id" value="${escapeHtml(user.id)}"><button class="btn secondary" type="submit">Hozzáférés eltávolítása</button></form></article>`).join('') : '<div class="notice warn">Jelenleg csak te használhatod a Nexa AI-t.</div>';
   const ownerCards = ownerUsers.length ? ownerUsers.map((user) => `<article class="card"><h3>${escapeHtml(user.label)}</h3><p class="muted">Owner-kezelő • ${escapeHtml(user.id)}</p>${isBotOwner(session.user.id) ? `<form method="post" action="/owner/access/remove"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="user_id" value="${escapeHtml(user.id)}"><button class="btn secondary" type="submit">Owner-hozzáférés elvétele</button></form>` : ''}</article>`).join('') : '<p class="muted">Nincs további owner-kezelő.</p>';
   const eventRows = (items, error = false) => items.length ? items.map((item) => `<tr><td>${escapeHtml(item.created_at || item.createdAt || '')}</td><td>${escapeHtml(error ? (item.error_type || item.errorType) : item.action)}</td><td>${escapeHtml(error ? item.message : (item.guild_id || item.guildId || 'globális'))}</td></tr>`).join('') : '<tr><td colspan="3" class="muted">Nincs bejegyzés.</td></tr>';
   const members = guilds.reduce((sum, guild) => sum + Number(guild.memberCount || 0), 0);
-  const channels = guilds.reduce((sum, guild) => sum + guild.channels.cache.size, 0);
-  const activeModules = guilds.reduce((sum, guild) => sum + Object.entries(getGuildConfig(guild.id).modules).filter(([key, enabled]) => key !== 'bvi' && enabled).length + (settings.rpGuilds.includes(guild.id) ? 1 : 0), 0);
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 4.1 • Owner Center</div><h1>Bot-tulajdonosi központ</h1><p class="muted">A teljes hálózat, biztonság, prémium és AI-hozzáférés egy helyen.</p></div><a class="btn secondary" href="${escapeHtml(inviteUrl())}">Bot meghívása</a></div>
+  const proCount = guilds.filter((guild) => getGuildPlan(guild.id) === 'pro').length;
+  const ultimateCount = guilds.filter((guild) => getGuildPlan(guild.id) === 'ultimate').length;
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 5.0 • Owner Command Center</div><h1>Hálózati irányítóközpont</h1><p class="muted">A teljes botinfrastruktúra, jogosultsági csomagok, védelem és AI-hozzáférés egy helyen.</p></div><a class="btn secondary" href="${escapeHtml(inviteUrl())}">Bot meghívása</a></div>
 ${saved ? '<div class="notice">✅ A tulajdonosi beállítás mentve.</div>' : ''}
-<div class="stats"><div class="stat"><div class="stat-value">${guilds.length}</div><div class="stat-label">Szerver</div></div><div class="stat"><div class="stat-value">${members}</div><div class="stat-label">Összes tag</div></div><div class="stat"><div class="stat-value">${channels}</div><div class="stat-label">Csatorna</div></div><div class="stat"><div class="stat-value">${activeModules}</div><div class="stat-label">Aktív modul</div></div></div>
+<div class="stats"><div class="stat"><div class="stat-value">${guilds.length}</div><div class="stat-label">Szerver</div></div><div class="stat"><div class="stat-value">${members}</div><div class="stat-label">Összes tag</div></div><div class="stat"><div class="stat-value">${proCount}</div><div class="stat-label">Pro hozzáférés</div></div><div class="stat"><div class="stat-value">${ultimateCount}</div><div class="stat-label">Ultimate hozzáférés</div></div></div>
 <section class="card section"><div class="section-kicker">Élő infrastruktúra</div><h2 class="section-title">Rendszerállapot</h2><div class="stats"><div class="stat"><div class="stat-value">${runtime.ping} ms</div><div class="stat-label">Discord ping</div></div><div class="stat"><div class="stat-value">${Math.floor(runtime.uptimeSeconds / 3600)} óra</div><div class="stat-label">Uptime</div></div><div class="stat"><div class="stat-value">${runtime.memoryMb} MB</div><div class="stat-label">Memória</div></div><div class="stat"><div class="stat-value">${isPersistentStore() ? 'ONLINE' : 'MEMÓRIA'}</div><div class="stat-label">Adatbázis</div></div></div><p class="muted">Node ${escapeHtml(runtime.node)} • AI hívás (30 nap): ${Number(summary.ai || summary.ai_request || 0)} • Interakció: ${Number(summary.interaction || 0)}</p></section>
 <section class="card section"><div class="section-kicker">Kizárólag Owner</div><h2 class="section-title">🎭 RP-rendszer hozzáférése</h2><p class="muted">Az RP-rendszer csak azokon a szervereken működik, amelyeknél lent megnyomod az <strong>RP bekapcsolása</strong> gombot. Normál szerveradmin nem kapcsolhatja be. Aktiválás után a <code>/telepites</code> és <code>/dokumentum-panelek</code> parancs használható, a Discord Control Center pedig RP-gombot kap.</p><div class="notice ${settings.rpGuilds.length ? '' : 'warn'}">Aktív RP-szerverek: <strong>${settings.rpGuilds.length}</strong></div></section>
-<section class="card section"><div class="section-kicker">Globális vezérlés</div><h2 class="section-title">Maintenance, blacklist, premium és közlemény</h2><form method="post" action="/owner/global"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="field-grid"><div><label>Maintenance mód</label><select name="maintenance"><option value="off"${settings.maintenance ? '' : ' selected'}>Kikapcsolva</option><option value="on"${settings.maintenance ? ' selected' : ''}>Bekapcsolva</option></select></div><div><label>Karbantartási üzenet</label><input type="text" name="maintenance_message" maxlength="500" value="${escapeHtml(settings.maintenanceMessage)}"></div><div><label>Szerver blacklist ID</label><input type="text" name="blacklist_guild" inputmode="numeric" placeholder="Discord szerver ID"></div><div><label>Felhasználó blacklist ID</label><input type="text" name="blacklist_user" inputmode="numeric" placeholder="Discord felhasználó ID"></div><div><label>Premium / közlemény szerver ID</label><input type="text" name="premium_guild" inputmode="numeric" placeholder="Discord szerver ID"></div><div><label>Premium időtartam (nap)</label><input type="number" name="premium_days" min="1" max="3650" value="30"></div><div><label>Közlemény címe</label><input type="text" name="announcement_title" maxlength="200" placeholder="NEXA Bot közlemény"></div><div><label>Közlemény szövege</label><textarea name="announcement_text" maxlength="3000" placeholder="A kijelölt szerver bejelentési csatornájába küldi."></textarea></div><div><label>Globálisan letiltott modulok</label><select name="disabled_modules" multiple size="7">${MODULE_KEYS.filter((key) => key !== 'bvi').map((key) => `<option value="${key}"${settings.remoteDisabledModules.includes(key) ? ' selected' : ''}>${key}</option>`).join('')}</select><div class="help">Vészkapcsoló: minden szerveren leállítja a kijelölt modulokat.</div></div></div><div class="actions"><button class="btn" name="operation" value="save" type="submit">Globális mentés</button><button class="btn secondary" name="operation" value="blacklist_guild_toggle" type="submit">Szerver blacklist váltás</button><button class="btn secondary" name="operation" value="blacklist_user_toggle" type="submit">User blacklist váltás</button><button class="btn green" name="operation" value="premium_add" type="submit">Premium adása</button><button class="btn secondary" name="operation" value="premium_remove" type="submit">Premium elvétele</button><button class="btn" name="operation" value="announcement" type="submit">Közlemény küldése</button></div></form></section>
+<section class="card section"><div class="section-kicker">Owner jogosultságkezelés</div><h2 class="section-title">✦ Ingyenes csomag kiosztása</h2><p class="muted">Nincs fizetés és nincs automatikus előfizetés. A csomagokat kizárólag az Owner Centerből lehet kiosztani. A Free alapértelmezett; a Pro megnyitja az Automodot és a közösségi modulokat, az Ultimate pedig a Nexa AI-t, Anti-Nuke-ot és raidvédelmet is.</p><form method="post" action="/owner/global"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="field-grid"><div><label>Cél szerver ID</label><input type="text" name="premium_guild" inputmode="numeric" placeholder="Discord szerver ID" required></div><div><label>Kiosztott csomag</label><select name="premium_plan"><option value="pro">PRO</option><option value="ultimate">ULTIMATE</option></select></div><div><label>Időtartam</label><select name="premium_days"><option value="">Korlátlan idő</option><option value="30">30 nap</option><option value="90">90 nap</option><option value="365">1 év</option></select></div><div><label>Owner megjegyzés</label><input type="text" name="premium_note" maxlength="300" placeholder="Például: partner szerver"></div></div><div class="actions"><button class="btn green" name="operation" value="package_grant" type="submit">Csomag kiosztása</button><button class="btn secondary" name="operation" value="package_remove" type="submit">Visszaállítás Free csomagra</button></div></form><div style="overflow:auto;margin-top:20px"><table><thead><tr><th>Szerver ID</th><th>Csomag</th><th>Lejárat</th><th>Megjegyzés</th></tr></thead><tbody>${packageRows}</tbody></table></div></section>
+<section class="card section"><div class="section-kicker">Globális vezérlés</div><h2 class="section-title">Maintenance, blacklist és közlemény</h2><form method="post" action="/owner/global"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="field-grid"><div><label>Maintenance mód</label><select name="maintenance"><option value="off"${settings.maintenance ? '' : ' selected'}>Kikapcsolva</option><option value="on"${settings.maintenance ? ' selected' : ''}>Bekapcsolva</option></select></div><div><label>Karbantartási üzenet</label><input type="text" name="maintenance_message" maxlength="500" value="${escapeHtml(settings.maintenanceMessage)}"></div><div><label>Szerver blacklist ID</label><input type="text" name="blacklist_guild" inputmode="numeric" placeholder="Discord szerver ID"></div><div><label>Felhasználó blacklist ID</label><input type="text" name="blacklist_user" inputmode="numeric" placeholder="Discord felhasználó ID"></div><div><label>Közlemény cél szerver ID</label><input type="text" name="premium_guild" inputmode="numeric" placeholder="Discord szerver ID"></div><div><label>Közlemény címe</label><input type="text" name="announcement_title" maxlength="200" placeholder="NEXA Bot közlemény"></div><div><label>Közlemény szövege</label><textarea name="announcement_text" maxlength="3000" placeholder="A kijelölt szerver bejelentési csatornájába küldi."></textarea></div><div><label>Globálisan letiltott modulok</label><select name="disabled_modules" multiple size="7">${MODULE_KEYS.filter((key) => key !== 'bvi').map((key) => `<option value="${key}"${settings.remoteDisabledModules.includes(key) ? ' selected' : ''}>${key}</option>`).join('')}</select><div class="help">Vészkapcsoló: minden szerveren leállítja a kijelölt modulokat.</div></div></div><div class="actions"><button class="btn" name="operation" value="save" type="submit">Globális mentés</button><button class="btn secondary" name="operation" value="blacklist_guild_toggle" type="submit">Szerver blacklist váltás</button><button class="btn secondary" name="operation" value="blacklist_user_toggle" type="submit">User blacklist váltás</button><button class="btn" name="operation" value="announcement" type="submit">Közlemény küldése</button></div></form></section>
 ${isBotOwner(session.user.id) ? `<section class="card section"><div class="section-kicker">Bizalmi hozzáférés</div><h2 class="section-title">Owner-kezelők</h2><form method="post" action="/owner/access"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="field-grid"><div><label>Discord felhasználói ID</label><input name="user_id" type="text" inputmode="numeric" required></div><div style="align-self:end"><button class="btn green" type="submit">+ Owner-kezelő hozzáadása</button></div></div></form><div class="grid" style="margin-top:18px">${ownerCards}</div></section>` : ''}
 <section class="card section"><div class="section-kicker">Privát hozzáférés</div><h2 class="section-title">✨ Nexa AI engedélylista</h2><p class="muted">Rajtat kívül csak az itt hozzáadott Discord-fiókok használhatják az AI-t szerveren vagy privátban.</p><form method="post" action="/owner/ai-access"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="field-grid"><div><label for="user_id">Discord felhasználói azonosító</label><input id="user_id" name="user_id" type="text" inputmode="numeric" maxlength="22" placeholder="Például: 123456789012345678" required></div><div style="align-self:end"><button class="btn green" type="submit">+ AI-hozzáférés hozzáadása</button></div></div></form><div class="grid" style="margin-top:18px">${accessCards}</div></section>
 <div class="grid"><section class="card"><div class="section-kicker">Hibaközpont</div><h2>Legutóbbi hibák</h2><table><thead><tr><th>Idő</th><th>Típus</th><th>Üzenet</th></tr></thead><tbody>${eventRows(errors, true)}</tbody></table></section><section class="card"><div class="section-kicker">Owner audit</div><h2>Legutóbbi műveletek</h2><table><thead><tr><th>Idő</th><th>Művelet</th><th>Szerver</th></tr></thead><tbody>${eventRows(audit)}</tbody></table></section></div>
@@ -2252,12 +2407,15 @@ ${isBotOwner(session.user.id) ? `<section class="card section"><div class="secti
 async function dashboardList(client, session) {
   const guilds = await manageableGuilds(client, session);
   const cards = guilds.length
-    ? guilds.map(({ oauthGuild }) => `<article class="card server">${guildIcon(oauthGuild)}<div class="server-body"><h3>${escapeHtml(oauthGuild.name)}</h3><div class="muted">NexaBot telepítve</div></div><a class="btn" href="/dashboard/guild/${escapeHtml(oauthGuild.id)}">Beállítás</a></article>`).join('')
+    ? guilds.map(({ oauthGuild, botGuild }) => {
+      const plan = getGuildPlan(botGuild.id);
+      return `<article class="card server">${guildIcon(oauthGuild)}<div class="server-body"><h3>${escapeHtml(oauthGuild.name)} <span class="badge ${plan}">${planName(plan)}</span></h3><div class="muted">NEXA Core csatlakoztatva • ${Number(botGuild.memberCount || 0)} tag</div></div><a class="btn" href="/dashboard/guild/${escapeHtml(oauthGuild.id)}">Command Deck →</a></article>`;
+    }).join('')
     : `<div class="card"><h2>Nincs kezelhető szerver</h2><p class="muted">Hívd meg a NexaBotot egy olyan szerverre, ahol tulajdonos, adminisztrátor vagy kijelölt rangú tag vagy.</p><a class="btn" href="${escapeHtml(inviteUrl())}">Bot meghívása</a></div>`;
   const persistence = isPersistentStore() ? '' : '<div class="notice warn">⚠️ Nincs DATABASE_URL beállítva. A módosítások újraindításkor elveszhetnek.</div>';
   const members = guilds.reduce((sum, item) => sum + Number(item.botGuild.memberCount || 0), 0);
   const modules = guilds.reduce((sum, item) => sum + Object.values(getGuildConfig(item.botGuild.id).modules).filter(Boolean).length, 0);
-  return layout('Szervereim', `<div class="page-head"><div><div class="section-kicker">NEXA Bot 4.1</div><h1>Szervereim</h1><p class="muted">Csak azok a szerverek láthatók, amelyekhez kezelői jogosultságod van.</p></div></div><div class="stats"><div class="stat"><div class="stat-value">${guilds.length}</div><div class="stat-label">Kezelt szerver</div></div><div class="stat"><div class="stat-value">${members}</div><div class="stat-label">Összes tag</div></div><div class="stat"><div class="stat-value">${modules}</div><div class="stat-label">Aktív modul</div></div><div class="stat"><div class="stat-value">ONLINE</div><div class="stat-label">Bot állapot</div></div></div>${persistence}<div class="grid">${cards}</div>`, session);
+  return layout('Szervereim', `<div class="page-head"><div><div class="section-kicker">NEXA Bot 5.0 • Command Deck</div><h1>Szerverhálózat</h1><p class="muted">Csak azok a szerverek láthatók, amelyekhez tulajdonosi, adminisztrátori vagy kijelölt kezelői jogosultságod van.</p></div></div><div class="stats"><div class="stat"><div class="stat-value">${guilds.length}</div><div class="stat-label">Kezelt szerver</div></div><div class="stat"><div class="stat-value">${members}</div><div class="stat-label">Összes tag</div></div><div class="stat"><div class="stat-value">${modules}</div><div class="stat-label">Konfigurált modul</div></div><div class="stat"><div class="stat-value">ONLINE</div><div class="stat-label">NEXA Core</div></div></div>${persistence}<div class="grid">${cards}</div>`, session);
 }
 
 function option(value, label, selected) {
@@ -2309,25 +2467,43 @@ function check(name, label, checked, help = '') {
   return `<label class="switch"><input type="checkbox" name="${escapeHtml(name)}"${checked ? ' checked' : ''}><span>${escapeHtml(label)}${help ? `<div class="help">${escapeHtml(help)}</div>` : ''}</span></label>`;
 }
 
+function planName(plan) {
+  return ({ free: 'FREE', pro: 'PRO', ultimate: 'ULTIMATE', premium: 'ULTIMATE' })[plan] || 'FREE';
+}
+
+function moduleCheck(guildId, key, name, label, checked, help = '') {
+  const allowed = planAllowsModule(guildId, key);
+  const minimum = MODULE_MINIMUM_PLAN[key] || 'free';
+  if (allowed) return check(name, label, checked, help);
+  return `<label class="switch locked"><input type="checkbox" disabled><span>${escapeHtml(label)} <b class="plan-tag">${planName(minimum)}</b><div class="help">${escapeHtml(help || 'Ehhez magasabb Owner-csomag szükséges.')}</div></span></label>`;
+}
+
+function featureCheck(guildId, requiredPlan, name, label, checked, help = '') {
+  if (planAllows(guildId, requiredPlan)) return check(name, label, checked, help);
+  return `<label class="switch locked"><input type="checkbox" disabled><span>${escapeHtml(label)} <b class="plan-tag">${planName(requiredPlan)}</b><div class="help">${escapeHtml(help || 'Ehhez magasabb Owner-csomag szükséges.')}</div></span></label>`;
+}
+
 function selectField(name, label, options, help = '') {
   return `<div><label for="${escapeHtml(name)}">${escapeHtml(label)}</label><select id="${escapeHtml(name)}" name="${escapeHtml(name)}">${options}</select>${help ? `<div class="help">${escapeHtml(help)}</div>` : ''}</div>`;
 }
 
 function settingsPage(guild, config, session, saved = false) {
   const rpEnabled = isBviGuild(guild.id);
+  const entitlement = getGuildEntitlement(guild.id);
+  const plan = entitlement.plan;
   const textChannels = (selected) => channelOptions(guild, selected, false);
   const categories = (selected) => channelOptions(guild, selected, true);
   const voiceChannels = (selected) => voiceChannelOptions(guild, selected);
   const roles = (selected) => roleOptions(guild, selected);
-  const enabledModules = Object.entries(config.modules).filter(([key, enabled]) => key !== 'bvi' && enabled).length + (rpEnabled ? 1 : 0);
+  const enabledModules = Object.entries(config.modules).filter(([key]) => key !== 'bvi' && moduleEnabled(guild.id, key)).length + (rpEnabled ? 1 : 0);
   const icon = guild.icon
     ? `<img alt="" src="https://cdn.discordapp.com/icons/${escapeHtml(guild.id)}/${escapeHtml(guild.icon)}.png">`
     : `<div class="server-icon">${escapeHtml(guild.name.slice(0, 2).toUpperCase())}</div>`;
-  const content = `<div class="page-head server">${icon}<div class="server-body"><div class="section-kicker">Szerver vezérlőpult</div><h1>${escapeHtml(guild.name)}</h1><div class="muted">Valós idejű modul- és jogosultságkezelés</div></div><a class="btn secondary" href="/dashboard">← Szerverek</a></div>
+  const content = `<div class="page-head server">${icon}<div class="server-body"><div class="section-kicker">NEXA Command Deck</div><h1>${escapeHtml(guild.name)} <span class="badge ${plan}">${planName(plan)}</span></h1><div class="muted">Valós idejű modul-, csatorna- és jogosultságkezelés${entitlement.expiresAt ? ` • lejár: ${escapeHtml(entitlement.expiresAt.toLocaleDateString('hu-HU'))}` : ''}</div></div><a class="btn secondary" href="/dashboard">← Szerverek</a></div>
 <div class="stats"><div class="stat"><div class="stat-value">${guild.memberCount}</div><div class="stat-label">Tag</div></div><div class="stat"><div class="stat-value">${guild.channels.cache.size}</div><div class="stat-label">Csatorna</div></div><div class="stat"><div class="stat-value">${guild.roles.cache.size}</div><div class="stat-label">Rang</div></div><div class="stat"><div class="stat-value">${enabledModules}</div><div class="stat-label">Aktív modul</div></div></div>
 ${saved ? '<div class="notice">✅ A NEXA Bot beállításai és a kiválasztott panelek frissültek.</div>' : ''}${!isPersistentStore() ? '<div class="notice warn">⚠️ Az adatbázis még nincs beállítva, ezért az AI-memória, XP és szolgálati statisztika újraindításkor elveszhet.</div>' : ''}${rpEnabled ? '<div class="notice">🎭 <strong>Owner RP aktív ezen a szerveren.</strong> Discordon a /telepites paranccsal a teljes alap RP-rendszer, a /dokumentum-panelek paranccsal pedig kizárólag a meglévő csatornák dokumentumpaneljei telepíthetők.</div>' : ''}
 <form method="post" action="/dashboard/guild/${escapeHtml(guild.id)}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="settings">
-<section id="modules" class="card section"><div class="section-kicker">Alaprendszer</div><h2 class="section-title">⬡ Modulok</h2><div class="field-grid"><div><label for="language">Bot nyelve ezen a szerveren</label><select id="language" name="language">${option('hu','Magyar (alapértelmezett)',config.language)}${option('en','English',config.language)}</select><div class="help">A panelek és a Discord-válaszok a kiválasztott nyelven jelennek meg.</div></div></div><div class="module-grid">${check('module_protection','Automod és Anti-Nuke',config.modules.protection,'Spam, raid, link és szerverrombolás elleni védelem.')}${check('module_moderation','Moderáció',config.modules.moderation,'Case ID és tagválasztós moderációs panel.')}${check('module_logging','Részletes naplózás',config.modules.logging)}${check('module_tickets','Ticket és segítségkérés',config.modules.tickets,'Privát ügyintézés és HTML transcript.')}${check('module_welcome','Welcome és Auto Role',config.modules.welcome)}${check('module_levels','XP és szintrendszer',config.modules.levels)}${check('module_reactionRoles','Button / Reaction Role',config.modules.reactionRoles)}${check('module_customCommands','Custom Commands',config.modules.customCommands)}${check('module_giveaways','Giveaway',config.modules.giveaways)}${check('module_suggestions','Közösségi extrák',config.modules.suggestions,'Ötletek, szavazás és bejelentés.')}${check('module_shift','Shift Management',config.modules.shift,'Szolgálat, szünet, statisztika és napló.')}${check('module_ai','Nexa AI és memória',config.modules.ai,'Csak a tulajdonos és az engedélyezett felhasználók használhatják.')}${check('module_tempVoice','Ideiglenes hangcsatornák',config.modules.tempVoice)}</div><div class="actions"><a class="btn secondary" href="/dashboard/guild/${escapeHtml(guild.id)}/commands">Custom Command kezelő →</a></div></section>
+<section id="modules" class="card section"><div class="section-kicker">Alaprendszer • ${planName(plan)}</div><h2 class="section-title">⬡ Modulmátrix</h2><div class="field-grid"><div><label for="language">Bot nyelve ezen a szerveren</label><select id="language" name="language">${option('hu','Magyar (alapértelmezett)',config.language)}${option('en','English',config.language)}</select><div class="help">A panelek és a Discord-válaszok a kiválasztott nyelven jelennek meg.</div></div></div><div class="module-grid">${moduleCheck(guild.id,'protection','module_protection','Automod és védelem',config.modules.protection,'Spam-, link- és tartalomvédelem. Anti-Nuke és raid csak Ultimate csomagban.')}${moduleCheck(guild.id,'moderation','module_moderation','Moderáció',config.modules.moderation,'Case ID és tagválasztós moderációs panel.')}${moduleCheck(guild.id,'logging','module_logging','Részletes naplózás',config.modules.logging)}${moduleCheck(guild.id,'tickets','module_tickets','Ticket és segítségkérés',config.modules.tickets,'Privát ügyintézés és HTML transcript.')}${moduleCheck(guild.id,'welcome','module_welcome','Welcome és Auto Role',config.modules.welcome)}${moduleCheck(guild.id,'levels','module_levels','XP és szintrendszer',config.modules.levels)}${moduleCheck(guild.id,'reactionRoles','module_reactionRoles','Button / Reaction Role',config.modules.reactionRoles)}${moduleCheck(guild.id,'customCommands','module_customCommands','Custom Commands',config.modules.customCommands)}${moduleCheck(guild.id,'giveaways','module_giveaways','Giveaway',config.modules.giveaways)}${moduleCheck(guild.id,'suggestions','module_suggestions','Közösségi extrák',config.modules.suggestions,'Ötletek, szavazás és bejelentés.')}${moduleCheck(guild.id,'shift','module_shift','Shift Management',config.modules.shift,'Szolgálat, szünet, statisztika és napló.')}${moduleCheck(guild.id,'ai','module_ai','Nexa AI és memória',config.modules.ai,'Csak Owner által engedélyezett felhasználók használhatják.')}${moduleCheck(guild.id,'tempVoice','module_tempVoice','Ideiglenes hangcsatornák',config.modules.tempVoice)}</div><div class="actions"><a class="btn secondary" href="/dashboard/guild/${escapeHtml(guild.id)}/commands">Custom Command kezelő →</a></div></section>
 
 <section class="card section"><div class="section-kicker">Eseményfigyelés</div><h2 class="section-title">📋 Külön kapcsolható logok</h2><div class="module-grid">${check('log_messageDelete','Üzenettörlés',config.logging.messageDelete)}${check('log_messageEdit','Üzenetszerkesztés',config.logging.messageEdit)}${check('log_memberJoin','Belépés',config.logging.memberJoin)}${check('log_memberLeave','Kilépés',config.logging.memberLeave)}${check('log_ban','Ban / unban',config.logging.ban)}${check('log_timeout','Timeout',config.logging.timeout)}${check('log_roleUpdate','Rangváltozás',config.logging.roleUpdate)}${check('log_channelUpdate','Csatornaváltozás',config.logging.channelUpdate)}${check('log_voiceJoin','Voice belépés',config.logging.voiceJoin)}${check('log_voiceLeave','Voice kilépés',config.logging.voiceLeave)}${check('log_nicknameChange','Becenév',config.logging.nicknameChange)}${check('log_invite','Meghívók',config.logging.invite)}${check('log_moderation','Moderáció',config.logging.moderation)}${check('log_automod','Automod',config.logging.automod)}${check('log_security','Security',config.logging.security)}</div></section>
 
@@ -2345,7 +2521,7 @@ ${saved ? '<div class="notice">✅ A NEXA Bot beállításai és a kiválasztott
 
 <section class="card section"><div class="section-kicker">Megjelenés</div><h2 class="section-title">◈ Saját arculat</h2><div class="field-grid"><div><label for="branding_title">Vezérlőpult neve</label><input id="branding_title" name="branding_title" type="text" maxlength="60" value="${escapeHtml(config.branding.title)}"></div><div><label for="branding_primary">Elsődleges szín</label><input id="branding_primary" name="branding_primary" type="color" value="${escapeHtml(config.branding.primary)}"></div><div><label for="branding_accent">Kiemelő szín</label><input id="branding_accent" name="branding_accent" type="color" value="${escapeHtml(config.branding.accent)}"></div><div><label for="branding_logoUrl">Logó HTTPS-címe</label><input id="branding_logoUrl" name="branding_logoUrl" type="url" maxlength="500" placeholder="https://…" value="${escapeHtml(config.branding.logoUrl)}"></div></div></section>
 
-<section id="protection" class="card section"><div class="section-kicker">Automod & Anti-Nuke</div><h2 class="section-title">⬢ Védelem és büntetések</h2><div class="field-grid"><div><label for="protection_sensitivity">Érzékenység</label><select id="protection_sensitivity" name="protection_sensitivity">${option('strict','Szigorú',config.protection.sensitivity)}${option('medium','Közepes',config.protection.sensitivity)}${option('relaxed','Enyhe',config.protection.sensitivity)}</select><div class="help">A közepes mód normál közösségi szerverhez ajánlott.</div></div><div><label>Tiltott szavak</label><textarea name="protection_blockedWords" placeholder="szó1, szó2, szó3">${escapeHtml(config.protection.blockedWords.join(', '))}</textarea></div><div><label>Whitelist rangok</label><select name="protection_whitelistRoles" multiple size="6">${roleOptionsMulti(guild, config.protection.whitelistRoles)}</select></div><div><label>Whitelist csatornák</label><select name="protection_whitelistChannels" multiple size="6">${channelOptionsMulti(guild, config.protection.whitelistChannels)}</select></div><div><label>Whitelist felhasználói ID-k</label><textarea name="protection_whitelistUsers" placeholder="Egy Discord ID soronként">${escapeHtml(config.protection.whitelistUsers.join('\n'))}</textarea></div></div><h3>Észlelési modulok</h3><div class="module-grid">${check('protection_spam','Spam és flood',config.protection.spam)}${check('protection_massMention','Mass mention',config.protection.massMention)}${check('protection_invites','Discord invite',config.protection.invites)}${check('protection_links','Külső linkek',config.protection.links)}${check('protection_scamLinks','Scam linkek',config.protection.scamLinks)}${check('protection_badWords','Káromkodás / tiltott szavak',config.protection.badWords)}${check('protection_capsSpam','Caps spam',config.protection.capsSpam)}${check('protection_emojiSpam','Emoji spam',config.protection.emojiSpam)}${check('protection_repeatedMessage','Ismételt üzenetek',config.protection.repeatedMessage)}${check('protection_raidDetection','Raid detection',config.protection.raidDetection)}${check('protection_freshAccounts','Friss fiókok',config.protection.freshAccounts)}${check('protection_antiNuke','Anti-Nuke auditvédelem',config.protection.antiNuke)}</div><h3>Automatikus reakciók</h3><div class="module-grid">${check('protection_deleteMessages','Tiltott üzenetek törlése',config.protection.deleteMessages)}${check('protection_warn','Figyelmeztetés',config.protection.warn)}${check('protection_timeout','Ideiglenes felfüggesztés',config.protection.timeout)}${check('protection_kick','Kirúgás',config.protection.kick)}${check('protection_ban','Kitiltás',config.protection.ban)}${check('protection_lockdown','Raid esetén szerverlezárás',config.protection.lockdown)}</div></section>
+<section id="protection" class="card section"><div class="section-kicker">Automod & Anti-Nuke</div><h2 class="section-title">⬢ Védelem és büntetések</h2><div class="field-grid"><div><label for="protection_sensitivity">Érzékenység</label><select id="protection_sensitivity" name="protection_sensitivity">${option('strict','Szigorú',config.protection.sensitivity)}${option('medium','Közepes',config.protection.sensitivity)}${option('relaxed','Enyhe',config.protection.sensitivity)}</select><div class="help">A közepes mód normál közösségi szerverhez ajánlott.</div></div><div><label>Tiltott szavak</label><textarea name="protection_blockedWords" placeholder="szó1, szó2, szó3">${escapeHtml(config.protection.blockedWords.join(', '))}</textarea></div><div><label>Whitelist rangok</label><select name="protection_whitelistRoles" multiple size="6">${roleOptionsMulti(guild, config.protection.whitelistRoles)}</select></div><div><label>Whitelist csatornák</label><select name="protection_whitelistChannels" multiple size="6">${channelOptionsMulti(guild, config.protection.whitelistChannels)}</select></div><div><label>Whitelist felhasználói ID-k</label><textarea name="protection_whitelistUsers" placeholder="Egy Discord ID soronként">${escapeHtml(config.protection.whitelistUsers.join('\n'))}</textarea></div></div><h3>Észlelési modulok</h3><div class="module-grid">${check('protection_spam','Spam és flood',config.protection.spam)}${check('protection_massMention','Mass mention',config.protection.massMention)}${check('protection_invites','Discord invite',config.protection.invites)}${check('protection_links','Külső linkek',config.protection.links)}${check('protection_scamLinks','Scam linkek',config.protection.scamLinks)}${check('protection_badWords','Káromkodás / tiltott szavak',config.protection.badWords)}${check('protection_capsSpam','Caps spam',config.protection.capsSpam)}${check('protection_emojiSpam','Emoji spam',config.protection.emojiSpam)}${check('protection_repeatedMessage','Ismételt üzenetek',config.protection.repeatedMessage)}${featureCheck(guild.id,'ultimate','protection_raidDetection','Raid detection',config.protection.raidDetection)}${check('protection_freshAccounts','Friss fiókok',config.protection.freshAccounts)}${featureCheck(guild.id,'ultimate','protection_antiNuke','Anti-Nuke auditvédelem',config.protection.antiNuke)}</div><h3>Automatikus reakciók</h3><div class="module-grid">${check('protection_deleteMessages','Tiltott üzenetek törlése',config.protection.deleteMessages)}${check('protection_warn','Figyelmeztetés',config.protection.warn)}${check('protection_timeout','Ideiglenes felfüggesztés',config.protection.timeout)}${check('protection_kick','Kirúgás',config.protection.kick)}${check('protection_ban','Kitiltás',config.protection.ban)}${featureCheck(guild.id,'ultimate','protection_lockdown','Raid esetén szerverlezárás',config.protection.lockdown)}</div></section>
 
 <div class="savebar"><span class="muted">A mentés azonnal frissíti a szerver beállításait.</span><button class="btn green" type="submit">✓ Minden módosítás mentése</button></div></div></form>`;
   return layout(`${guild.name} beállításai`, content, session, config.branding);
@@ -2511,8 +2687,17 @@ function configFromForm(guild, form) {
   };
 }
 
-function validateConfiguration(config) {
+function validateConfiguration(config, guildId = null) {
   const missing = [];
+  if (guildId) {
+    const lockedModules = Object.entries(config.modules)
+      .filter(([key, enabled]) => key !== 'bvi' && enabled && !planAllowsModule(guildId, key))
+      .map(([key]) => `${key} (${planName(MODULE_MINIMUM_PLAN[key])})`);
+    if (lockedModules.length) throw new Error(`A jelenlegi csomagban nem kapcsolható be: ${lockedModules.join(', ')}.`);
+    if (!planAllows(guildId, 'ultimate') && (config.protection.raidDetection || config.protection.antiNuke || config.protection.lockdown)) {
+      throw new Error('A raid detection, Anti-Nuke és automatikus szerverlezárás Ultimate csomagot igényel.');
+    }
+  }
   if (config.modules.protection && !config.channels.securityLogs) missing.push('biztonsági naplócsatorna');
   if (config.modules.moderation) {
     if (!config.channels.moderationPanel) missing.push('moderációs panelcsatorna');
@@ -2549,7 +2734,7 @@ async function upsertPanel(channel, botId, titlePrefix, payload) {
 async function syncConfiguredPanels(guild, config, botUser) {
   const panelConfig = {
     ...config,
-    modules: { ...config.modules, bvi: moduleEnabled(guild.id, 'bvi') }
+    modules: Object.fromEntries(MODULE_KEYS.map((key) => [key, moduleEnabled(guild.id, key)]))
   };
   if (config.channels.controlCenter) {
     const channel = guild.channels.cache.get(config.channels.controlCenter);
@@ -2560,11 +2745,11 @@ async function syncConfiguredPanels(guild, config, botUser) {
       controlCenterPanel(panelConfig, dashboardUrl(guild.id))
     );
   }
-  if (config.modules.tickets && config.channels.ticketPanel) {
+  if (moduleEnabled(guild.id, 'tickets') && config.channels.ticketPanel) {
     const channel = guild.channels.cache.get(config.channels.ticketPanel);
     await upsertPanel(channel, botUser.id, config.language === 'en' ? '🎫 Support' : '🎫 Segítségkérés', ticketPanel(config.messages.ticket, config.language));
   }
-  if (config.modules.moderation && config.channels.moderationPanel) {
+  if (moduleEnabled(guild.id, 'moderation') && config.channels.moderationPanel) {
     const channel = guild.channels.cache.get(config.channels.moderationPanel);
     const roleName = config.roles.staff ? guild.roles.cache.get(config.roles.staff)?.name : NAMES.staffRole;
     await upsertPanel(channel, botUser.id, '🛡️ NEXA', staffPanel(roleName || 'Staff', config.language));
@@ -2723,27 +2908,34 @@ async function handleRequest(client, request, response) {
         if (!/^\d{16,22}$/.test(userId) || isOwnerUser(userId)) return sendHtml(response, 400, errorPage('Érvénytelen felhasználó ID', 'Owner-kezelő nem tehető blackliste-re.', session));
         if (blacklistedUsers.has(userId)) blacklistedUsers.delete(userId); else blacklistedUsers.add(userId);
       }
-      await setOwnerSettings({
-        ...settings,
-        maintenance: form.get('maintenance') === 'on',
-        maintenanceMessage: form.get('maintenance_message'),
-        blacklistedGuilds: [...blacklistedGuilds],
-        blacklistedUsers: [...blacklistedUsers],
-        remoteDisabledModules: form.getAll('disabled_modules')
-      });
-      if (operation === 'premium_add') {
-        if (!/^\d{16,22}$/.test(guildId)) return sendHtml(response, 400, errorPage('Érvénytelen szerver ID', 'Adj meg érvényes Discord szerver ID-t.', session));
-        const days = Math.min(3650, Math.max(1, Number.parseInt(form.get('premium_days'), 10) || 30));
-        await dbQuery(
-          `INSERT INTO nexabot_premium (guild_id, premium_type, starts_at, expires_at, granted_by)
-           VALUES ($1, 'premium', NOW(), NOW() + ($2 * INTERVAL '1 day'), $3)
-           ON CONFLICT (guild_id) DO UPDATE SET premium_type = 'premium', starts_at = NOW(), expires_at = NOW() + ($2 * INTERVAL '1 day'), granted_by = $3`,
-          [guildId, days, session.user.id]
-        );
+      if (!['package_grant', 'package_remove', 'package_set', 'announcement'].includes(operation)) {
+        await setOwnerSettings({
+          ...settings,
+          maintenance: form.get('maintenance') === 'on',
+          maintenanceMessage: form.get('maintenance_message'),
+          blacklistedGuilds: [...blacklistedGuilds],
+          blacklistedUsers: [...blacklistedUsers],
+          remoteDisabledModules: form.getAll('disabled_modules')
+        });
       }
-      if (operation === 'premium_remove') {
+      if (operation === 'package_grant') {
         if (!/^\d{16,22}$/.test(guildId)) return sendHtml(response, 400, errorPage('Érvénytelen szerver ID', 'Adj meg érvényes Discord szerver ID-t.', session));
-        await dbQuery('DELETE FROM nexabot_premium WHERE guild_id = $1', [guildId]);
+        if (!client.guilds.cache.has(guildId)) return sendHtml(response, 404, errorPage('A szerver nem található', 'A NEXA Bot nincs ezen a szerveren.', session));
+        await grantGuildPlan(guildId, form.get('premium_plan'), {
+          days: form.get('premium_days') || null,
+          grantedBy: session.user.id,
+          note: form.get('premium_note')
+        });
+      }
+      if (operation === 'package_remove') {
+        if (!/^\d{16,22}$/.test(guildId)) return sendHtml(response, 400, errorPage('Érvénytelen szerver ID', 'Adj meg érvényes Discord szerver ID-t.', session));
+        await revokeGuildPlan(guildId);
+      }
+      if (operation === 'package_set') {
+        if (!/^\d{16,22}$/.test(guildId)) return sendHtml(response, 400, errorPage('Érvénytelen szerver ID', 'Adj meg érvényes Discord szerver ID-t.', session));
+        if (!client.guilds.cache.has(guildId)) return sendHtml(response, 404, errorPage('A szerver nem található', 'A NEXA Bot nincs ezen a szerveren.', session));
+        if (String(form.get('premium_plan')) === 'free') await revokeGuildPlan(guildId);
+        else await grantGuildPlan(guildId, form.get('premium_plan'), { days: null, grantedBy: session.user.id, note: 'Owner gyorsbeállítás' });
       }
       if (operation === 'announcement') {
         if (!/^\d{16,22}$/.test(guildId)) return sendHtml(response, 400, errorPage('Érvénytelen szerver ID', 'A közleményhez add meg a cél szerver ID-jét.', session));
@@ -2756,6 +2948,10 @@ async function handleRequest(client, request, response) {
         const text = String(form.get('announcement_text') || '').trim().slice(0, 3000);
         if (!text) return sendHtml(response, 400, errorPage('Üres közlemény', 'Írd be a közlemény szövegét.', session));
         await channel.send({ content: `## ${title}\n${text}`, allowedMentions: { parse: [] } });
+      }
+      if (['package_grant', 'package_remove', 'package_set'].includes(operation)) {
+        const guild = client.guilds.cache.get(guildId);
+        if (guild) await syncConfiguredPanels(guild, getGuildConfig(guildId), client.user);
       }
       await recordAudit(`owner_${operation}`, { actorId: session.user.id, targetId: guildId || userId || null });
       return redirect(response, '/owner?saved=1');
@@ -2770,6 +2966,7 @@ async function handleRequest(client, request, response) {
     const guild = client.guilds.cache.get(commandsMatch[1]);
     const oauthGuild = session.guilds.find((item) => item.id === commandsMatch[1]) || (guild && isOwnerUser(session.user.id) ? { id: guild.id, name: guild.name, permissions: '0' } : null);
     if (!guild || !(await userCanManageGuild(session, oauthGuild, guild))) return sendHtml(response, 403, errorPage('Nincs hozzáférésed', 'Ehhez a szerverhez nincs kezelői jogosultságod.', session));
+    if (!planAllowsModule(guild.id, 'customCommands')) return sendHtml(response, 403, errorPage('Pro csomag szükséges', 'A Custom Commands modult az Owner Centerben kiosztott Pro vagy Ultimate csomag nyitja meg.', session));
     if (request.method === 'GET' && !commandsMatch[2]) return sendHtml(response, 200, await customCommandsPage(guild, session, url.searchParams.get('saved') === '1'));
     if (request.method === 'POST') {
       const form = await readBody(request);
@@ -2808,7 +3005,7 @@ async function handleRequest(client, request, response) {
           return sendHtml(response, 403, errorPage('Lejárt munkamenet', 'Frissítsd az oldalt, majd próbáld újra.', session));
         }
         const requestedConfig = configFromForm(guild, form);
-        validateConfiguration(requestedConfig);
+        validateConfiguration(requestedConfig, guild.id);
         const config = await setGuildConfig(guild.id, requestedConfig);
         await syncConfiguredPanels(guild, config, client.user);
         await recordAudit('dashboard_settings_save', { actorId: session.user.id, guildId: guild.id });
@@ -3821,7 +4018,7 @@ function helpEmbed(category = null, language = 'hu') {
       .setTitle(language === 'en' ? '✨ NEXA Bot Help Center' : '✨ NEXA Bot Súgóközpont')
       .setDescription(language === 'en' ? 'Choose a category below. I will show only the commands and usage for that system.' : 'Válassz egy kategóriát az alábbi menüből. Csak az adott rendszer parancsait és használatát mutatom meg.')
       .addFields({ name: language === 'en' ? 'Tip' : 'Tipp', value: language === 'en' ? 'Most features are also available through buttons in the Discord Control Center and the web dashboard.' : 'A legtöbb funkció a Discord Control Center gombjaival és a webes dashboardon is használható.' })
-      .setFooter({ text: 'NEXA Bot 4.1 • Management Platform' });
+      .setFooter({ text: 'NEXA Bot 5.0 • Management Platform' });
   }
   const item = CATEGORIES[category];
   const englishTitles = { moderation: 'Moderation', utility: 'Utility', security: 'Security', tickets: 'Tickets', levels: 'Levels', giveaway: 'Giveaway', ai: 'AI', admin: 'Admin' };
@@ -3829,7 +4026,7 @@ function helpEmbed(category = null, language = 'hu') {
     .setColor(COLORS.primary)
     .setTitle(`${item.emoji} ${language === 'en' ? englishTitles[category] : item.title}`)
     .setDescription(language === 'en' ? item.en : item.text)
-    .setFooter({ text: language === 'en' ? 'NEXA Bot 4.1 • Choose another category from the menu' : 'NEXA Bot 4.1 • Válassz másik kategóriát a menüből' });
+    .setFooter({ text: language === 'en' ? 'NEXA Bot 5.0 • Choose another category from the menu' : 'NEXA Bot 5.0 • Válassz másik kategóriát a menüből' });
 }
 
 function buildHelpCommand() {
@@ -3893,7 +4090,7 @@ const { handleInteraction } = require('./interactions');
 const { registerEvents } = require('./events');
 const { buildSecurityCommand, registerSecurity } = require('./security');
 const { buildSettingsCommand, buildRpCommands, startDashboardServer } = require('./dashboard');
-const { initConfigStore, dbQuery } = require('./config');
+const { initConfigStore, pruneExpiredPremium } = require('./config');
 const { buildAiCommand } = require('./ai');
 const { buildShiftCommand } = require('./shifts');
 const { communityCommands, restoreGiveaways } = require('./community');
@@ -3973,7 +4170,7 @@ client.once(Events.ClientReady, async (readyClient) => {
     await registerCommands();
     console.log(`NexaBot elindult: ${readyClient.user.tag}`);
     await restoreGiveaways(readyClient);
-    console.log('A NEXA Bot 4.1 management platform használatra kész.');
+    console.log('A NEXA Bot 5.0 management platform használatra kész.');
   } catch (error) {
     console.error('A parancs regisztrálása nem sikerült:', error);
     await recordError(error, { command: 'registerCommands' });
@@ -4013,7 +4210,7 @@ process.on('uncaughtException', (error) => {
 
 async function start() {
   await initConfigStore();
-  const cleanupPremium = () => dbQuery('DELETE FROM nexabot_premium WHERE expires_at IS NOT NULL AND expires_at <= NOW()').catch(() => null);
+  const cleanupPremium = () => pruneExpiredPremium().catch(() => null);
   await cleanupPremium();
   setInterval(cleanupPremium, 60 * 60 * 1000).unref();
   await client.login(process.env.DISCORD_TOKEN);
@@ -5668,7 +5865,7 @@ const {
 } = require('discord.js');
 const { NAMES, COLORS } = require('./constants');
 const { baseEmbed, byName, ephemeralError } = require('./utils');
-const { getGuildConfig, moduleEnabled, configuredChannel, isBviGuild } = require('./config');
+const { getGuildConfig, moduleEnabled, configuredChannel, isBviGuild, planAllows } = require('./config');
 const { recordAudit, recordError } = require('./telemetry');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
@@ -6122,7 +6319,9 @@ async function handleHumanJoin(member) {
     .filter((record) => now - record.joinedAt <= profile.raidWindowMs);
   records.push({ userId: member.id, joinedAt: now, fresh: age < profile.freshAccountMs });
   joinWindows.set(member.guild.id, records);
-  if (protection.raidDetection && records.length >= profile.raidLimit) await beginRaidLock(member.guild, records);
+  if (planAllows(member.guild.id, 'ultimate') && protection.raidDetection && records.length >= profile.raidLimit) {
+    await beginRaidLock(member.guild, records);
+  }
 }
 
 const DANGEROUS_AUDIT_ACTIONS = new Map([
@@ -6140,7 +6339,7 @@ const DANGEROUS_AUDIT_ACTIONS = new Map([
 async function handleAuditLogEntry(entry, guild) {
   if (!moduleEnabled(guild.id, 'protection')) return;
   const config = getGuildConfig(guild.id);
-  if (!config.protection.antiNuke || !DANGEROUS_AUDIT_ACTIONS.has(entry.action)) return;
+  if (!planAllows(guild.id, 'ultimate') || !config.protection.antiNuke || !DANGEROUS_AUDIT_ACTIONS.has(entry.action)) return;
   const executorId = entry.executorId || entry.executor?.id;
   if (!executorId || executorId === guild.client.user.id || executorId === guild.ownerId) return;
   const executor = await guild.members.fetch(executorId).catch(() => null);
