@@ -1,8 +1,8 @@
 {
   "name": "nexabot",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "private": true,
-  "description": "NEXA Bot 4.0 több szerveres Discord management platform webes dashboarddal, Owner Centerrel, AI-val és védelemmel",
+  "description": "NEXA Bot 4.1 több szerveres Discord management platform Owner-only RP modullal",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {

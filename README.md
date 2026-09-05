@@ -1,6 +1,6 @@
-# NEXA Bot 4.0
+# NEXA Bot 4.1
 
-Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Nem RP-specifikus.
+Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Az opcionális RP- és dokumentumrendszert kizárólag a bot tulajdonosa vagy az általa kijelölt Owner-kezelő kapcsolhatja be egy kiválasztott szerveren.
 
 ## Fő funkciók
 
@@ -9,6 +9,7 @@
 - Discord OAuth2 dashboard tulajdonos, admin és egy kijelölt kezelői rang részére;
 - külön Owner Center: szerverhálózat, uptime, ping, memória, adatbázis, használat, hibák és audit;
 - owner-kezelők, AI-engedélylista, user/guild blacklist, maintenance, globális modul-vészkapcsoló és premium;
+- Owner-only RP modul: szerverenkénti engedélyezés, TGF, részletes dokumentumpanelek, vezetői jóváhagyás és automatikus RP-ügyszám;
 - moderációs Case ID és adatbázis: ban, unban, kick, timeout, untimeout, warn, warnings, clearwarns, clear, slowmode, lock, unlock és nick;
 - Automod: spam/flood, ismétlés, mass mention, invite, link, scam, tiltott szavak, caps és emoji spam;
 - whitelist felhasználó, rang és csatorna szerint;
@@ -112,7 +113,7 @@ npm test
 A sikeres logban ez jelenik meg:
 
 ```text
-A NEXA Bot 4.0 management platform használatra kész.
+A NEXA Bot 4.1 management platform használatra kész.
 ```
 
 ## Használat
@@ -124,6 +125,7 @@ A NEXA Bot 4.0 management platform használatra kész.
 - a bot mentéskor frissíti a Discord-paneleket;
 - Custom Commands: nyisd meg a szerver **Custom Command kezelő** oldalát;
 - Owner Center: a `BOT_OWNER_ID` fiókkal belépve automatikusan megnyílik.
+- RP-rendszer: az Owner Center szerverlistáján nyomd meg az **RP bekapcsolása** gombot. Ezután Discordon a `/telepites` a teljes alap RP-rendszert, a `/dokumentum-panelek` pedig a már meglévő dokumentumcsatornák paneljeit telepíti.
 
 ## Biztonság
 
