@@ -1,4 +1,4 @@
-# NEXA Bot 5.1
+# NEXA Bot 5.2 Full Anti-Raid
 
 Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Az opcionális RP- és dokumentumrendszert kizárólag a bot tulajdonosa vagy az általa kijelölt Owner-kezelő kapcsolhatja be egy kiválasztott szerveren.
 
@@ -15,8 +15,10 @@
 - moderációs Case ID és adatbázis: ban, unban, kick, timeout, untimeout, warn, warnings, clearwarns, clear, slowmode, lock, unlock és nick;
 - Automod: spam/flood, ismétlés, mass mention, invite, link, scam, tiltott szavak, caps és emoji spam;
 - whitelist felhasználó, rang és csatorna szerint;
-- Anti-Nuke: csatorna/rang létrehozás és törlés, tömeges ban/kick, webhook és jogosultságmódosítás;
-- admin döntésig lezárt raid-riasztás és visszaállítási állapot;
+- külön webes Anti-Raid irányítóközpont érzékenység-, csatorna-, whitelist- és büntetésbeállítással;
+- teljes Anti-Nuke: már az első jogosulatlan csatorna-, rang-, jogosultság-, ban/kick/prune- vagy webhookműveletnél azonnali karantén és szerverlezárás;
+- Bot-Guard: kizárólag az előre engedélyezett bot-ID maradhat bent; minden más új bot az auditellenőrzés előtt azonnal kirúgásra kerül;
+- admin döntésig lezárt raid-riasztás, nyitva maradó döntési csatorna és újraindítás után is használható visszaállítási állapot;
 - kategóriás ticketek, claim/unclaim, lezárás és automatikus HTML transcript;
 - welcome/goodbye placeholder, külön ember- és bot-autorang;
 - XP, szintek, ranglista, önkiszolgáló rangpanel, ötletek, szavazás, bejelentés és giveaway;
@@ -127,7 +129,7 @@ npm test
 A sikeres logban ez jelenik meg:
 
 ```text
-A NEXA Bot 5.1 management platform használatra kész.
+A NEXA Bot 5.2 Full Anti-Raid platform használatra kész.
 ```
 
 ## Használat
@@ -142,13 +144,22 @@ A NEXA Bot 5.1 management platform használatra kész.
 - Csomag kiosztása: az Owner Center **Ingyenes csomag kiosztása** részében válaszd ki a Pro vagy Ultimate csomagot és a lejáratot; a szerverkártyán egy mozdulattal visszaállítható Free-re.
 - RP-rendszer: az Owner Center szerverlistáján nyomd meg az **RP bekapcsolása** gombot. Ezután Discordon a `/telepites` a teljes alap RP-rendszert, a `/dokumentum-panelek` pedig a már meglévő dokumentumcsatornák paneljeit telepíti.
 
+### Teljes Anti-Raid bekapcsolása
+
+1. Az Owner Centerben adj a szervernek **Ultimate** csomagot. Az Owner által RP-re engedélyezett szerver ezt automatikusan megkapja.
+2. A szerver dashboardján kapcsold be a **Védelem** modult.
+3. A **Külön Anti-Raid irányítóközpontban** válaszd a `minden-log` csatornát, és kapcsold be az összes őrt, az Anti-Nuke-ot és az azonnali szerverlezárást.
+4. A Discord **Szerverbeállítások → Rangok** oldalán húzd a NEXA Bot rangját minden más bot és minden általa kezelendő rang fölé.
+5. Minden engedélyezett külső bot ID-jét add a **NEXA Bot-Guard** listájához még a meghívása előtt. A listán nem szereplő botot a NEXA azonnal kirúgja.
+6. A `/vedelem statusz` paranccsal ellenőrizd a szükséges jogosultságokat és a rangpozíciót.
+
 ## Biztonság
 
 - paraméterezett SQL lekérdezések;
 - OAuth state, HttpOnly/SameSite/Secure session cookie és CSRF token;
 - Content Security Policy, XSS-kódolás, kérésméret-limit és IP-alapú rate limit;
 - Discord jogosultság és rangsorrend ellenőrzése;
-- szervertulajdonos, bot és whitelistelt tagok Anti-Nuke védelme;
+- a szervertulajdonos, Admin/Vezetőség, külön whitelistelt tagok és engedélyezett bot-ID-k biztonságos kivétele;
 - az AI kulcs és Discord token nem jelenik meg a dashboardon vagy logokban;
 - az Owner Center AI-statisztikát mutat, privát beszélgetésszöveget nem.
 
