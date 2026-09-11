@@ -1,4 +1,4 @@
-# NEXA Bot 5.2 Full Anti-Raid
+# NEXA Bot 5.3 Always-On Core
 
 Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Az opcionális RP- és dokumentumrendszert kizárólag a bot tulajdonosa vagy az általa kijelölt Owner-kezelő kapcsolhatja be egy kiválasztott szerveren.
 
@@ -27,6 +27,9 @@
 - Nexa AI kijelölt csatornában és DM-ben, cooldownnal, korlátozott előzménnyel és beleegyezéses memóriával;
 - select menüs `/help` nyolc kategóriával;
 - automatikus Discord sharding, korlátozott cache, sweeperek, adatbázis-pool és háttérfeladatok;
+- öngyógyító Discord gateway watchdog: tartós kapcsolatvesztésnél szabályos process-újraindítást kér a hostingtól;
+- külön liveness/readiness végpont, valós Discord-állapottal, indulási türelmi idővel és adatbázis-állapotjelzéssel;
+- PostgreSQL kapcsolat-időkorlát, automatikus állapotellenőrzés és háttérben történő visszacsatlakozás;
 - központi error handler, audit-, command-, dashboard- és AI használati napló.
 
 ## Owner által kezelt csomagok
@@ -46,6 +49,7 @@ Az Owner által RP-re engedélyezett szerver automatikusan Ultimate hozzáféré
 ```text
 src/
   index.js             Discord kliens és automatikus sharding
+  runtime.js           gateway watchdog, health állapot és öngyógyító újraindítás
   config.js            PostgreSQL, migrációk, szerver- és owner-beállítás
   dashboard.js         OAuth2 Command Deck, Owner Center, publikus oldalak
   interactions.js      gombok, select menük, modalok és ticket workflow
@@ -81,6 +85,10 @@ src/
 | `OPENAI_API_KEY` | csak AI-hoz | Kizárólag szerveroldali environment variable |
 | `OPENAI_MODEL` | nem | Alapérték: `gpt-5-mini` |
 | `DB_POOL_MAX` | nem | Pool méret, alapérték 10, maximum 20 |
+| `DB_RETRY_MS` | nem | Adatbázis-visszacsatlakozás gyakorisága; alapérték 60 000 ms |
+| `DISCORD_MAX_OFFLINE_MS` | nem | Ennyi tartós Discord-kiesés után indul újra a process; alapérték 180 000 ms |
+| `STARTUP_GRACE_MS` | nem | Indulási türelmi idő; alapérték 180 000 ms |
+| `WATCHDOG_INTERVAL_MS` | nem | Gateway-ellenőrzés gyakorisága; alapérték 15 000 ms |
 | `SHARD_COUNT` | nem | Kézi shard szám; nélküle automatikus |
 | `DATABASE_SSL` | nem | Renderen `true` |
 | `PORT` | nem | Render automatikusan beállítja |
@@ -126,10 +134,17 @@ npm test
 6. Health Check Path: `/health`
 7. Indíts **Manual Deploy → Deploy latest commit** műveletet.
 
+Az állapotvégpontok:
+
+- `/health/live`: a Node.js folyamat fut-e;
+- `/health`: a Discord gateway ténylegesen üzemkész-e. Induláskor rövid türelmi időt ad, tartós kiesésnél `503` választ küld, hogy a hosting újra tudja indítani a szolgáltatást.
+
+> **Fontos a folyamatos online állapothoz:** a Render Free web service 15 perc bejövő forgalom nélküli inaktivitás után leáll, és a Render időnként újra is indíthatja. Ezt alkalmazáskóddal nem lehet megbízhatóan kikapcsolni. Valódi 0–24 üzemhez fizetős Render instance, production PostgreSQL és bekapcsolt health check szükséges. A watchdog a program- és kapcsolat-hibákat helyreállítja, de a Free csomag kényszerített alvását nem tudja megszüntetni.
+
 A sikeres logban ez jelenik meg:
 
 ```text
-A NEXA Bot 5.2 Full Anti-Raid platform használatra kész.
+A NEXA Bot 5.3 Always-On Core platform használatra kész.
 ```
 
 ## Használat

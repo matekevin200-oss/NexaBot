@@ -28,6 +28,14 @@ services:
         generateValue: true
       - key: DB_POOL_MAX
         value: "10"
+      - key: DB_RETRY_MS
+        value: "60000"
+      - key: DISCORD_MAX_OFFLINE_MS
+        value: "180000"
+      - key: STARTUP_GRACE_MS
+        value: "180000"
+      - key: WATCHDOG_INTERVAL_MS
+        value: "15000"
       - key: PUBLIC_URL
         sync: false
       - key: NODE_VERSION

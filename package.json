@@ -1,8 +1,8 @@
 {
   "name": "nexabot",
-  "version": "5.2.0",
+  "version": "5.3.0",
   "private": true,
-  "description": "NEXA Bot 5.2 több szerveres Discord platform teljes Anti-Raid és Anti-Nuke védelemmel",
+  "description": "NEXA Bot 5.3 több szerveres Discord platform öngyógyító felügyelettel és teljes Anti-Raid védelemmel",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
