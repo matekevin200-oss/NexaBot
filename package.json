@@ -1,8 +1,8 @@
 {
   "name": "nexabot",
-  "version": "5.4.0",
+  "version": "5.5.0",
   "private": true,
-  "description": "NEXA Bot 5.4 több szerveres Discord platform Owner Document Controllal és teljes Anti-Raid védelemmel",
+  "description": "NEXA Bot 5.5 több szerveres Discord platform Owner jogosultságvezérléssel és teljes Anti-Raid védelemmel",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {

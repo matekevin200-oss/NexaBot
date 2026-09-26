@@ -1,4 +1,4 @@
-// NEXA Bot 5.4 single-file release — generated automatically.
+// NEXA Bot 5.5 single-file release — generated automatically.
 const __nativeRequire = require;
 const __path = __nativeRequire('node:path').posix;
 const __modules = {
@@ -1316,6 +1316,7 @@ function defaultConfig(guildId) {
       systemPrompt: 'Segítőkész, tömör, magyar nyelvű Discord-asszisztens vagy. Ne találj ki szerverinformációkat.'
     },
     documents: {
+      defaultAccessRoleId: null,
       types: {}
     },
     branding: {
@@ -1345,7 +1346,7 @@ function sanitizeConfig(guildId, input = {}) {
     community: { ...defaults.community },
     shift: { ...defaults.shift },
     ai: { ...defaults.ai },
-    documents: { types: {} },
+    documents: { defaultAccessRoleId: null, types: {} },
     branding: { ...defaults.branding },
     logging: { ...defaults.logging }
   };
@@ -1407,6 +1408,7 @@ function sanitizeConfig(guildId, input = {}) {
   const documentTypes = input.documents?.types && typeof input.documents.types === 'object'
     ? input.documents.types
     : {};
+  config.documents.defaultAccessRoleId = sanitizeId(input.documents?.defaultAccessRoleId);
   for (const [key, value] of Object.entries(documentTypes).slice(0, 100)) {
     if (!/^[a-z0-9_]{1,50}$/.test(key) || !value || typeof value !== 'object') continue;
     const rule = { accessRoleId: sanitizeId(value.accessRoleId) };
@@ -1438,7 +1440,10 @@ function mergeStoredConfig(guildId, stored) {
     community: { ...defaults.community, ...(stored.community || {}) },
     shift: { ...defaults.shift, ...(stored.shift || {}) },
     ai: { ...defaults.ai, ...(stored.ai || {}) },
-    documents: { types: { ...(stored.documents?.types || {}) } },
+    documents: {
+      defaultAccessRoleId: stored.documents?.defaultAccessRoleId || null,
+      types: { ...(stored.documents?.types || {}) }
+    },
     branding: { ...defaults.branding, ...(stored.branding || {}) },
     logging: { ...defaults.logging, ...(stored.logging || {}) }
   };
@@ -2409,7 +2414,7 @@ function layout(title, content, session = null, branding = null, language = 'hu'
 :root{color-scheme:dark;--bg:#05070d;--panel:#0b0f19;--card:#101725;--card2:#171f31;--line:#29344c;--text:#f8f9ff;--muted:#9ca8bf;--primary:${primary};--accent:${accent};--cyan:#54d7ff;--red:#ff6174;--gold:#ffca64;--shadow:0 28px 90px rgba(0,0,0,.42)}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(1100px 650px at 78% -10%,color-mix(in srgb,var(--primary) 29%,transparent),transparent 70%),radial-gradient(760px 520px at -8% 28%,rgba(84,215,255,.10),transparent 72%),linear-gradient(180deg,#060812 0,var(--bg) 42%);color:var(--text);font:16px/1.58 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;min-height:100vh}a{color:inherit}.topbar{position:sticky;top:0;z-index:20;height:72px;background:rgba(5,7,13,.76);backdrop-filter:blur(24px);border-bottom:1px solid rgba(255,255,255,.075)}.topbar-inner{height:100%;padding:0 24px;display:flex;align-items:center;gap:14px}.brand{display:flex;align-items:center;gap:11px;font-size:19px;font-weight:900;text-decoration:none;letter-spacing:-.4px}.brand-mark{width:40px;height:40px;display:grid;place-items:center;border-radius:14px;background:linear-gradient(145deg,var(--primary),#2b1f70);box-shadow:0 0 0 1px rgba(255,255,255,.14),0 12px 34px color-mix(in srgb,var(--primary) 38%,transparent);position:relative}.brand-mark::after{content:"";position:absolute;inset:5px;border:1px solid rgba(255,255,255,.22);border-radius:10px}.brand span{color:var(--accent)}.live-pill{display:flex;align-items:center;gap:7px;border:1px solid rgba(82,224,164,.25);background:rgba(82,224,164,.07);color:#b8f8df;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:800}.live-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}.spacer{flex:1}.user{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:13px}.avatar{width:38px;height:38px;border-radius:13px;background:var(--card2);border:1px solid var(--line)}.app{display:grid;grid-template-columns:260px minmax(0,1fr);min-height:calc(100vh - 72px)}.sidebar{position:sticky;top:72px;height:calc(100vh - 72px);padding:24px 16px;border-right:1px solid rgba(255,255,255,.07);background:linear-gradient(180deg,rgba(11,15,25,.92),rgba(7,10,17,.62))}.side-label{padding:8px 12px;color:#65708a;font-size:11px;font-weight:900;letter-spacing:1.5px;text-transform:uppercase}.side-link{display:flex;align-items:center;gap:10px;margin:3px 0;padding:11px 12px;border-radius:11px;color:var(--muted);font-weight:700;text-decoration:none}.side-link:hover,.side-link.active{color:#fff;background:linear-gradient(90deg,color-mix(in srgb,var(--primary) 26%,transparent),rgba(84,215,255,.035));box-shadow:inset 3px 0 var(--primary)}main{width:100%;max-width:1320px;margin:0 auto;padding:36px 32px 96px}.public-main{max-width:1240px}.hero{padding:80px 0 52px}.eyebrow{display:inline-flex;align-items:center;gap:8px;padding:7px 11px;border:1px solid color-mix(in srgb,var(--primary) 35%,transparent);border-radius:999px;background:color-mix(in srgb,var(--primary) 9%,transparent);color:#d6ceff;font-size:12px;font-weight:900;letter-spacing:.7px;text-transform:uppercase}.hero h1{max-width:960px;font-size:clamp(44px,8vw,88px);line-height:.96;margin:22px 0;letter-spacing:-4px}.gradient{background:linear-gradient(105deg,#fff 18%,color-mix(in srgb,var(--primary) 65%,#fff) 57%,var(--cyan));-webkit-background-clip:text;color:transparent}.lead{color:var(--muted);max-width:780px;font-size:clamp(17px,2vw,21px)}.actions{display:flex;flex-wrap:wrap;gap:11px;margin-top:28px}.btn{border:0;border-radius:12px;background:linear-gradient(135deg,var(--primary),color-mix(in srgb,var(--primary) 65%,#221c54));color:#fff;padding:12px 17px;font:inherit;font-weight:850;text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 10px 28px color-mix(in srgb,var(--primary) 25%,transparent);transition:.18s transform,.18s border-color,.18s filter}.btn:hover{transform:translateY(-2px);filter:brightness(1.08)}.btn.secondary{background:rgba(255,255,255,.035);border:1px solid var(--line);box-shadow:none}.btn.green{background:linear-gradient(135deg,#168b64,#11634b);box-shadow:0 10px 25px rgba(22,139,100,.18)}.btn.small{padding:8px 11px;font-size:12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:15px}.bento{grid-template-columns:repeat(12,1fr)}.bento .card{grid-column:span 4}.card{position:relative;overflow:hidden;background:linear-gradient(145deg,rgba(19,27,43,.96),rgba(10,14,24,.96));border:1px solid rgba(255,255,255,.09);border-radius:20px;padding:22px;box-shadow:var(--shadow)}.card::before{content:"";position:absolute;width:190px;height:190px;border-radius:50%;background:color-mix(in srgb,var(--primary) 9%,transparent);filter:blur(52px);right:-90px;top:-100px;pointer-events:none}.card h2,.card h3{position:relative;margin:0 0 8px;letter-spacing:-.3px}.feature-icon{width:46px;height:46px;display:grid;place-items:center;border:1px solid color-mix(in srgb,var(--primary) 28%,transparent);border-radius:14px;background:color-mix(in srgb,var(--primary) 12%,transparent);font-size:22px;margin-bottom:16px}.muted{color:var(--muted)}.notice{padding:13px 15px;border-radius:12px;margin:0 0 18px;background:rgba(82,224,164,.08);border:1px solid rgba(82,224,164,.25);color:#bdf7df}.warn{background:rgba(244,185,66,.08);border-color:rgba(244,185,66,.26);color:#ffe2a5}.error{background:rgba(239,91,108,.09);border-color:rgba(239,91,108,.28);color:#ffc0ca}.server{display:flex;align-items:center;gap:14px}.server img,.server-icon{width:56px;height:56px;border-radius:17px;background:var(--card2);display:grid;place-items:center;font-size:20px;font-weight:900;border:1px solid var(--line)}.server-body{min-width:0;flex:1}.server-body h1,.server-body h3{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0}.page-head{display:flex;align-items:center;gap:15px;margin-bottom:24px}.page-head h1{font-size:clamp(30px,5vw,46px);letter-spacing:-1.5px}.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:20px 0}.stat{padding:17px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(145deg,rgba(255,255,255,.035),rgba(255,255,255,.012))}.stat-value{font-size:25px;font-weight:900}.stat-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px}.section{scroll-margin-top:94px}.section-title{display:flex;align-items:center;gap:9px;margin:0 0 14px;font-size:22px}.section-kicker{font-size:11px;text-transform:uppercase;letter-spacing:1.15px;color:#a99cff;font-weight:900}.settings{display:grid;grid-template-columns:1fr;gap:17px}.field-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(225px,1fr));gap:14px}.module-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}label{display:block;font-weight:750;margin-bottom:6px}.switch{display:flex;align-items:flex-start;gap:11px;background:rgba(255,255,255,.026);border:1px solid var(--line);border-radius:14px;padding:13px;margin:0;min-height:60px}.switch:hover{border-color:color-mix(in srgb,var(--primary) 45%,var(--line))}.switch input{width:20px;height:20px;accent-color:var(--primary);flex:0 0 auto;margin-top:2px}.switch.locked{opacity:.64;border-style:dashed;background:rgba(255,255,255,.014)}.plan-tag{display:inline-flex;margin-left:6px;padding:2px 7px;border-radius:999px;background:linear-gradient(135deg,#6950ff,#294d86);font-size:10px;letter-spacing:.8px;color:#fff}select,textarea,input[type=text],input[type=number],input[type=url],input[type=color]{width:100%;border:1px solid var(--line);border-radius:11px;background:#080c15;color:#fff;padding:11px;font:inherit;outline:none}select:focus,textarea:focus,input:focus{border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 14%,transparent)}input[type=color]{height:46px;padding:5px}textarea{min-height:105px;resize:vertical}.help{font-size:12px;color:var(--muted);margin-top:5px}.savebar{position:sticky;bottom:12px;z-index:8;background:rgba(15,21,34,.94);backdrop-filter:blur(20px);border:1px solid var(--line);border-radius:16px;padding:11px 13px;display:flex;align-items:center;gap:12px;box-shadow:0 18px 58px #000}.savebar .btn{margin-left:auto}.footer-note{text-align:center;color:#59647a;font-size:12px;margin-top:42px}@media(max-width:900px){.app{grid-template-columns:1fr}.sidebar{display:none}.bento .card{grid-column:span 6}.stats{grid-template-columns:repeat(2,1fr)}main{padding:26px 18px 82px}}@media(max-width:600px){.topbar{height:64px}.topbar-inner{padding:0 14px}.brand-text,.user span,.live-pill{display:none}.app{min-height:calc(100vh - 64px)}main{padding:22px 13px 78px}.hero{padding-top:42px}.hero h1{letter-spacing:-2.4px}.bento{display:grid;grid-template-columns:1fr}.bento .card{grid-column:auto}.card{padding:16px;border-radius:15px}.stats{grid-template-columns:1fr 1fr}.stat{padding:13px}.stat-value{font-size:20px}.savebar{bottom:7px}.savebar .muted{font-size:11px}.page-head{align-items:flex-start}}
 .badge{display:inline-block;padding:3px 8px;border-radius:999px;background:rgba(82,224,164,.12);color:var(--accent);font-size:10px;font-weight:900;letter-spacing:.7px;vertical-align:middle}.badge.pro{background:rgba(124,92,255,.16);color:#c9c0ff}.badge.ultimate{background:linear-gradient(135deg,rgba(124,92,255,.25),rgba(84,215,255,.14));color:#dcd8ff}.command-deck{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(320px,.88fr);gap:18px;align-items:stretch}.deck-panel{min-height:390px;background:linear-gradient(145deg,rgba(16,23,38,.97),rgba(7,11,20,.98));border:1px solid rgba(255,255,255,.1);border-radius:24px;padding:20px;box-shadow:0 36px 110px rgba(0,0,0,.48);position:relative;overflow:hidden}.deck-panel::after{content:"";position:absolute;inset:auto -80px -110px auto;width:280px;height:280px;border-radius:50%;background:color-mix(in srgb,var(--cyan) 13%,transparent);filter:blur(50px)}.deck-top{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:16px}.deck-row{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;padding:13px;border:1px solid rgba(255,255,255,.07);border-radius:14px;background:rgba(255,255,255,.022);margin:9px 0}.deck-row strong{display:block}.pulse{width:9px;height:9px;background:var(--accent);border-radius:50%;box-shadow:0 0 0 6px rgba(82,224,164,.08),0 0 18px var(--accent)}.metric-orbit{display:grid;place-items:center;min-height:390px}.orbit{width:min(320px,78vw);aspect-ratio:1;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at center,#111a2c 0 37%,transparent 38%),conic-gradient(from 20deg,var(--primary),var(--cyan),var(--accent),var(--primary));padding:2px;box-shadow:0 0 90px color-mix(in srgb,var(--primary) 20%,transparent)}.orbit-core{width:76%;height:76%;border-radius:50%;background:#090e19;display:grid;place-items:center;text-align:center;border:1px solid rgba(255,255,255,.1)}.orbit-core strong{font-size:52px;line-height:1}.eyeline{height:1px;background:linear-gradient(90deg,transparent,var(--primary),var(--cyan),transparent);margin:58px 0 32px}.feature-wide{grid-column:span 8!important}.feature-narrow{grid-column:span 4!important}.navlinks{display:flex;gap:6px}.navlinks a{color:var(--muted);text-decoration:none;font-size:13px;font-weight:750;padding:8px 10px;border-radius:9px}.navlinks a:hover{color:#fff;background:rgba(255,255,255,.05)}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:9px 6px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.7px}@media(max-width:900px){.command-deck{grid-template-columns:1fr}.feature-wide,.feature-narrow{grid-column:span 6!important}.navlinks{display:none}}@media(max-width:600px){.feature-wide,.feature-narrow{grid-column:auto!important}.deck-panel,.metric-orbit{min-height:330px}}
 .marketing{isolation:isolate}.marketing .hero{display:grid;grid-template-columns:minmax(0,1.02fr) minmax(430px,.98fr);align-items:center;gap:54px;padding:94px 0 68px;min-height:720px}.marketing .hero-copy{position:relative;z-index:2}.marketing .hero h1{font-size:clamp(52px,7.4vw,96px);max-width:820px;margin:24px 0;line-height:.91;letter-spacing:-5px}.hero-proof{display:flex;flex-wrap:wrap;gap:18px;margin-top:28px;color:#c0c9dc;font-size:13px;font-weight:750}.hero-proof span{display:flex;align-items:center;gap:8px}.hero-proof i{width:19px;height:19px;border-radius:7px;background:rgba(82,224,164,.11);border:1px solid rgba(82,224,164,.28);display:grid;place-items:center;color:var(--accent);font-style:normal;font-size:11px}.product-stage{position:relative;min-height:610px;display:grid;place-items:center}.product-stage::before{content:"";position:absolute;width:78%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--primary) 28%,transparent),transparent 67%);filter:blur(14px)}.product-shell{position:relative;width:100%;max-width:590px;border:1px solid rgba(255,255,255,.13);border-radius:26px;background:linear-gradient(155deg,rgba(17,24,40,.98),rgba(6,9,17,.98));box-shadow:0 54px 130px rgba(0,0,0,.62),0 0 0 1px rgba(124,92,255,.06);overflow:hidden;transform:perspective(1100px) rotateY(-4deg) rotateX(2deg);animation:deckFloat 8s ease-in-out infinite}.shell-bar{height:52px;border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:7px;padding:0 17px}.shell-bar i{width:8px;height:8px;border-radius:50%;background:#394359}.shell-bar i:first-child{background:var(--red)}.shell-bar i:nth-child(2){background:var(--gold)}.shell-bar i:nth-child(3){background:var(--accent)}.shell-title{margin-left:auto;color:#707c94;font-size:11px;letter-spacing:1px;text-transform:uppercase}.shell-body{display:grid;grid-template-columns:142px 1fr;min-height:470px}.shell-side{padding:17px 11px;border-right:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.018)}.shell-brand{display:flex;align-items:center;gap:8px;padding:4px 7px 17px;font-size:12px;font-weight:900}.shell-brand b{width:27px;height:27px;border-radius:9px;display:grid;place-items:center;background:linear-gradient(145deg,var(--primary),#35277e)}.shell-link{padding:9px;border-radius:9px;color:#758198;font-size:11px;font-weight:750;margin:3px 0}.shell-link.active{color:#fff;background:linear-gradient(90deg,rgba(124,92,255,.28),rgba(124,92,255,.04));box-shadow:inset 2px 0 var(--primary)}.shell-main{padding:21px;position:relative;overflow:hidden}.shell-main::after{content:"";position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);box-shadow:0 0 16px var(--cyan);opacity:.35;animation:scanLine 5s linear infinite}.shell-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.shell-head h3{font-size:22px;margin:2px 0}.shell-status{font-size:9px;font-weight:900;color:var(--accent);border:1px solid rgba(82,224,164,.25);background:rgba(82,224,164,.07);padding:5px 7px;border-radius:999px}.shell-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:20px 0}.shell-metric{padding:12px 10px;border:1px solid rgba(255,255,255,.075);border-radius:11px;background:rgba(255,255,255,.025)}.shell-metric strong{display:block;font-size:17px}.shell-metric span{font-size:9px;color:#78849b;text-transform:uppercase;letter-spacing:.6px}.signal-card{padding:14px;border:1px solid rgba(255,255,255,.08);border-radius:13px;background:linear-gradient(120deg,rgba(124,92,255,.08),rgba(84,215,255,.025));margin-top:9px}.signal-top{display:flex;justify-content:space-between;gap:12px;font-size:11px;font-weight:800}.signal-bars{display:flex;align-items:end;gap:5px;height:64px;margin-top:11px}.signal-bars i{display:block;flex:1;min-width:6px;border-radius:4px 4px 1px 1px;background:linear-gradient(180deg,var(--cyan),var(--primary));opacity:.75}.signal-bars i:nth-child(1){height:22%}.signal-bars i:nth-child(2){height:48%}.signal-bars i:nth-child(3){height:34%}.signal-bars i:nth-child(4){height:72%}.signal-bars i:nth-child(5){height:58%}.signal-bars i:nth-child(6){height:86%}.signal-bars i:nth-child(7){height:68%}.signal-bars i:nth-child(8){height:100%}.signal-bars i:nth-child(9){height:76%}.signal-bars i:nth-child(10){height:91%}.float-chip{position:absolute;z-index:2;padding:11px 14px;border:1px solid rgba(255,255,255,.12);border-radius:14px;background:rgba(10,15,26,.88);backdrop-filter:blur(18px);box-shadow:0 20px 50px rgba(0,0,0,.42);font-size:11px;font-weight:800}.float-chip strong{color:var(--accent);display:block;font-size:13px}.chip-a{right:-24px;top:88px}.chip-b{left:-28px;bottom:80px}.live-network{display:grid;grid-template-columns:1.15fr repeat(4,1fr);gap:1px;border:1px solid rgba(255,255,255,.09);border-radius:20px;overflow:hidden;background:rgba(255,255,255,.09);box-shadow:var(--shadow);margin-bottom:110px}.network-intro,.network-stat{background:rgba(8,12,21,.96);padding:22px}.network-intro strong{display:block;font-size:16px}.network-stat strong{display:block;font-size:25px;letter-spacing:-1px}.network-stat span{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.8px}.section-block{padding:0 0 110px;scroll-margin-top:100px}.section-heading{display:grid;grid-template-columns:minmax(0,.75fr) minmax(280px,.45fr);gap:54px;align-items:end;margin-bottom:34px}.section-heading h2{font-size:clamp(35px,5vw,60px);line-height:1.02;letter-spacing:-2.6px;margin:11px 0 0}.section-heading p{margin:0;color:var(--muted);font-size:17px}.capability-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}.capability{grid-column:span 4;min-height:250px;padding:24px;border-radius:20px;border:1px solid rgba(255,255,255,.085);background:linear-gradient(150deg,rgba(17,24,39,.95),rgba(8,12,20,.96));position:relative;overflow:hidden}.capability.wide{grid-column:span 8}.capability::after{content:attr(data-code);position:absolute;right:16px;top:7px;font-size:50px;font-weight:950;letter-spacing:-4px;color:rgba(255,255,255,.025)}.capability-code{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;color:#ded9ff;background:rgba(124,92,255,.12);border:1px solid rgba(124,92,255,.25);font-size:11px;font-weight:950;letter-spacing:.5px}.capability h3{font-size:21px;margin:36px 0 8px}.capability p{color:var(--muted);margin:0}.capability ul{padding:0;margin:20px 0 0;list-style:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.capability li{color:#bac5d9;font-size:12px}.capability li::before{content:"+";color:var(--accent);margin-right:7px}.workflow{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;counter-reset:flow}.workflow-step{counter-increment:flow;padding:25px;border-left:1px solid rgba(124,92,255,.4);background:linear-gradient(90deg,rgba(124,92,255,.07),transparent)}.workflow-step::before{content:"0" counter(flow);font-size:11px;color:#a99cff;font-weight:950;letter-spacing:1px}.workflow-step h3{font-size:20px;margin:22px 0 8px}.workflow-step p{color:var(--muted);margin:0}.access-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.access-card{padding:25px;border:1px solid rgba(255,255,255,.09);border-radius:20px;background:rgba(11,16,27,.84)}.access-card.featured{background:linear-gradient(145deg,rgba(124,92,255,.18),rgba(8,13,23,.94));border-color:rgba(124,92,255,.42);box-shadow:0 30px 80px rgba(63,45,151,.2)}.access-name{font-size:12px;letter-spacing:1px;font-weight:950}.access-card h3{font-size:30px;margin:9px 0 18px}.access-card ul{padding:0;list-style:none}.access-card li{padding:8px 0;color:#bdc7da;border-bottom:1px solid rgba(255,255,255,.055);font-size:13px}.access-card li::before{content:"✓";color:var(--accent);margin-right:9px}.access-note{margin-top:18px;color:#8d99af;font-size:12px}.security-showcase{display:grid;grid-template-columns:minmax(0,.9fr) minmax(400px,1.1fr);gap:17px}.security-copy,.security-console{border:1px solid rgba(255,255,255,.09);border-radius:22px;background:linear-gradient(145deg,rgba(16,23,38,.96),rgba(7,11,19,.98));padding:28px}.security-copy h2{font-size:clamp(34px,4vw,52px);line-height:1.02;letter-spacing:-2px;margin:14px 0}.trust-list{display:grid;gap:10px;margin-top:28px}.trust-item{display:grid;grid-template-columns:36px 1fr;gap:11px;align-items:start}.trust-item b{width:32px;height:32px;border:1px solid rgba(82,224,164,.2);background:rgba(82,224,164,.07);border-radius:10px;display:grid;place-items:center;color:var(--accent)}.trust-item strong{display:block}.trust-item span{font-size:12px;color:var(--muted)}.console-line{display:grid;grid-template-columns:66px 1fr auto;gap:12px;padding:13px 0;border-bottom:1px solid rgba(255,255,255,.06);font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}.console-line time{color:#5e6b82}.console-line span{color:#c5cfdf}.console-line b{font-size:9px;letter-spacing:.6px;color:var(--accent);border:1px solid rgba(82,224,164,.22);padding:3px 6px;border-radius:999px}.cta-panel{position:relative;overflow:hidden;text-align:center;padding:72px 24px;border:1px solid rgba(124,92,255,.28);border-radius:28px;background:radial-gradient(circle at 50% 130%,rgba(84,215,255,.18),transparent 48%),linear-gradient(145deg,rgba(124,92,255,.15),rgba(8,12,21,.95));box-shadow:0 40px 120px rgba(0,0,0,.5)}.cta-panel h2{font-size:clamp(38px,6vw,66px);line-height:1;margin:12px auto 18px;max-width:800px;letter-spacing:-3px}.cta-panel p{max-width:650px;margin:0 auto;color:var(--muted);font-size:17px}.site-footer{display:flex;flex-wrap:wrap;align-items:center;gap:18px;padding:28px 0 6px;border-top:1px solid rgba(255,255,255,.07);color:#7f8ba1;font-size:12px}.site-footer .brand{margin-right:auto;color:#fff}.site-footer a{text-decoration:none}.site-footer a:hover{color:#fff}.locale-switch{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;padding:2px;background:rgba(255,255,255,.025)}.locale-switch a{padding:5px 7px;border-radius:7px;text-decoration:none;color:#77839a;font-size:10px;font-weight:900}.locale-switch a.active{background:rgba(124,92,255,.2);color:#fff}@keyframes deckFloat{0%,100%{transform:perspective(1100px) rotateY(-4deg) rotateX(2deg) translateY(0)}50%{transform:perspective(1100px) rotateY(-2deg) rotateX(1deg) translateY(-9px)}}@keyframes scanLine{0%{top:6%}100%{top:94%}}@media(max-width:1050px){.marketing .hero{grid-template-columns:1fr;padding-top:70px}.product-stage{min-height:570px}.product-shell{max-width:680px}.chip-a{right:4px}.chip-b{left:4px}.live-network{grid-template-columns:repeat(2,1fr)}.network-intro{grid-column:span 2}.section-heading{grid-template-columns:1fr;gap:16px}.capability{grid-column:span 6}.capability.wide{grid-column:span 6}.security-showcase{grid-template-columns:1fr}}@media(max-width:700px){.marketing .hero{gap:24px;min-height:auto;padding:52px 0 44px}.marketing .hero h1{letter-spacing:-3.2px}.product-stage{min-height:440px}.product-shell{transform:none;animation:none;border-radius:18px}.shell-body{grid-template-columns:92px 1fr;min-height:370px}.shell-side{padding:12px 6px}.shell-link{font-size:0;padding:10px}.shell-link::first-letter{font-size:12px}.shell-main{padding:14px}.shell-metrics{grid-template-columns:1fr 1fr}.shell-metric:last-child{display:none}.float-chip{display:none}.live-network{margin-bottom:78px}.network-stat strong{font-size:20px}.section-block{padding-bottom:78px}.section-heading h2{letter-spacing:-1.7px}.capability-grid,.access-grid,.workflow{grid-template-columns:1fr}.capability,.capability.wide{grid-column:auto;min-height:auto}.capability ul{grid-template-columns:1fr}.security-showcase{grid-template-columns:1fr}.security-console{padding:18px}.console-line{grid-template-columns:50px 1fr}.console-line b{display:none}.cta-panel{padding:54px 18px}.cta-panel h2{letter-spacing:-2px}.locale-switch{margin-left:auto}.topbar .btn.small{display:none}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.product-shell,.shell-main::after{animation:none}.btn{transition:none}}
-</style></head><body><header class="topbar"><div class="topbar-inner"><a class="brand" href="${homeUrl}"><span class="brand-mark">N</span><span class="brand-text">Nexa<span>Bot</span></span></a><div class="live-pill"><i class="live-dot"></i> NEXA CORE ONLINE</div><nav class="navlinks"><a href="${homeUrl}#platform">${platformLabel}</a><a href="${commandsUrl}">${commandsLabel}</a><a href="${privacyUrl}">${privacyLabel}</a></nav><div class="spacer"></div><div class="locale-switch" aria-label="Language"><a class="${pageLanguage === 'hu' ? 'active' : ''}" href="/">HU</a><a class="${pageLanguage === 'en' ? 'active' : ''}" href="/?lang=en">EN</a></div>${user ? `<div class="user"><span>${escapeHtml(user.username)}</span>${user.avatar ? `<img class="avatar" alt="" src="https://cdn.discordapp.com/avatars/${escapeHtml(user.id)}/${escapeHtml(user.avatar)}.png">` : ''}<a class="btn secondary small" href="/logout">Kilépés</a></div>` : `<a class="btn small" href="/login">${loginLabel}</a>`}</div></header>${user ? `<div class="app"><aside class="sidebar"><div class="side-label">Command Deck</div><a class="side-link active" href="/dashboard">◈ Áttekintés</a>${isOwnerUser(user.id) ? '<a class="side-link" href="/owner">⌾ Owner Center</a>' : ''}<a class="side-link" href="#modules">⬡ Modulok</a><a class="side-link" href="#channels"># Csatornák</a><a class="side-link" href="#roles">◇ Rangok</a><div class="side-label">Rendszerek</div><a class="side-link" href="#community">★ Közösség</a><a class="side-link" href="#shift">◷ Szolgálat</a><a class="side-link" href="#ai">✦ Nexa AI</a><a class="side-link" href="#protection">⬢ Védelem</a><div class="footer-note">${escapeHtml(productName)}<br>NEXA Bot 5.4</div></aside><main>${content}</main></div>` : `<main class="public-main">${content}</main>`}</body></html>`;
+</style></head><body><header class="topbar"><div class="topbar-inner"><a class="brand" href="${homeUrl}"><span class="brand-mark">N</span><span class="brand-text">Nexa<span>Bot</span></span></a><div class="live-pill"><i class="live-dot"></i> NEXA CORE ONLINE</div><nav class="navlinks"><a href="${homeUrl}#platform">${platformLabel}</a><a href="${commandsUrl}">${commandsLabel}</a><a href="${privacyUrl}">${privacyLabel}</a></nav><div class="spacer"></div><div class="locale-switch" aria-label="Language"><a class="${pageLanguage === 'hu' ? 'active' : ''}" href="/">HU</a><a class="${pageLanguage === 'en' ? 'active' : ''}" href="/?lang=en">EN</a></div>${user ? `<div class="user"><span>${escapeHtml(user.username)}</span>${user.avatar ? `<img class="avatar" alt="" src="https://cdn.discordapp.com/avatars/${escapeHtml(user.id)}/${escapeHtml(user.avatar)}.png">` : ''}<a class="btn secondary small" href="/logout">Kilépés</a></div>` : `<a class="btn small" href="/login">${loginLabel}</a>`}</div></header>${user ? `<div class="app"><aside class="sidebar"><div class="side-label">Command Deck</div><a class="side-link active" href="/dashboard">◈ Áttekintés</a>${isOwnerUser(user.id) ? '<a class="side-link" href="/owner">⌾ Owner Center</a>' : ''}<a class="side-link" href="#modules">⬡ Modulok</a><a class="side-link" href="#channels"># Csatornák</a><a class="side-link" href="#roles">◇ Rangok</a><div class="side-label">Rendszerek</div><a class="side-link" href="#community">★ Közösség</a><a class="side-link" href="#shift">◷ Szolgálat</a><a class="side-link" href="#ai">✦ Nexa AI</a><a class="side-link" href="#protection">⬢ Védelem</a><div class="footer-note">${escapeHtml(productName)}<br>NEXA Bot 5.5</div></aside><main>${content}</main></div>` : `<main class="public-main">${content}</main>`}</body></html>`;
 }
 
 function publicLanguage(url) {
@@ -2442,7 +2447,7 @@ function landing(client, session, language = 'hu') {
   const dashboardHref = session ? '/dashboard' : '/login';
   const query = en ? '?lang=en' : '';
   const copy = en ? {
-    eyebrow: 'NEXA BOT 5.4 · DISCORD MANAGEMENT PLATFORM',
+    eyebrow: 'NEXA BOT 5.5 · DISCORD MANAGEMENT PLATFORM',
     headlineA: 'Your server.', headlineB: 'Operating at its next level.',
     lead: 'Moderation, support, community automation, AI and serious server protection in one auditable control system built for growth.',
     dashboard: session ? 'Open dashboard' : 'Sign in with Discord', invite: 'Invite NEXA Bot', explore: 'Explore the platform',
@@ -2454,9 +2459,9 @@ function landing(client, session, language = 'hu') {
     accessKicker: 'Owner-controlled access', accessTitle: 'Capability levels without online payment.', accessLead: 'The bot owner grants access levels directly. There is no checkout, card form or automatic subscription on the site.',
     securityKicker: 'Security architecture', securityTitle: 'Protection that can explain every action.', securityLead: 'Sensitive operations are permission-checked, rate-limited and written to an audit trail. Secrets remain server-side.',
     ctaKicker: 'NEXA is ready', ctaTitle: 'Give your Discord server a real operating system.', ctaLead: 'Invite the bot, sign in with Discord and configure each server independently from a responsive command center.',
-    footer: 'Discord management platform · Version 5.4', privacy: 'Privacy', terms: 'Terms', commands: 'Commands'
+    footer: 'Discord management platform · Version 5.5', privacy: 'Privacy', terms: 'Terms', commands: 'Commands'
   } : {
-    eyebrow: 'NEXA BOT 5.4 · DISCORD MANAGEMENT PLATFORM',
+    eyebrow: 'NEXA BOT 5.5 · DISCORD MANAGEMENT PLATFORM',
     headlineA: 'A szervered.', headlineB: 'Egy szinttel feljebb.',
     lead: 'Moderáció, ügyféltámogatás, közösségi automatizálás, AI és komoly szervervédelem egyetlen auditálható, növekedésre tervezett rendszerben.',
     dashboard: session ? 'Vezérlőpult megnyitása' : 'Belépés Discorddal', invite: 'NEXA Bot meghívása', explore: 'Platform felfedezése',
@@ -2468,7 +2473,7 @@ function landing(client, session, language = 'hu') {
     accessKicker: 'Owner által kezelt hozzáférés', accessTitle: 'Funkciószintek online fizetés nélkül.', accessLead: 'A jogosultsági szinteket közvetlenül a bot tulajdonosa osztja ki. Az oldalon nincs bankkártya, pénztár vagy automatikus előfizetés.',
     securityKicker: 'Biztonsági architektúra', securityTitle: 'Védelem, amely minden döntésről elszámol.', securityLead: 'Az érzékeny műveleteket jogosultság-ellenőrzés, rate limit és auditnapló védi. A titkos kulcsok kizárólag szerveroldalon maradnak.',
     ctaKicker: 'A NEXA készen áll', ctaTitle: 'Adj valódi operációs rendszert a Discord-szerverednek.', ctaLead: 'Hívd meg a botot, lépj be Discorddal, majd állíts be minden szervert külön a mobilbarát irányítóközpontból.',
-    footer: 'Discord management platform · 5.4-es verzió', privacy: 'Adatvédelem', terms: 'Feltételek', commands: 'Parancsok'
+    footer: 'Discord management platform · 5.5-ös verzió', privacy: 'Adatvédelem', terms: 'Feltételek', commands: 'Parancsok'
   };
   const capabilities = en ? [
     ['MD', 'Moderation with context', 'Every action becomes a searchable Case ID instead of disappearing into chat history.', ['Ban, kick and timeout', 'Warnings and clearing', 'Lock and slowmode', 'Member information']],
@@ -2540,7 +2545,7 @@ function publicInfoPage(kind, session, language = 'hu') {
   };
   const [title, description, sections] = pages[kind] || pages.commands;
   const query = en ? '?lang=en' : '';
-  return layout(title, `<section class="hero"><div class="eyebrow">NEXA Bot 5.4</div><h1>${escapeHtml(title)}</h1><p class="lead">${escapeHtml(description)}</p><div class="actions"><a class="btn secondary" href="/${query}">← ${en ? 'Home' : 'Kezdőlap'}</a><a class="btn" href="${escapeHtml(inviteUrl())}">${en ? 'Invite bot' : 'Bot meghívása'}</a></div></section><div class="grid">${sections.map(([name, body]) => `<article class="card"><h2>${escapeHtml(name)}</h2><p class="muted">${escapeHtml(body)}</p></article>`).join('')}</div>`, session, null, language);
+  return layout(title, `<section class="hero"><div class="eyebrow">NEXA Bot 5.5</div><h1>${escapeHtml(title)}</h1><p class="lead">${escapeHtml(description)}</p><div class="actions"><a class="btn secondary" href="/${query}">← ${en ? 'Home' : 'Kezdőlap'}</a><a class="btn" href="${escapeHtml(inviteUrl())}">${en ? 'Invite bot' : 'Bot meghívása'}</a></div></section><div class="grid">${sections.map(([name, body]) => `<article class="card"><h2>${escapeHtml(name)}</h2><p class="muted">${escapeHtml(body)}</p></article>`).join('')}</div>`, session, null, language);
 }
 
 function errorPage(title, message, session = null) {
@@ -2628,7 +2633,7 @@ async function ownerDashboard(client, session, saved = false) {
   const members = guilds.reduce((sum, guild) => sum + Number(guild.memberCount || 0), 0);
   const proCount = guilds.filter((guild) => getGuildPlan(guild.id) === 'pro').length;
   const ultimateCount = guilds.filter((guild) => getGuildPlan(guild.id) === 'ultimate').length;
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 5.4 • Owner Command Center</div><h1>Hálózati irányítóközpont</h1><p class="muted">A teljes botinfrastruktúra, jogosultsági csomagok, védelem és AI-hozzáférés egy helyen.</p></div><a class="btn secondary" href="${escapeHtml(inviteUrl())}">Bot meghívása</a></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 5.5 • Owner Command Center</div><h1>Hálózati irányítóközpont</h1><p class="muted">A teljes botinfrastruktúra, jogosultsági csomagok, védelem és AI-hozzáférés egy helyen.</p></div><a class="btn secondary" href="${escapeHtml(inviteUrl())}">Bot meghívása</a></div>
 ${saved ? '<div class="notice">✅ A tulajdonosi beállítás mentve.</div>' : ''}
 <div class="stats"><div class="stat"><div class="stat-value">${guilds.length}</div><div class="stat-label">Szerver</div></div><div class="stat"><div class="stat-value">${members}</div><div class="stat-label">Összes tag</div></div><div class="stat"><div class="stat-value">${proCount}</div><div class="stat-label">Pro hozzáférés</div></div><div class="stat"><div class="stat-value">${ultimateCount}</div><div class="stat-label">Ultimate hozzáférés</div></div></div>
 <section class="card section"><div class="section-kicker">Élő infrastruktúra</div><h2 class="section-title">Rendszerállapot</h2><div class="stats"><div class="stat"><div class="stat-value">${runtime.ping} ms</div><div class="stat-label">Discord ping</div></div><div class="stat"><div class="stat-value">${Math.floor(runtime.uptimeSeconds / 3600)} óra</div><div class="stat-label">Uptime</div></div><div class="stat"><div class="stat-value">${runtime.memoryMb} MB</div><div class="stat-label">Memória</div></div><div class="stat"><div class="stat-value">${isPersistentStore() ? 'ONLINE' : 'MEMÓRIA'}</div><div class="stat-label">Adatbázis</div></div></div><p class="muted">Node ${escapeHtml(runtime.node)} • AI hívás (30 nap): ${Number(summary.ai || summary.ai_request || 0)} • Interakció: ${Number(summary.interaction || 0)}</p></section>
@@ -2643,6 +2648,11 @@ ${isBotOwner(session.user.id) ? `<section class="card section"><div class="secti
 }
 
 function ownerDocumentsPage(guild, session, saved = false) {
+  const config = getGuildConfig(guild.id);
+  const defaultAccessRoleId = config.documents?.defaultAccessRoleId || null;
+  const defaultAccessRoleName = defaultAccessRoleId
+    ? guild.roles.cache.get(defaultAccessRoleId)?.name || 'Ismeretlen rang'
+    : 'Nincs beállítva';
   const categoryNames = {
     root: 'Alaprendszer',
     informaciok: 'Információk és nyilvántartások',
@@ -2659,14 +2669,14 @@ function ownerDocumentsPage(guild, session, saved = false) {
   const sections = [...groups.entries()].map(([groupKey, types]) => {
     const cards = types.map((type) => {
       const rule = documentRule(guild, type);
-      return `<article class="card"><div class="section-kicker"># ${escapeHtml(type.channel || type.channelPrefix)}</div><h3>${escapeHtml(type.emoji)} ${escapeHtml(type.title)}</h3><div class="field-grid"><div><label for="doc_role_${escapeHtml(type.key)}">Használati rang</label><select id="doc_role_${escapeHtml(type.key)}" name="doc_role_${escapeHtml(type.key)}">${roleOptions(guild, rule.accessRoleId, `Alapértelmezett: ${NAMES.operativeRole}`)}</select><div class="help">Csak ez a rang nyithatja meg és küldheti be az adatlapot.</div></div><div><label class="switch"><input type="checkbox" name="doc_case_${escapeHtml(type.key)}"${rule.caseNumber ? ' checked' : ''}><span><strong>Ügyszám hozzáadása</strong><br><span class="muted">Kikapcsolva a felhívásoknál és egyszerű közleményeknél.</span></span></label></div><div><label class="switch"><input type="checkbox" name="doc_ping_${escapeHtml(type.key)}"${rule.pingTarget ? ' checked' : ''}><span><strong>Személy kiválasztása és pingelése</strong><br><span class="muted">A beküldő Discord-listából választ; ID beírása nem kell.</span></span></label></div></div></article>`;
+      return `<article class="card"><div class="section-kicker"># ${escapeHtml(type.channel || type.channelPrefix)}</div><h3>${escapeHtml(type.emoji)} ${escapeHtml(type.title)}</h3><div class="field-grid"><div><label for="doc_role_${escapeHtml(type.key)}">Használati rang</label><select id="doc_role_${escapeHtml(type.key)}" name="doc_role_${escapeHtml(type.key)}">${roleOptions(guild, rule.overrideAccessRoleId, `Alapértelmezett: ${defaultAccessRoleName}`)}</select><div class="help">Ha itt nem választasz külön rangot, a fenti alapértelmezett használati rang érvényes.</div></div><div><label class="switch"><input type="checkbox" name="doc_case_${escapeHtml(type.key)}"${rule.caseNumber ? ' checked' : ''}><span><strong>Ügyszám hozzáadása</strong><br><span class="muted">Kikapcsolva a felhívásoknál és egyszerű közleményeknél.</span></span></label></div><div><label class="switch"><input type="checkbox" name="doc_ping_${escapeHtml(type.key)}"${rule.pingTarget ? ' checked' : ''}><span><strong>Személy kiválasztása és pingelése</strong><br><span class="muted">A beküldő Discord-listából választ; ID beírása nem kell.</span></span></label></div></div></article>`;
     }).join('');
     return `<section class="section" style="margin-top:28px"><div class="page-head"><div><div class="section-kicker">Dokumentumcsoport</div><h2>${escapeHtml(categoryNames[groupKey] || groupKey)}</h2></div></div><div class="grid">${cards}</div></section>`;
   }).join('');
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 5.4 • Owner Document Control</div><h1>Irat- és jogosultságvezérlés</h1><p class="muted">${escapeHtml(guild.name)} • Dokumentumtípusonkénti ügyszám, személymegjelölés és használati rang.</p></div><a class="btn secondary" href="/owner">← Owner Center</a></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 5.5 • Owner Document Control</div><h1>Irat- és jogosultságvezérlés</h1><p class="muted">${escapeHtml(guild.name)} • Itt állíthatod be, melyik Discord-rang használhatja a dokumentumpaneleket.</p></div><a class="btn secondary" href="/owner">← Owner Center</a></div>
 ${saved ? '<div class="notice">✅ A dokumentumszabályok mentve, a meglévő Discord-panelek frissítve.</div>' : ''}
 <div class="notice warn">Az egyszerű felhívások és tájékoztatások alapból nem kapnak ügyszámot. A hivatalos, jóváhagyásos iratok alapból igen.</div>
-<form method="post" action="/owner/documents/${escapeHtml(guild.id)}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}">${sections}<div class="savebar"><span class="muted">A mentés után a bot frissíti a már kihelyezett dokumentumpaneleket is.</span><button class="btn green" type="submit">Minden szabály mentése</button></div></form>`;
+<form method="post" action="/owner/documents/${escapeHtml(guild.id)}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><section class="card section"><div class="section-kicker">Globális jogosultság</div><h2 class="section-title">Ki használhatja a dokumentumrendszert?</h2><div class="field-grid"><div><label for="doc_default_role">Alapértelmezett használati rang</label><select id="doc_default_role" name="doc_default_role" required>${roleOptions(guild, defaultAccessRoleId, 'Válassz egy rangot')}</select><div class="help">Ez váltja le a korábbi, fix „Operatív állomány” korlátozást. A kiválasztott rang használhatja az összes olyan panelt, amelynél lent nem adsz meg külön rangot.</div></div></div></section>${sections}<div class="savebar"><span class="muted">A mentés után a bot frissíti a már kihelyezett dokumentumpaneleket is.</span><button class="btn green" type="submit">Minden szabály mentése</button></div></form>`;
   return layout(`Iratvezérlés • ${guild.name}`, content, session);
 }
 
@@ -2681,7 +2691,7 @@ async function dashboardList(client, session) {
   const persistence = isPersistentStore() ? '' : '<div class="notice warn">⚠️ Nincs DATABASE_URL beállítva. A módosítások újraindításkor elveszhetnek.</div>';
   const members = guilds.reduce((sum, item) => sum + Number(item.botGuild.memberCount || 0), 0);
   const modules = guilds.reduce((sum, item) => sum + Object.values(getGuildConfig(item.botGuild.id).modules).filter(Boolean).length, 0);
-  return layout('Szervereim', `<div class="page-head"><div><div class="section-kicker">NEXA Bot 5.4 • Command Deck</div><h1>Szerverhálózat</h1><p class="muted">Csak azok a szerverek láthatók, amelyekhez tulajdonosi, adminisztrátori vagy kijelölt kezelői jogosultságod van.</p></div></div><div class="stats"><div class="stat"><div class="stat-value">${guilds.length}</div><div class="stat-label">Kezelt szerver</div></div><div class="stat"><div class="stat-value">${members}</div><div class="stat-label">Összes tag</div></div><div class="stat"><div class="stat-value">${modules}</div><div class="stat-label">Konfigurált modul</div></div><div class="stat"><div class="stat-value">ONLINE</div><div class="stat-label">NEXA Core</div></div></div>${persistence}<div class="grid">${cards}</div>`, session);
+  return layout('Szervereim', `<div class="page-head"><div><div class="section-kicker">NEXA Bot 5.5 • Command Deck</div><h1>Szerverhálózat</h1><p class="muted">Csak azok a szerverek láthatók, amelyekhez tulajdonosi, adminisztrátori vagy kijelölt kezelői jogosultságod van.</p></div></div><div class="stats"><div class="stat"><div class="stat-value">${guilds.length}</div><div class="stat-label">Kezelt szerver</div></div><div class="stat"><div class="stat-value">${members}</div><div class="stat-label">Összes tag</div></div><div class="stat"><div class="stat-value">${modules}</div><div class="stat-label">Konfigurált modul</div></div><div class="stat"><div class="stat-value">ONLINE</div><div class="stat-label">NEXA Core</div></div></div>${persistence}<div class="grid">${cards}</div>`, session);
 }
 
 function option(value, label, selected) {
@@ -3067,7 +3077,7 @@ function defaultHealthSnapshot(client) {
   const startup = process.uptime() < 180;
   return {
     name: 'NexaBot',
-    version: '5.4.0',
+    version: '5.5.0',
     healthy: ready || startup,
     status: ready ? 'online' : startup ? 'starting' : 'offline',
     guilds: client.guilds?.cache?.size || 0,
@@ -3167,13 +3177,17 @@ async function handleRequest(client, request, response, healthProvider = null) {
         const form = await readBody(request);
         if (form.get('csrf') !== session.csrf) return sendHtml(response, 403, errorPage('Lejárt munkamenet', 'Frissítsd az oldalt.', session));
         const current = getGuildConfig(guild.id);
+        const defaultAccessRoleId = validRoleId(guild, form.get('doc_default_role'));
+        if (!defaultAccessRoleId) {
+          return sendHtml(response, 400, errorPage('Használati rang szükséges', 'Válaszd ki, melyik Discord-rang használhatja alapból a dokumentumpaneleket.', session));
+        }
         const types = Object.fromEntries(DOCUMENT_TYPES.map((type) => [type.key, {
           caseNumber: form.has(`doc_case_${type.key}`),
           pingTarget: form.has(`doc_ping_${type.key}`),
           accessRoleId: validRoleId(guild, form.get(`doc_role_${type.key}`))
         }]));
         try {
-          await setGuildConfig(guild.id, { ...current, documents: { types } });
+          await setGuildConfig(guild.id, { ...current, documents: { defaultAccessRoleId, types } });
           await installDocumentPanels(guild, client.user);
           await recordAudit('owner_document_rules_save', { actorId: session.user.id, guildId: guild.id });
           return redirect(response, `/owner/documents/${guild.id}?saved=1`);
@@ -3895,22 +3909,25 @@ function documentModal(type, targetUserId = null) {
 
 function documentRule(guildOrId, type) {
   const guildId = typeof guildOrId === 'string' ? guildOrId : guildOrId?.id;
-  const stored = guildId ? getGuildConfig(guildId).documents?.types?.[type.key] : null;
+  const documents = guildId ? getGuildConfig(guildId).documents : null;
+  const stored = documents?.types?.[type.key];
   return {
     caseNumber: typeof stored?.caseNumber === 'boolean' ? stored.caseNumber : Boolean(type.approval),
     pingTarget: typeof stored?.pingTarget === 'boolean' ? stored.pingTarget : DEFAULT_TARGET_PING_TYPES.has(type.key),
-    accessRoleId: stored?.accessRoleId || null
+    accessRoleId: stored?.accessRoleId || documents?.defaultAccessRoleId || null,
+    overrideAccessRoleId: stored?.accessRoleId || null,
+    defaultAccessRoleId: documents?.defaultAccessRoleId || null
   };
 }
 
 function documentAccessLabel(guild, type) {
   const roleId = documentRule(guild, type).accessRoleId;
-  return roleId ? guild?.roles?.cache?.get(roleId)?.name || `Rang: ${roleId}` : NAMES.operativeRole;
+  return roleId ? guild?.roles?.cache?.get(roleId)?.name || `Rang: ${roleId}` : 'nincs beállítva';
 }
 
 function canUseDocument(member, type) {
   const roleId = documentRule(member?.guild, type).accessRoleId;
-  return roleId ? Boolean(member?.roles?.cache?.has(roleId)) : isOperative(member);
+  return roleId ? Boolean(member?.roles?.cache?.has(roleId)) : false;
 }
 
 function targetPicker(type) {
@@ -3934,7 +3951,7 @@ function documentPanel(type, guild = null) {
         : 'Töltsd ki az adatlapot. A kész bejegyzést a NexaBot teszi közzé ebben a csatornában.'
     )
     .addFields(
-      { name: 'Hozzáférés', value: `Csak a **${documentAccessLabel(guild, type)}** rang használhatja.`, inline: true },
+      { name: 'Hozzáférés', value: rule.accessRoleId ? `Csak a **${documentAccessLabel(guild, type)}** rang használhatja.` : 'Az Owner Centerben még nincs használati rang beállítva.', inline: true },
       { name: 'Ügyszám', value: rule.caseNumber ? 'Bekapcsolva' : 'Kikapcsolva', inline: true },
       { name: 'Személy megjelölése', value: rule.pingTarget ? 'Kötelező' : 'Nincs', inline: true }
     )
@@ -4045,7 +4062,10 @@ async function handleDocumentButton(interaction) {
     const type = findDocumentType(id.split(':')[1]);
     if (!type) return ephemeralError(interaction, 'Ismeretlen dokumentumtípus.');
     if (!canUseDocument(interaction.member, type)) {
-      return ephemeralError(interaction, `Ezt csak a **${documentAccessLabel(interaction.guild, type)}** rang használhatja.`);
+      const rule = documentRule(interaction.guild, type);
+      return ephemeralError(interaction, rule.accessRoleId
+        ? `Ezt csak a **${documentAccessLabel(interaction.guild, type)}** rang használhatja.`
+        : 'Ehhez a dokumentumhoz még nincs használati rang beállítva az Owner Centerben.');
     }
     if (documentRule(interaction.guild, type).pingTarget) {
       return interaction.reply({
@@ -4109,7 +4129,10 @@ async function handleDocumentSelect(interaction) {
   const type = findDocumentType(interaction.customId.split(':')[1]);
   if (!type) return ephemeralError(interaction, 'Ismeretlen dokumentumtípus.');
   if (!canUseDocument(interaction.member, type)) {
-    return ephemeralError(interaction, `Ezt csak a **${documentAccessLabel(interaction.guild, type)}** rang használhatja.`);
+    const rule = documentRule(interaction.guild, type);
+    return ephemeralError(interaction, rule.accessRoleId
+      ? `Ezt csak a **${documentAccessLabel(interaction.guild, type)}** rang használhatja.`
+      : 'Ehhez a dokumentumhoz még nincs használati rang beállítva az Owner Centerben.');
   }
   const targetUserId = interaction.values?.[0];
   if (!/^\d{16,22}$/.test(targetUserId || '')) return ephemeralError(interaction, 'Nem sikerült kiválasztani a személyt.');
@@ -4122,7 +4145,10 @@ async function handleDocumentModal(interaction) {
     const type = findDocumentType(typeKey);
     if (!type) return ephemeralError(interaction, 'Ismeretlen dokumentumtípus.');
     if (!canUseDocument(interaction.member, type)) {
-      return ephemeralError(interaction, `Ezt csak a **${documentAccessLabel(interaction.guild, type)}** rang használhatja.`);
+      const rule = documentRule(interaction.guild, type);
+      return ephemeralError(interaction, rule.accessRoleId
+        ? `Ezt csak a **${documentAccessLabel(interaction.guild, type)}** rang használhatja.`
+        : 'Ehhez a dokumentumhoz még nincs használati rang beállítva az Owner Centerben.');
     }
     const rule = documentRule(interaction.guild, type);
     const targetUserId = rule.pingTarget && /^\d{16,22}$/.test(selectedUserId || '') ? selectedUserId : null;
@@ -4452,7 +4478,7 @@ function helpEmbed(category = null, language = 'hu') {
       .setTitle(language === 'en' ? '✨ NEXA Bot Help Center' : '✨ NEXA Bot Súgóközpont')
       .setDescription(language === 'en' ? 'Choose a category below. I will show only the commands and usage for that system.' : 'Válassz egy kategóriát az alábbi menüből. Csak az adott rendszer parancsait és használatát mutatom meg.')
       .addFields({ name: language === 'en' ? 'Tip' : 'Tipp', value: language === 'en' ? 'Most features are also available through buttons in the Discord Control Center and the web dashboard.' : 'A legtöbb funkció a Discord Control Center gombjaival és a webes dashboardon is használható.' })
-      .setFooter({ text: 'NEXA Bot 5.4 • Management Platform' });
+      .setFooter({ text: 'NEXA Bot 5.5 • Management Platform' });
   }
   const item = CATEGORIES[category];
   const englishTitles = { moderation: 'Moderation', utility: 'Utility', security: 'Security', tickets: 'Tickets', levels: 'Levels', giveaway: 'Giveaway', ai: 'AI', admin: 'Admin' };
@@ -4460,7 +4486,7 @@ function helpEmbed(category = null, language = 'hu') {
     .setColor(COLORS.primary)
     .setTitle(`${item.emoji} ${language === 'en' ? englishTitles[category] : item.title}`)
     .setDescription(language === 'en' ? item.en : item.text)
-    .setFooter({ text: language === 'en' ? 'NEXA Bot 5.4 • Choose another category from the menu' : 'NEXA Bot 5.4 • Válassz másik kategóriát a menüből' });
+    .setFooter({ text: language === 'en' ? 'NEXA Bot 5.5 • Choose another category from the menu' : 'NEXA Bot 5.5 • Válassz másik kategóriát a menüből' });
 }
 
 function buildHelpCommand() {
@@ -4610,7 +4636,7 @@ client.once(Events.ClientReady, async (readyClient) => {
     await registerCommands();
     console.log(`NexaBot elindult: ${readyClient.user.tag}`);
     await restoreGiveaways(readyClient);
-    console.log('A NEXA Bot 5.4 Owner Document Control platform használatra kész.');
+    console.log('A NEXA Bot 5.5 Owner Access Control platform használatra kész.');
   } catch (error) {
     console.error('A parancs regisztrálása nem sikerült:', error);
     await recordError(error, { command: 'registerCommands' });
@@ -6354,7 +6380,7 @@ module.exports = {
 const { Events, Status } = require('discord.js');
 const { databaseHealth } = require('./config');
 
-const APP_VERSION = '5.4.0';
+const APP_VERSION = '5.5.0';
 
 function positiveInteger(value, fallback, minimum = 1_000, maximum = 60 * 60 * 1000) {
   const parsed = Number.parseInt(value, 10);
