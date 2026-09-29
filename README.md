@@ -1,4 +1,4 @@
-# NEXA Bot 5.5 Owner Access Control
+# NEXA Bot 6.0 Production Platform
 
 Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Az opcionális RP- és dokumentumrendszert kizárólag a bot tulajdonosa vagy az általa kijelölt Owner-kezelő kapcsolhatja be egy kiválasztott szerveren.
 
@@ -9,6 +9,7 @@
 - professzionális, kétnyelvű publikus bemutatóoldal élő szerver-, tagszám-, ping-, uptime- és adatbázis-állapottal;
 - Discord OAuth2 dashboard tulajdonos, admin és egy kijelölt kezelői rang részére;
 - külön Owner Center: szerverhálózat, uptime, ping, memória, adatbázis, használat, hibák és audit;
+- kereshető, lapozott Owner szerverlista és szerverenkénti részletes állapotlap modul-, csatorna-, rang-, jogosultság-, NEXA Shield-, audit- és hibanézettel;
 - owner-kezelők, AI-engedélylista, user/guild blacklist, maintenance és globális modul-vészkapcsoló;
 - Owner által ingyen kiosztható Free, Pro és Ultimate jogosultsági csomagok, megadható lejárattal vagy korlátlan időre;
 - Owner-only RP modul: szerverenkénti engedélyezés, TGF, részletes dokumentumpanelek és vezetői jóváhagyás;
@@ -32,6 +33,7 @@
 - külön liveness/readiness végpont, valós Discord-állapottal, indulási türelmi idővel és adatbázis-állapotjelzéssel;
 - PostgreSQL kapcsolat-időkorlát, automatikus állapotellenőrzés és háttérben történő visszacsatlakozás;
 - központi error handler, audit-, command-, dashboard- és AI használati napló.
+- kétlépcsős Discord interakciós rate limit felhasználó és szerver szerint, automatikus telemetria- és AI-előzménytisztítással;
 
 ## Owner által kezelt csomagok
 
@@ -90,6 +92,13 @@ src/
 | `DISCORD_MAX_OFFLINE_MS` | nem | Ennyi tartós Discord-kiesés után indul újra a process; alapérték 180 000 ms |
 | `STARTUP_GRACE_MS` | nem | Indulási türelmi idő; alapérték 180 000 ms |
 | `WATCHDOG_INTERVAL_MS` | nem | Gateway-ellenőrzés gyakorisága; alapérték 15 000 ms |
+| `INTERACTION_WINDOW_MS` | nem | Discord interakciós rate limit időablaka; alapérték 10 000 ms |
+| `INTERACTION_USER_LIMIT` | nem | Egy felhasználó súlyozott interakciós limitje időablakonként; alapérték 18 |
+| `INTERACTION_GUILD_LIMIT` | nem | Egy szerver súlyozott interakciós limitje időablakonként; alapérték 220 |
+| `TELEMETRY_RETENTION_DAYS` | nem | Használati események megőrzése; alapérték 90 nap |
+| `ERROR_RETENTION_DAYS` | nem | Hibanaplók megőrzése; alapérték 180 nap |
+| `AUDIT_RETENTION_DAYS` | nem | Auditnaplók megőrzése; alapérték 365 nap |
+| `AI_HISTORY_RETENTION_DAYS` | nem | AI beszélgetési előzmények megőrzése; alapérték 30 nap |
 | `SHARD_COUNT` | nem | Kézi shard szám; nélküle automatikus |
 | `DATABASE_SSL` | nem | Renderen `true` |
 | `PORT` | nem | Render automatikusan beállítja |
@@ -140,12 +149,12 @@ Az állapotvégpontok:
 - `/health/live`: a Node.js folyamat fut-e;
 - `/health`: a Discord gateway ténylegesen üzemkész-e. Induláskor rövid türelmi időt ad, tartós kiesésnél `503` választ küld, hogy a hosting újra tudja indítani a szolgáltatást.
 
-> **Fontos a folyamatos online állapothoz:** a Render Free web service 15 perc bejövő forgalom nélküli inaktivitás után leáll, és a Render időnként újra is indíthatja. Ezt alkalmazáskóddal nem lehet megbízhatóan kikapcsolni. Valódi 0–24 üzemhez fizetős Render instance, production PostgreSQL és bekapcsolt health check szükséges. A watchdog a program- és kapcsolat-hibákat helyreállítja, de a Free csomag kényszerített alvását nem tudja megszüntetni.
+> **Folyamatos online állapot:** a `render.yaml` fizetős `0.5c-512mb` compute csomagra van beállítva, ezért nincs Free inaktivitási alvás. A szolgáltató karbantartási újraindításai továbbra is előfordulhatnak; a health check, a szabályos leállítás és a gateway-watchdog automatikusan helyreállítja a folyamatot. Production PostgreSQL használata szükséges ahhoz, hogy az adatok újraindítás után is megmaradjanak.
 
 A sikeres logban ez jelenik meg:
 
 ```text
-A NEXA Bot 5.5 Owner Access Control platform használatra kész.
+A NEXA Bot 6.0 production platform használatra kész.
 ```
 
 ## Használat
@@ -174,7 +183,7 @@ A NEXA Bot 5.5 Owner Access Control platform használatra kész.
 
 - paraméterezett SQL lekérdezések;
 - OAuth state, HttpOnly/SameSite/Secure session cookie és CSRF token;
-- Content Security Policy, XSS-kódolás, kérésméret-limit és IP-alapú rate limit;
+- Content Security Policy, Permissions Policy, cross-origin izoláció, XSS-kódolás, kérésméret-limit, IP- és Discord-interakciós rate limit;
 - Discord jogosultság és rangsorrend ellenőrzése;
 - a szervertulajdonos, Admin/Vezetőség, külön whitelistelt tagok és engedélyezett bot-ID-k biztonságos kivétele;
 - az AI kulcs és Discord token nem jelenik meg a dashboardon vagy logokban;

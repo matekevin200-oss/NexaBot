@@ -2,11 +2,12 @@ services:
   - type: web
     name: nexabot
     runtime: node
-    plan: free
+    plan: 0.5c-512mb
     region: frankfurt
     buildCommand: npm ci
     startCommand: npm start
     healthCheckPath: /health
+    maxShutdownDelaySeconds: 90
     envVars:
       - key: DISCORD_TOKEN
         sync: false
@@ -36,6 +37,20 @@ services:
         value: "180000"
       - key: WATCHDOG_INTERVAL_MS
         value: "15000"
+      - key: INTERACTION_WINDOW_MS
+        value: "10000"
+      - key: INTERACTION_USER_LIMIT
+        value: "18"
+      - key: INTERACTION_GUILD_LIMIT
+        value: "220"
+      - key: TELEMETRY_RETENTION_DAYS
+        value: "90"
+      - key: ERROR_RETENTION_DAYS
+        value: "180"
+      - key: AUDIT_RETENTION_DAYS
+        value: "365"
+      - key: AI_HISTORY_RETENTION_DAYS
+        value: "30"
       - key: PUBLIC_URL
         sync: false
       - key: NODE_VERSION
