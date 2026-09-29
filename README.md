@@ -1,4 +1,4 @@
-# NEXA Bot 6.0 Production Platform
+# NEXA Bot 6.1 Engagement Platform
 
 Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Az opcionális RP- és dokumentumrendszert kizárólag a bot tulajdonosa vagy az általa kijelölt Owner-kezelő kapcsolhatja be egy kiválasztott szerveren.
 
@@ -24,6 +24,9 @@
 - kategóriás ticketek, claim/unclaim, lezárás és automatikus HTML transcript;
 - welcome/goodbye placeholder, külön ember- és bot-autorang;
 - XP, szintek, ranglista, önkiszolgáló rangpanel, ötletek, szavazás, bejelentés és giveaway;
+- egykattintásos tagellenőrzőpanel külön ellenőrzött ranggal és auditnaplóval;
+- konfigurálható Starboard a legtöbb ⭐ reakciót kapó üzenetek automatikus kiemelésére;
+- PostgreSQL-alapú személyes emlékeztetők, amelyek bot-újraindítás után is megmaradnak;
 - PostgreSQL-alapú saját `!parancsok`, webes létrehozással;
 - Shift Management és ideiglenes hangcsatornák;
 - Nexa AI kijelölt csatornában és DM-ben, cooldownnal, korlátozott előzménnyel és beleegyezéses memóriával;
@@ -41,8 +44,8 @@ Nincs bankkártyás fizetés és nincs automatikus előfizetés. A szerverek cso
 
 | Csomag | Elérhető rendszerek |
 |---|---|
-| Free | Moderáció, welcome/autorole, ticket és részletes naplózás |
-| Pro | Minden Free funkció, Automod, XP, rangpanelek, giveaway, custom commands, közösségi és shift modulok |
+| Free | Moderáció, welcome/autorole, ticket, naplózás, gombos tagellenőrzés és tartós emlékeztetők |
+| Pro | Minden Free funkció, Automod, XP, rangpanelek, Starboard, giveaway, custom commands, közösségi és shift modulok |
 | Ultimate | Minden Pro funkció, Nexa AI, teljes Anti-Nuke, raid detection és automatikus szerverlezárás |
 
 Az Owner által RP-re engedélyezett szerver automatikusan Ultimate hozzáférést kap. A régi `premium` adatbázis-bejegyzéseket az induló migráció Ultimate csomagra alakítja.
@@ -56,6 +59,7 @@ src/
   config.js            PostgreSQL, migrációk, szerver- és owner-beállítás
   dashboard.js         OAuth2 Command Deck, Owner Center, publikus oldalak
   interactions.js      gombok, select menük, modalok és ticket workflow
+  engagement.js        tagellenőrzés, Starboard és tartós emlékeztetők
   moderation.js        slash moderáció és Case ID
   security.js          Automod, raidvédelem és Anti-Nuke
   telemetry.js         használat, audit, hiba és runtime statisztika
@@ -154,13 +158,16 @@ Az állapotvégpontok:
 A sikeres logban ez jelenik meg:
 
 ```text
-A NEXA Bot 6.0 production platform használatra kész.
+A NEXA Bot 6.1 engagement platform használatra kész.
 ```
 
 ## Használat
 
 - `/beallitas`: megnyitja az adott szerver dashboardját;
 - `/help`: kategóriás súgó;
+- `/hitelesites panel`: kihelyezi vagy frissíti a gombos tagellenőrzőpanelt;
+- `/emlekezteto letrehozas`: személyes emlékeztetőt készít (`10m`, `2h`, `3d`, `1w` formátum);
+- `/emlekezteto lista` és `/emlekezteto torles`: kezeli a saját aktív emlékeztetőket;
 - válaszd ki a fő Discord Control Center csatornát, majd ments;
 - a szerver nyelve ugyanott állítható `Magyar` vagy `English` értékre;
 - a bot mentéskor frissíti a Discord-paneleket;

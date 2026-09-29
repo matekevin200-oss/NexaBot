@@ -1,8 +1,8 @@
 {
   "name": "nexabot",
-  "version": "6.0.0",
+  "version": "6.1.0",
   "private": true,
-  "description": "NEXA Bot 6.0 több szerveres Discord management platform Owner Centerrel és NEXA Shield védelemmel",
+  "description": "NEXA Bot 6.1 több szerveres Discord platform Owner Centerrel, NEXA Shielddel és Engagement Suite-tal",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {

@@ -1,4 +1,4 @@
-// NEXA Bot 6.0 single-file release — generated automatically.
+// NEXA Bot 6.1 single-file release — generated automatically.
 const __nativeRequire = require;
 const __path = __nativeRequire('node:path').posix;
 const __modules = {
@@ -1112,6 +1112,9 @@ const MODULE_KEYS = Object.freeze([
   'shift',
   'ai',
   'tempVoice',
+  'verification',
+  'starboard',
+  'reminders',
   'bvi'
 ]);
 const CHANNEL_KEYS = Object.freeze([
@@ -1129,10 +1132,12 @@ const CHANNEL_KEYS = Object.freeze([
   'suggestions',
   'shiftLogs',
   'announcements',
+  'verification',
+  'starboard',
   'tempVoiceLobby',
   'tempVoiceCategory'
 ]);
-const ROLE_KEYS = Object.freeze(['staff', 'auto', 'human', 'bot', 'dashboard', 'shift']);
+const ROLE_KEYS = Object.freeze(['staff', 'auto', 'human', 'bot', 'dashboard', 'shift', 'verified']);
 const LOG_KEYS = Object.freeze(['messageDelete', 'messageEdit', 'memberJoin', 'memberLeave', 'ban', 'timeout', 'roleUpdate', 'channelUpdate', 'voiceJoin', 'voiceLeave', 'nicknameChange', 'invite', 'moderation', 'automod', 'security']);
 
 const PLAN_LEVELS = Object.freeze({ free: 0, pro: 1, ultimate: 2 });
@@ -1150,6 +1155,9 @@ const MODULE_MINIMUM_PLAN = Object.freeze({
   shift: 'pro',
   ai: 'ultimate',
   tempVoice: 'pro',
+  verification: 'free',
+  starboard: 'pro',
+  reminders: 'free',
   bvi: 'ultimate'
 });
 
@@ -1257,6 +1265,9 @@ function defaultConfig(guildId) {
       shift: false,
       ai: false,
       tempVoice: false,
+      verification: false,
+      starboard: false,
+      reminders: false,
       bvi
     },
     channels: Object.fromEntries(CHANNEL_KEYS.map((key) => [key, null])),
@@ -1302,6 +1313,7 @@ function defaultConfig(guildId) {
       xpCooldownSeconds: 60,
       xpMin: 8,
       xpMax: 15,
+      starboardThreshold: 3,
       selfRoles: [],
       rewardRoles: []
     },
@@ -1384,9 +1396,11 @@ function sanitizeConfig(guildId, input = {}) {
   const cooldown = Number.parseInt(input.community?.xpCooldownSeconds, 10);
   const xpMin = Number.parseInt(input.community?.xpMin, 10);
   const xpMax = Number.parseInt(input.community?.xpMax, 10);
+  const starboardThreshold = Number.parseInt(input.community?.starboardThreshold, 10);
   config.community.xpCooldownSeconds = Number.isInteger(cooldown) ? Math.min(300, Math.max(15, cooldown)) : 60;
   config.community.xpMin = Number.isInteger(xpMin) ? Math.min(50, Math.max(1, xpMin)) : 8;
   config.community.xpMax = Number.isInteger(xpMax) ? Math.min(100, Math.max(config.community.xpMin, xpMax)) : 15;
+  config.community.starboardThreshold = Number.isInteger(starboardThreshold) ? Math.min(25, Math.max(2, starboardThreshold)) : 3;
   config.community.selfRoles = [...new Set((Array.isArray(input.community?.selfRoles) ? input.community.selfRoles : [])
     .map(sanitizeId)
     .filter(Boolean))].slice(0, 10);
@@ -1687,10 +1701,39 @@ async function initializeConfigStore() {
         roles JSONB NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+      CREATE TABLE IF NOT EXISTS nexabot_reminders (
+        id BIGSERIAL PRIMARY KEY,
+        guild_id TEXT NOT NULL,
+        channel_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        message TEXT NOT NULL,
+        due_at TIMESTAMPTZ NOT NULL,
+        sent BOOLEAN NOT NULL DEFAULT FALSE,
+        sent_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS nexabot_reminder_due_lookup
+        ON nexabot_reminders (due_at ASC) WHERE sent = FALSE;
+      CREATE INDEX IF NOT EXISTS nexabot_reminder_user_lookup
+        ON nexabot_reminders (guild_id, user_id, due_at ASC) WHERE sent = FALSE;
+      CREATE TABLE IF NOT EXISTS nexabot_starboard (
+        guild_id TEXT NOT NULL,
+        message_id TEXT NOT NULL,
+        channel_id TEXT NOT NULL,
+        starboard_message_id TEXT NOT NULL,
+        score INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (guild_id, message_id)
+      );
+      CREATE INDEX IF NOT EXISTS nexabot_starboard_score_lookup
+        ON nexabot_starboard (guild_id, score DESC);
       INSERT INTO nexabot_schema_migrations (version, name)
       VALUES (1, 'nexabot_4_core') ON CONFLICT (version) DO NOTHING;
       INSERT INTO nexabot_schema_migrations (version, name)
       VALUES (2, 'nexabot_6_owner_observability_indexes') ON CONFLICT (version) DO NOTHING;
+      INSERT INTO nexabot_schema_migrations (version, name)
+      VALUES (3, 'nexabot_6_1_engagement_suite') ON CONFLICT (version) DO NOTHING;
     `);
     const result = await pool.query('SELECT guild_id, config FROM nexabot_guild_configs');
     for (const row of result.rows) cache.set(row.guild_id, mergeStoredConfig(row.guild_id, row.config));
@@ -2303,6 +2346,7 @@ const {
 const { securityReadiness } = require('./security');
 const { guildCommands, saveCustomCommand, deleteCustomCommand } = require('./custom-commands');
 const { DOCUMENT_TYPES, documentRule, installDocumentPanels } = require('./documents');
+const { upsertVerificationPanel } = require('./engagement');
 
 const sessions = new Map();
 const oauthStates = new Map();
@@ -2455,7 +2499,7 @@ function layout(title, content, session = null, branding = null, language = 'hu'
 :root{color-scheme:dark;--bg:#05070d;--panel:#0b0f19;--card:#101725;--card2:#171f31;--line:#29344c;--text:#f8f9ff;--muted:#9ca8bf;--primary:${primary};--accent:${accent};--cyan:#54d7ff;--red:#ff6174;--gold:#ffca64;--shadow:0 28px 90px rgba(0,0,0,.42)}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(1100px 650px at 78% -10%,color-mix(in srgb,var(--primary) 29%,transparent),transparent 70%),radial-gradient(760px 520px at -8% 28%,rgba(84,215,255,.10),transparent 72%),linear-gradient(180deg,#060812 0,var(--bg) 42%);color:var(--text);font:16px/1.58 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;min-height:100vh}a{color:inherit}.topbar{position:sticky;top:0;z-index:20;height:72px;background:rgba(5,7,13,.76);backdrop-filter:blur(24px);border-bottom:1px solid rgba(255,255,255,.075)}.topbar-inner{height:100%;padding:0 24px;display:flex;align-items:center;gap:14px}.brand{display:flex;align-items:center;gap:11px;font-size:19px;font-weight:900;text-decoration:none;letter-spacing:-.4px}.brand-mark{width:40px;height:40px;display:grid;place-items:center;border-radius:14px;background:linear-gradient(145deg,var(--primary),#2b1f70);box-shadow:0 0 0 1px rgba(255,255,255,.14),0 12px 34px color-mix(in srgb,var(--primary) 38%,transparent);position:relative}.brand-mark::after{content:"";position:absolute;inset:5px;border:1px solid rgba(255,255,255,.22);border-radius:10px}.brand span{color:var(--accent)}.live-pill{display:flex;align-items:center;gap:7px;border:1px solid rgba(82,224,164,.25);background:rgba(82,224,164,.07);color:#b8f8df;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:800}.live-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}.spacer{flex:1}.user{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:13px}.avatar{width:38px;height:38px;border-radius:13px;background:var(--card2);border:1px solid var(--line)}.app{display:grid;grid-template-columns:260px minmax(0,1fr);min-height:calc(100vh - 72px)}.sidebar{position:sticky;top:72px;height:calc(100vh - 72px);padding:24px 16px;border-right:1px solid rgba(255,255,255,.07);background:linear-gradient(180deg,rgba(11,15,25,.92),rgba(7,10,17,.62))}.side-label{padding:8px 12px;color:#65708a;font-size:11px;font-weight:900;letter-spacing:1.5px;text-transform:uppercase}.side-link{display:flex;align-items:center;gap:10px;margin:3px 0;padding:11px 12px;border-radius:11px;color:var(--muted);font-weight:700;text-decoration:none}.side-link:hover,.side-link.active{color:#fff;background:linear-gradient(90deg,color-mix(in srgb,var(--primary) 26%,transparent),rgba(84,215,255,.035));box-shadow:inset 3px 0 var(--primary)}main{width:100%;max-width:1320px;margin:0 auto;padding:36px 32px 96px}.public-main{max-width:1240px}.hero{padding:80px 0 52px}.eyebrow{display:inline-flex;align-items:center;gap:8px;padding:7px 11px;border:1px solid color-mix(in srgb,var(--primary) 35%,transparent);border-radius:999px;background:color-mix(in srgb,var(--primary) 9%,transparent);color:#d6ceff;font-size:12px;font-weight:900;letter-spacing:.7px;text-transform:uppercase}.hero h1{max-width:960px;font-size:clamp(44px,8vw,88px);line-height:.96;margin:22px 0;letter-spacing:-4px}.gradient{background:linear-gradient(105deg,#fff 18%,color-mix(in srgb,var(--primary) 65%,#fff) 57%,var(--cyan));-webkit-background-clip:text;color:transparent}.lead{color:var(--muted);max-width:780px;font-size:clamp(17px,2vw,21px)}.actions{display:flex;flex-wrap:wrap;gap:11px;margin-top:28px}.btn{border:0;border-radius:12px;background:linear-gradient(135deg,var(--primary),color-mix(in srgb,var(--primary) 65%,#221c54));color:#fff;padding:12px 17px;font:inherit;font-weight:850;text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 10px 28px color-mix(in srgb,var(--primary) 25%,transparent);transition:.18s transform,.18s border-color,.18s filter}.btn:hover{transform:translateY(-2px);filter:brightness(1.08)}.btn.secondary{background:rgba(255,255,255,.035);border:1px solid var(--line);box-shadow:none}.btn.green{background:linear-gradient(135deg,#168b64,#11634b);box-shadow:0 10px 25px rgba(22,139,100,.18)}.btn.small{padding:8px 11px;font-size:12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:15px}.bento{grid-template-columns:repeat(12,1fr)}.bento .card{grid-column:span 4}.card{position:relative;overflow:hidden;background:linear-gradient(145deg,rgba(19,27,43,.96),rgba(10,14,24,.96));border:1px solid rgba(255,255,255,.09);border-radius:20px;padding:22px;box-shadow:var(--shadow)}.card::before{content:"";position:absolute;width:190px;height:190px;border-radius:50%;background:color-mix(in srgb,var(--primary) 9%,transparent);filter:blur(52px);right:-90px;top:-100px;pointer-events:none}.card h2,.card h3{position:relative;margin:0 0 8px;letter-spacing:-.3px}.feature-icon{width:46px;height:46px;display:grid;place-items:center;border:1px solid color-mix(in srgb,var(--primary) 28%,transparent);border-radius:14px;background:color-mix(in srgb,var(--primary) 12%,transparent);font-size:22px;margin-bottom:16px}.muted{color:var(--muted)}.notice{padding:13px 15px;border-radius:12px;margin:0 0 18px;background:rgba(82,224,164,.08);border:1px solid rgba(82,224,164,.25);color:#bdf7df}.warn{background:rgba(244,185,66,.08);border-color:rgba(244,185,66,.26);color:#ffe2a5}.error{background:rgba(239,91,108,.09);border-color:rgba(239,91,108,.28);color:#ffc0ca}.server{display:flex;align-items:center;gap:14px}.server img,.server-icon{width:56px;height:56px;border-radius:17px;background:var(--card2);display:grid;place-items:center;font-size:20px;font-weight:900;border:1px solid var(--line)}.server-body{min-width:0;flex:1}.server-body h1,.server-body h3{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0}.page-head{display:flex;align-items:center;gap:15px;margin-bottom:24px}.page-head h1{font-size:clamp(30px,5vw,46px);letter-spacing:-1.5px}.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:20px 0}.stat{padding:17px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(145deg,rgba(255,255,255,.035),rgba(255,255,255,.012))}.stat-value{font-size:25px;font-weight:900}.stat-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px}.section{scroll-margin-top:94px}.section-title{display:flex;align-items:center;gap:9px;margin:0 0 14px;font-size:22px}.section-kicker{font-size:11px;text-transform:uppercase;letter-spacing:1.15px;color:#a99cff;font-weight:900}.settings{display:grid;grid-template-columns:1fr;gap:17px}.field-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(225px,1fr));gap:14px}.module-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}label{display:block;font-weight:750;margin-bottom:6px}.switch{display:flex;align-items:flex-start;gap:11px;background:rgba(255,255,255,.026);border:1px solid var(--line);border-radius:14px;padding:13px;margin:0;min-height:60px}.switch:hover{border-color:color-mix(in srgb,var(--primary) 45%,var(--line))}.switch input{width:20px;height:20px;accent-color:var(--primary);flex:0 0 auto;margin-top:2px}.switch.locked{opacity:.64;border-style:dashed;background:rgba(255,255,255,.014)}.plan-tag{display:inline-flex;margin-left:6px;padding:2px 7px;border-radius:999px;background:linear-gradient(135deg,#6950ff,#294d86);font-size:10px;letter-spacing:.8px;color:#fff}select,textarea,input[type=text],input[type=number],input[type=url],input[type=color]{width:100%;border:1px solid var(--line);border-radius:11px;background:#080c15;color:#fff;padding:11px;font:inherit;outline:none}select:focus,textarea:focus,input:focus{border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 14%,transparent)}input[type=color]{height:46px;padding:5px}textarea{min-height:105px;resize:vertical}.help{font-size:12px;color:var(--muted);margin-top:5px}.savebar{position:sticky;bottom:12px;z-index:8;background:rgba(15,21,34,.94);backdrop-filter:blur(20px);border:1px solid var(--line);border-radius:16px;padding:11px 13px;display:flex;align-items:center;gap:12px;box-shadow:0 18px 58px #000}.savebar .btn{margin-left:auto}.footer-note{text-align:center;color:#59647a;font-size:12px;margin-top:42px}@media(max-width:900px){.app{grid-template-columns:1fr}.sidebar{display:none}.bento .card{grid-column:span 6}.stats{grid-template-columns:repeat(2,1fr)}main{padding:26px 18px 82px}}@media(max-width:600px){.topbar{height:64px}.topbar-inner{padding:0 14px}.brand-text,.user span,.live-pill{display:none}.app{min-height:calc(100vh - 64px)}main{padding:22px 13px 78px}.hero{padding-top:42px}.hero h1{letter-spacing:-2.4px}.bento{display:grid;grid-template-columns:1fr}.bento .card{grid-column:auto}.card{padding:16px;border-radius:15px}.stats{grid-template-columns:1fr 1fr}.stat{padding:13px}.stat-value{font-size:20px}.savebar{bottom:7px}.savebar .muted{font-size:11px}.page-head{align-items:flex-start}}
 .badge{display:inline-block;padding:3px 8px;border-radius:999px;background:rgba(82,224,164,.12);color:var(--accent);font-size:10px;font-weight:900;letter-spacing:.7px;vertical-align:middle}.badge.pro{background:rgba(124,92,255,.16);color:#c9c0ff}.badge.ultimate{background:linear-gradient(135deg,rgba(124,92,255,.25),rgba(84,215,255,.14));color:#dcd8ff}.command-deck{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(320px,.88fr);gap:18px;align-items:stretch}.deck-panel{min-height:390px;background:linear-gradient(145deg,rgba(16,23,38,.97),rgba(7,11,20,.98));border:1px solid rgba(255,255,255,.1);border-radius:24px;padding:20px;box-shadow:0 36px 110px rgba(0,0,0,.48);position:relative;overflow:hidden}.deck-panel::after{content:"";position:absolute;inset:auto -80px -110px auto;width:280px;height:280px;border-radius:50%;background:color-mix(in srgb,var(--cyan) 13%,transparent);filter:blur(50px)}.deck-top{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:16px}.deck-row{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;padding:13px;border:1px solid rgba(255,255,255,.07);border-radius:14px;background:rgba(255,255,255,.022);margin:9px 0}.deck-row strong{display:block}.pulse{width:9px;height:9px;background:var(--accent);border-radius:50%;box-shadow:0 0 0 6px rgba(82,224,164,.08),0 0 18px var(--accent)}.metric-orbit{display:grid;place-items:center;min-height:390px}.orbit{width:min(320px,78vw);aspect-ratio:1;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at center,#111a2c 0 37%,transparent 38%),conic-gradient(from 20deg,var(--primary),var(--cyan),var(--accent),var(--primary));padding:2px;box-shadow:0 0 90px color-mix(in srgb,var(--primary) 20%,transparent)}.orbit-core{width:76%;height:76%;border-radius:50%;background:#090e19;display:grid;place-items:center;text-align:center;border:1px solid rgba(255,255,255,.1)}.orbit-core strong{font-size:52px;line-height:1}.eyeline{height:1px;background:linear-gradient(90deg,transparent,var(--primary),var(--cyan),transparent);margin:58px 0 32px}.feature-wide{grid-column:span 8!important}.feature-narrow{grid-column:span 4!important}.navlinks{display:flex;gap:6px}.navlinks a{color:var(--muted);text-decoration:none;font-size:13px;font-weight:750;padding:8px 10px;border-radius:9px}.navlinks a:hover{color:#fff;background:rgba(255,255,255,.05)}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:9px 6px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.7px}@media(max-width:900px){.command-deck{grid-template-columns:1fr}.feature-wide,.feature-narrow{grid-column:span 6!important}.navlinks{display:none}}@media(max-width:600px){.feature-wide,.feature-narrow{grid-column:auto!important}.deck-panel,.metric-orbit{min-height:330px}}
 .marketing{isolation:isolate}.marketing .hero{display:grid;grid-template-columns:minmax(0,1.02fr) minmax(430px,.98fr);align-items:center;gap:54px;padding:94px 0 68px;min-height:720px}.marketing .hero-copy{position:relative;z-index:2}.marketing .hero h1{font-size:clamp(52px,7.4vw,96px);max-width:820px;margin:24px 0;line-height:.91;letter-spacing:-5px}.hero-proof{display:flex;flex-wrap:wrap;gap:18px;margin-top:28px;color:#c0c9dc;font-size:13px;font-weight:750}.hero-proof span{display:flex;align-items:center;gap:8px}.hero-proof i{width:19px;height:19px;border-radius:7px;background:rgba(82,224,164,.11);border:1px solid rgba(82,224,164,.28);display:grid;place-items:center;color:var(--accent);font-style:normal;font-size:11px}.product-stage{position:relative;min-height:610px;display:grid;place-items:center}.product-stage::before{content:"";position:absolute;width:78%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--primary) 28%,transparent),transparent 67%);filter:blur(14px)}.product-shell{position:relative;width:100%;max-width:590px;border:1px solid rgba(255,255,255,.13);border-radius:26px;background:linear-gradient(155deg,rgba(17,24,40,.98),rgba(6,9,17,.98));box-shadow:0 54px 130px rgba(0,0,0,.62),0 0 0 1px rgba(124,92,255,.06);overflow:hidden;transform:perspective(1100px) rotateY(-4deg) rotateX(2deg);animation:deckFloat 8s ease-in-out infinite}.shell-bar{height:52px;border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:7px;padding:0 17px}.shell-bar i{width:8px;height:8px;border-radius:50%;background:#394359}.shell-bar i:first-child{background:var(--red)}.shell-bar i:nth-child(2){background:var(--gold)}.shell-bar i:nth-child(3){background:var(--accent)}.shell-title{margin-left:auto;color:#707c94;font-size:11px;letter-spacing:1px;text-transform:uppercase}.shell-body{display:grid;grid-template-columns:142px 1fr;min-height:470px}.shell-side{padding:17px 11px;border-right:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.018)}.shell-brand{display:flex;align-items:center;gap:8px;padding:4px 7px 17px;font-size:12px;font-weight:900}.shell-brand b{width:27px;height:27px;border-radius:9px;display:grid;place-items:center;background:linear-gradient(145deg,var(--primary),#35277e)}.shell-link{padding:9px;border-radius:9px;color:#758198;font-size:11px;font-weight:750;margin:3px 0}.shell-link.active{color:#fff;background:linear-gradient(90deg,rgba(124,92,255,.28),rgba(124,92,255,.04));box-shadow:inset 2px 0 var(--primary)}.shell-main{padding:21px;position:relative;overflow:hidden}.shell-main::after{content:"";position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);box-shadow:0 0 16px var(--cyan);opacity:.35;animation:scanLine 5s linear infinite}.shell-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.shell-head h3{font-size:22px;margin:2px 0}.shell-status{font-size:9px;font-weight:900;color:var(--accent);border:1px solid rgba(82,224,164,.25);background:rgba(82,224,164,.07);padding:5px 7px;border-radius:999px}.shell-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:20px 0}.shell-metric{padding:12px 10px;border:1px solid rgba(255,255,255,.075);border-radius:11px;background:rgba(255,255,255,.025)}.shell-metric strong{display:block;font-size:17px}.shell-metric span{font-size:9px;color:#78849b;text-transform:uppercase;letter-spacing:.6px}.signal-card{padding:14px;border:1px solid rgba(255,255,255,.08);border-radius:13px;background:linear-gradient(120deg,rgba(124,92,255,.08),rgba(84,215,255,.025));margin-top:9px}.signal-top{display:flex;justify-content:space-between;gap:12px;font-size:11px;font-weight:800}.signal-bars{display:flex;align-items:end;gap:5px;height:64px;margin-top:11px}.signal-bars i{display:block;flex:1;min-width:6px;border-radius:4px 4px 1px 1px;background:linear-gradient(180deg,var(--cyan),var(--primary));opacity:.75}.signal-bars i:nth-child(1){height:22%}.signal-bars i:nth-child(2){height:48%}.signal-bars i:nth-child(3){height:34%}.signal-bars i:nth-child(4){height:72%}.signal-bars i:nth-child(5){height:58%}.signal-bars i:nth-child(6){height:86%}.signal-bars i:nth-child(7){height:68%}.signal-bars i:nth-child(8){height:100%}.signal-bars i:nth-child(9){height:76%}.signal-bars i:nth-child(10){height:91%}.float-chip{position:absolute;z-index:2;padding:11px 14px;border:1px solid rgba(255,255,255,.12);border-radius:14px;background:rgba(10,15,26,.88);backdrop-filter:blur(18px);box-shadow:0 20px 50px rgba(0,0,0,.42);font-size:11px;font-weight:800}.float-chip strong{color:var(--accent);display:block;font-size:13px}.chip-a{right:-24px;top:88px}.chip-b{left:-28px;bottom:80px}.live-network{display:grid;grid-template-columns:1.15fr repeat(4,1fr);gap:1px;border:1px solid rgba(255,255,255,.09);border-radius:20px;overflow:hidden;background:rgba(255,255,255,.09);box-shadow:var(--shadow);margin-bottom:110px}.network-intro,.network-stat{background:rgba(8,12,21,.96);padding:22px}.network-intro strong{display:block;font-size:16px}.network-stat strong{display:block;font-size:25px;letter-spacing:-1px}.network-stat span{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.8px}.section-block{padding:0 0 110px;scroll-margin-top:100px}.section-heading{display:grid;grid-template-columns:minmax(0,.75fr) minmax(280px,.45fr);gap:54px;align-items:end;margin-bottom:34px}.section-heading h2{font-size:clamp(35px,5vw,60px);line-height:1.02;letter-spacing:-2.6px;margin:11px 0 0}.section-heading p{margin:0;color:var(--muted);font-size:17px}.capability-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}.capability{grid-column:span 4;min-height:250px;padding:24px;border-radius:20px;border:1px solid rgba(255,255,255,.085);background:linear-gradient(150deg,rgba(17,24,39,.95),rgba(8,12,20,.96));position:relative;overflow:hidden}.capability.wide{grid-column:span 8}.capability::after{content:attr(data-code);position:absolute;right:16px;top:7px;font-size:50px;font-weight:950;letter-spacing:-4px;color:rgba(255,255,255,.025)}.capability-code{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;color:#ded9ff;background:rgba(124,92,255,.12);border:1px solid rgba(124,92,255,.25);font-size:11px;font-weight:950;letter-spacing:.5px}.capability h3{font-size:21px;margin:36px 0 8px}.capability p{color:var(--muted);margin:0}.capability ul{padding:0;margin:20px 0 0;list-style:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.capability li{color:#bac5d9;font-size:12px}.capability li::before{content:"+";color:var(--accent);margin-right:7px}.workflow{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;counter-reset:flow}.workflow-step{counter-increment:flow;padding:25px;border-left:1px solid rgba(124,92,255,.4);background:linear-gradient(90deg,rgba(124,92,255,.07),transparent)}.workflow-step::before{content:"0" counter(flow);font-size:11px;color:#a99cff;font-weight:950;letter-spacing:1px}.workflow-step h3{font-size:20px;margin:22px 0 8px}.workflow-step p{color:var(--muted);margin:0}.access-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.access-card{padding:25px;border:1px solid rgba(255,255,255,.09);border-radius:20px;background:rgba(11,16,27,.84)}.access-card.featured{background:linear-gradient(145deg,rgba(124,92,255,.18),rgba(8,13,23,.94));border-color:rgba(124,92,255,.42);box-shadow:0 30px 80px rgba(63,45,151,.2)}.access-name{font-size:12px;letter-spacing:1px;font-weight:950}.access-card h3{font-size:30px;margin:9px 0 18px}.access-card ul{padding:0;list-style:none}.access-card li{padding:8px 0;color:#bdc7da;border-bottom:1px solid rgba(255,255,255,.055);font-size:13px}.access-card li::before{content:"✓";color:var(--accent);margin-right:9px}.access-note{margin-top:18px;color:#8d99af;font-size:12px}.security-showcase{display:grid;grid-template-columns:minmax(0,.9fr) minmax(400px,1.1fr);gap:17px}.security-copy,.security-console{border:1px solid rgba(255,255,255,.09);border-radius:22px;background:linear-gradient(145deg,rgba(16,23,38,.96),rgba(7,11,19,.98));padding:28px}.security-copy h2{font-size:clamp(34px,4vw,52px);line-height:1.02;letter-spacing:-2px;margin:14px 0}.trust-list{display:grid;gap:10px;margin-top:28px}.trust-item{display:grid;grid-template-columns:36px 1fr;gap:11px;align-items:start}.trust-item b{width:32px;height:32px;border:1px solid rgba(82,224,164,.2);background:rgba(82,224,164,.07);border-radius:10px;display:grid;place-items:center;color:var(--accent)}.trust-item strong{display:block}.trust-item span{font-size:12px;color:var(--muted)}.console-line{display:grid;grid-template-columns:66px 1fr auto;gap:12px;padding:13px 0;border-bottom:1px solid rgba(255,255,255,.06);font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}.console-line time{color:#5e6b82}.console-line span{color:#c5cfdf}.console-line b{font-size:9px;letter-spacing:.6px;color:var(--accent);border:1px solid rgba(82,224,164,.22);padding:3px 6px;border-radius:999px}.cta-panel{position:relative;overflow:hidden;text-align:center;padding:72px 24px;border:1px solid rgba(124,92,255,.28);border-radius:28px;background:radial-gradient(circle at 50% 130%,rgba(84,215,255,.18),transparent 48%),linear-gradient(145deg,rgba(124,92,255,.15),rgba(8,12,21,.95));box-shadow:0 40px 120px rgba(0,0,0,.5)}.cta-panel h2{font-size:clamp(38px,6vw,66px);line-height:1;margin:12px auto 18px;max-width:800px;letter-spacing:-3px}.cta-panel p{max-width:650px;margin:0 auto;color:var(--muted);font-size:17px}.site-footer{display:flex;flex-wrap:wrap;align-items:center;gap:18px;padding:28px 0 6px;border-top:1px solid rgba(255,255,255,.07);color:#7f8ba1;font-size:12px}.site-footer .brand{margin-right:auto;color:#fff}.site-footer a{text-decoration:none}.site-footer a:hover{color:#fff}.locale-switch{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;padding:2px;background:rgba(255,255,255,.025)}.locale-switch a{padding:5px 7px;border-radius:7px;text-decoration:none;color:#77839a;font-size:10px;font-weight:900}.locale-switch a.active{background:rgba(124,92,255,.2);color:#fff}@keyframes deckFloat{0%,100%{transform:perspective(1100px) rotateY(-4deg) rotateX(2deg) translateY(0)}50%{transform:perspective(1100px) rotateY(-2deg) rotateX(1deg) translateY(-9px)}}@keyframes scanLine{0%{top:6%}100%{top:94%}}@media(max-width:1050px){.marketing .hero{grid-template-columns:1fr;padding-top:70px}.product-stage{min-height:570px}.product-shell{max-width:680px}.chip-a{right:4px}.chip-b{left:4px}.live-network{grid-template-columns:repeat(2,1fr)}.network-intro{grid-column:span 2}.section-heading{grid-template-columns:1fr;gap:16px}.capability{grid-column:span 6}.capability.wide{grid-column:span 6}.security-showcase{grid-template-columns:1fr}}@media(max-width:700px){.marketing .hero{gap:24px;min-height:auto;padding:52px 0 44px}.marketing .hero h1{letter-spacing:-3.2px}.product-stage{min-height:440px}.product-shell{transform:none;animation:none;border-radius:18px}.shell-body{grid-template-columns:92px 1fr;min-height:370px}.shell-side{padding:12px 6px}.shell-link{font-size:0;padding:10px}.shell-link::first-letter{font-size:12px}.shell-main{padding:14px}.shell-metrics{grid-template-columns:1fr 1fr}.shell-metric:last-child{display:none}.float-chip{display:none}.live-network{margin-bottom:78px}.network-stat strong{font-size:20px}.section-block{padding-bottom:78px}.section-heading h2{letter-spacing:-1.7px}.capability-grid,.access-grid,.workflow{grid-template-columns:1fr}.capability,.capability.wide{grid-column:auto;min-height:auto}.capability ul{grid-template-columns:1fr}.security-showcase{grid-template-columns:1fr}.security-console{padding:18px}.console-line{grid-template-columns:50px 1fr}.console-line b{display:none}.cta-panel{padding:54px 18px}.cta-panel h2{letter-spacing:-2px}.locale-switch{margin-left:auto}.topbar .btn.small{display:none}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.product-shell,.shell-main::after{animation:none}.btn{transition:none}}
-</style></head><body><header class="topbar"><div class="topbar-inner"><a class="brand" href="${homeUrl}"><span class="brand-mark">N</span><span class="brand-text">Nexa<span>Bot</span></span></a><div class="live-pill"><i class="live-dot"></i> NEXA CORE ONLINE</div><nav class="navlinks"><a href="${homeUrl}#platform">${platformLabel}</a><a href="${commandsUrl}">${commandsLabel}</a><a href="${privacyUrl}">${privacyLabel}</a></nav><div class="spacer"></div><div class="locale-switch" aria-label="Language"><a class="${pageLanguage === 'hu' ? 'active' : ''}" href="/">HU</a><a class="${pageLanguage === 'en' ? 'active' : ''}" href="/?lang=en">EN</a></div>${user ? `<div class="user"><span>${escapeHtml(user.username)}</span>${user.avatar ? `<img class="avatar" alt="" src="https://cdn.discordapp.com/avatars/${escapeHtml(user.id)}/${escapeHtml(user.avatar)}.png">` : ''}<a class="btn secondary small" href="/logout">Kilépés</a></div>` : `<a class="btn small" href="/login">${loginLabel}</a>`}</div></header>${user ? `<div class="app"><aside class="sidebar"><div class="side-label">Command Deck</div><a class="side-link active" href="/dashboard">◈ Áttekintés</a>${isOwnerUser(user.id) ? '<a class="side-link" href="/owner">⌾ Owner Center</a>' : ''}<a class="side-link" href="#modules">⬡ Modulok</a><a class="side-link" href="#channels"># Csatornák</a><a class="side-link" href="#roles">◇ Rangok</a><div class="side-label">Rendszerek</div><a class="side-link" href="#community">★ Közösség</a><a class="side-link" href="#shift">◷ Szolgálat</a><a class="side-link" href="#ai">✦ Nexa AI</a><a class="side-link" href="#protection">⬢ Védelem</a><div class="footer-note">${escapeHtml(productName)}<br>NEXA Bot 6.0</div></aside><main>${content}</main></div>` : `<main class="public-main">${content}</main>`}</body></html>`;
+</style></head><body><header class="topbar"><div class="topbar-inner"><a class="brand" href="${homeUrl}"><span class="brand-mark">N</span><span class="brand-text">Nexa<span>Bot</span></span></a><div class="live-pill"><i class="live-dot"></i> NEXA CORE ONLINE</div><nav class="navlinks"><a href="${homeUrl}#platform">${platformLabel}</a><a href="${commandsUrl}">${commandsLabel}</a><a href="${privacyUrl}">${privacyLabel}</a></nav><div class="spacer"></div><div class="locale-switch" aria-label="Language"><a class="${pageLanguage === 'hu' ? 'active' : ''}" href="/">HU</a><a class="${pageLanguage === 'en' ? 'active' : ''}" href="/?lang=en">EN</a></div>${user ? `<div class="user"><span>${escapeHtml(user.username)}</span>${user.avatar ? `<img class="avatar" alt="" src="https://cdn.discordapp.com/avatars/${escapeHtml(user.id)}/${escapeHtml(user.avatar)}.png">` : ''}<a class="btn secondary small" href="/logout">Kilépés</a></div>` : `<a class="btn small" href="/login">${loginLabel}</a>`}</div></header>${user ? `<div class="app"><aside class="sidebar"><div class="side-label">Command Deck</div><a class="side-link active" href="/dashboard">◈ Áttekintés</a>${isOwnerUser(user.id) ? '<a class="side-link" href="/owner">⌾ Owner Center</a>' : ''}<a class="side-link" href="#modules">⬡ Modulok</a><a class="side-link" href="#channels"># Csatornák</a><a class="side-link" href="#roles">◇ Rangok</a><div class="side-label">Rendszerek</div><a class="side-link" href="#community">★ Közösség</a><a class="side-link" href="#shift">◷ Szolgálat</a><a class="side-link" href="#ai">✦ Nexa AI</a><a class="side-link" href="#protection">⬢ Védelem</a><div class="footer-note">${escapeHtml(productName)}<br>NEXA Bot 6.1</div></aside><main>${content}</main></div>` : `<main class="public-main">${content}</main>`}</body></html>`;
 }
 
 function publicLanguage(url) {
@@ -2488,7 +2532,7 @@ function landing(client, session, language = 'hu') {
   const dashboardHref = session ? '/dashboard' : '/login';
   const query = en ? '?lang=en' : '';
   const copy = en ? {
-    eyebrow: 'NEXA BOT 6.0 · DISCORD MANAGEMENT PLATFORM',
+    eyebrow: 'NEXA BOT 6.1 · DISCORD MANAGEMENT PLATFORM',
     headlineA: 'Your server.', headlineB: 'Operating at its next level.',
     lead: 'Moderation, support, community automation, AI and serious server protection in one auditable control system built for growth.',
     dashboard: session ? 'Open dashboard' : 'Sign in with Discord', invite: 'Invite NEXA Bot', explore: 'Explore the platform',
@@ -2500,9 +2544,9 @@ function landing(client, session, language = 'hu') {
     accessKicker: 'Owner-controlled access', accessTitle: 'Capability levels without online payment.', accessLead: 'The bot owner grants access levels directly. There is no checkout, card form or automatic subscription on the site.',
     securityKicker: 'Security architecture', securityTitle: 'Protection that can explain every action.', securityLead: 'Sensitive operations are permission-checked, rate-limited and written to an audit trail. Secrets remain server-side.',
     ctaKicker: 'NEXA is ready', ctaTitle: 'Give your Discord server a real operating system.', ctaLead: 'Invite the bot, sign in with Discord and configure each server independently from a responsive command center.',
-    footer: 'Discord management platform · Version 6.0', privacy: 'Privacy', terms: 'Terms', commands: 'Commands'
+    footer: 'Discord management platform · Version 6.1', privacy: 'Privacy', terms: 'Terms', commands: 'Commands'
   } : {
-    eyebrow: 'NEXA BOT 6.0 · DISCORD MANAGEMENT PLATFORM',
+    eyebrow: 'NEXA BOT 6.1 · DISCORD MANAGEMENT PLATFORM',
     headlineA: 'A szervered.', headlineB: 'Egy szinttel feljebb.',
     lead: 'Moderáció, ügyféltámogatás, közösségi automatizálás, AI és komoly szervervédelem egyetlen auditálható, növekedésre tervezett rendszerben.',
     dashboard: session ? 'Vezérlőpult megnyitása' : 'Belépés Discorddal', invite: 'NEXA Bot meghívása', explore: 'Platform felfedezése',
@@ -2514,7 +2558,7 @@ function landing(client, session, language = 'hu') {
     accessKicker: 'Owner által kezelt hozzáférés', accessTitle: 'Funkciószintek online fizetés nélkül.', accessLead: 'A jogosultsági szinteket közvetlenül a bot tulajdonosa osztja ki. Az oldalon nincs bankkártya, pénztár vagy automatikus előfizetés.',
     securityKicker: 'Biztonsági architektúra', securityTitle: 'Védelem, amely minden döntésről elszámol.', securityLead: 'Az érzékeny műveleteket jogosultság-ellenőrzés, rate limit és auditnapló védi. A titkos kulcsok kizárólag szerveroldalon maradnak.',
     ctaKicker: 'A NEXA készen áll', ctaTitle: 'Adj valódi operációs rendszert a Discord-szerverednek.', ctaLead: 'Hívd meg a botot, lépj be Discorddal, majd állíts be minden szervert külön a mobilbarát irányítóközpontból.',
-    footer: 'Discord management platform · 6.0-s verzió', privacy: 'Adatvédelem', terms: 'Feltételek', commands: 'Parancsok'
+    footer: 'Discord management platform · 6.1-es verzió', privacy: 'Adatvédelem', terms: 'Feltételek', commands: 'Parancsok'
   };
   const capabilities = en ? [
     ['MD', 'Moderation with context', 'Every action becomes a searchable Case ID instead of disappearing into chat history.', ['Ban, kick and timeout', 'Warnings and clearing', 'Lock and slowmode', 'Member information']],
@@ -2541,12 +2585,12 @@ function landing(client, session, language = 'hu') {
     ['Napi munka panelekről', 'A Staff áttekinthető Discord-paneleket használ, miközben minden fontos művelet naplózásra kerül.']
   ];
   const tiers = en ? [
-    ['FREE', 'Core control', ['Moderation and cases', 'Welcome and autorole', 'Ticket system', 'Detailed logging']],
-    ['PRO', 'Community operations', ['Everything in Free', 'Automod protection', 'Levels and role panels', 'Giveaways, shifts and voice']],
+    ['FREE', 'Core control', ['Moderation and cases', 'Welcome and verification', 'Tickets and reminders', 'Detailed logging']],
+    ['PRO', 'Community operations', ['Everything in Free', 'Automod and Starboard', 'Levels and role panels', 'Giveaways, shifts and voice']],
     ['ULTIMATE', 'Full protection', ['Everything in Pro', 'Nexa AI', 'Anti-Nuke monitoring', 'Raid detection and lockdown']]
   ] : [
-    ['FREE', 'Alapirányítás', ['Moderáció és esetek', 'Welcome és autorole', 'Ticketrendszer', 'Részletes naplózás']],
-    ['PRO', 'Közösségi működés', ['Minden Free funkció', 'Automod-védelem', 'Szintek és rangpanelek', 'Giveaway, shift és hangszobák']],
+    ['FREE', 'Alapirányítás', ['Moderáció és esetek', 'Welcome és hitelesítés', 'Ticket és emlékeztetők', 'Részletes naplózás']],
+    ['PRO', 'Közösségi működés', ['Minden Free funkció', 'Automod és Starboard', 'Szintek és rangpanelek', 'Giveaway, shift és hangszobák']],
     ['ULTIMATE', 'Teljes védelem', ['Minden Pro funkció', 'Nexa AI', 'Anti-Nuke megfigyelés', 'Raidfelismerés és lezárás']]
   ];
   const capabilityCards = capabilities.map(([code, title, body, items], index) => `<article class="capability${index === 0 || index === 5 ? ' wide' : ''}" data-code="${escapeHtml(code)}"><div class="capability-code">${escapeHtml(code)}</div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(body)}</p><ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></article>`).join('');
@@ -2586,7 +2630,7 @@ function publicInfoPage(kind, session, language = 'hu') {
   };
   const [title, description, sections] = pages[kind] || pages.commands;
   const query = en ? '?lang=en' : '';
-  return layout(title, `<section class="hero"><div class="eyebrow">NEXA Bot 6.0</div><h1>${escapeHtml(title)}</h1><p class="lead">${escapeHtml(description)}</p><div class="actions"><a class="btn secondary" href="/${query}">← ${en ? 'Home' : 'Kezdőlap'}</a><a class="btn" href="${escapeHtml(inviteUrl())}">${en ? 'Invite bot' : 'Bot meghívása'}</a></div></section><div class="grid">${sections.map(([name, body]) => `<article class="card"><h2>${escapeHtml(name)}</h2><p class="muted">${escapeHtml(body)}</p></article>`).join('')}</div>`, session, null, language);
+  return layout(title, `<section class="hero"><div class="eyebrow">NEXA Bot 6.1</div><h1>${escapeHtml(title)}</h1><p class="lead">${escapeHtml(description)}</p><div class="actions"><a class="btn secondary" href="/${query}">← ${en ? 'Home' : 'Kezdőlap'}</a><a class="btn" href="${escapeHtml(inviteUrl())}">${en ? 'Invite bot' : 'Bot meghívása'}</a></div></section><div class="grid">${sections.map(([name, body]) => `<article class="card"><h2>${escapeHtml(name)}</h2><p class="muted">${escapeHtml(body)}</p></article>`).join('')}</div>`, session, null, language);
 }
 
 function errorPage(title, message, session = null) {
@@ -2691,13 +2735,13 @@ async function ownerDashboard(client, session, saved = false, options = {}) {
   const pagination = totalPages > 1
     ? `<nav class="pagination" aria-label="Szerverlista oldalak">${page > 1 ? `<a class="btn secondary small" href="${queryFor(page - 1)}">← Előző</a>` : ''}<span>${page}. oldal / ${totalPages}</span>${page < totalPages ? `<a class="btn secondary small" href="${queryFor(page + 1)}">Következő →</a>` : ''}</nav>`
     : '';
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 6.0 • Owner Command Center</div><h1>Hálózati irányítóközpont</h1><p class="muted">A teljes botinfrastruktúra, jogosultsági csomagok, védelem és AI-hozzáférés egy helyen.</p></div><a class="btn secondary" href="${escapeHtml(inviteUrl())}">Bot meghívása</a></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 6.1 • Owner Command Center</div><h1>Hálózati irányítóközpont</h1><p class="muted">A teljes botinfrastruktúra, jogosultsági csomagok, védelem és AI-hozzáférés egy helyen.</p></div><a class="btn secondary" href="${escapeHtml(inviteUrl())}">Bot meghívása</a></div>
 ${saved ? '<div class="notice">✅ A tulajdonosi beállítás mentve.</div>' : ''}
 <div class="stats"><div class="stat"><div class="stat-value">${guilds.length}</div><div class="stat-label">Szerver</div></div><div class="stat"><div class="stat-value">${members}</div><div class="stat-label">Összes tag</div></div><div class="stat"><div class="stat-value">${proCount}</div><div class="stat-label">Pro hozzáférés</div></div><div class="stat"><div class="stat-value">${ultimateCount}</div><div class="stat-label">Ultimate hozzáférés</div></div></div>
 <section class="card section"><div class="section-kicker">Élő infrastruktúra</div><h2 class="section-title">Rendszerállapot</h2><div class="stats"><div class="stat"><div class="stat-value">${runtime.ping} ms</div><div class="stat-label">Discord ping</div></div><div class="stat"><div class="stat-value">${Math.floor(runtime.uptimeSeconds / 3600)} óra</div><div class="stat-label">Uptime</div></div><div class="stat"><div class="stat-value">${runtime.memoryMb} MB</div><div class="stat-label">Memória</div></div><div class="stat"><div class="stat-value">${isPersistentStore() ? 'ONLINE' : 'MEMÓRIA'}</div><div class="stat-label">Adatbázis</div></div></div><div class="stats"><div class="stat"><div class="stat-value">${operations.usage24h}</div><div class="stat-label">Művelet • 24 óra</div></div><div class="stat"><div class="stat-value">${operations.security24h}</div><div class="stat-label">Védelmi esemény</div></div><div class="stat"><div class="stat-value">${operations.audit24h}</div><div class="stat-label">Auditbejegyzés</div></div><div class="stat"><div class="stat-value">${operations.errors24h}</div><div class="stat-label">Hiba • 24 óra</div></div></div><p class="muted">Node ${escapeHtml(runtime.node)} • AI hívás (30 nap): ${Number(summary.ai || summary.ai_request || 0)} • Összes interakció (30 nap): ${Number(summary.interaction || 0)}</p></section>
 <section class="card section"><div class="section-kicker">Production readiness</div><h2 class="section-title">Környezeti biztonsági ellenőrzés</h2><div class="notice ${environment.ready ? '' : 'error'}">${environment.ready ? '✅ Minden kötelező production beállítás rendelkezésre áll.' : `⚠️ Hiányzó kötelező kulcsok: ${escapeHtml(environment.missingRequired.join(', '))}`}</div><div class="status-list">${environmentRows}</div><p class="muted">Az Owner Center csak azt jelzi, hogy egy kulcs megfelelően be van-e állítva; titkos értéket soha nem jelenít meg.</p></section>
 <section class="card section"><div class="section-kicker">Kizárólag Owner</div><h2 class="section-title">🎭 RP-rendszer hozzáférése</h2><p class="muted">Az RP-rendszer csak azokon a szervereken működik, amelyeknél lent megnyomod az <strong>RP bekapcsolása</strong> gombot. Normál szerveradmin nem kapcsolhatja be. Aktiválás után a <code>/telepites</code> és <code>/dokumentum-panelek</code> parancs használható, a Discord Control Center pedig RP-gombot kap.</p><div class="notice ${settings.rpGuilds.length ? '' : 'warn'}">Aktív RP-szerverek: <strong>${settings.rpGuilds.length}</strong></div></section>
-<section class="card section"><div class="section-kicker">Owner jogosultságkezelés</div><h2 class="section-title">✦ Ingyenes csomag kiosztása</h2><p class="muted">Nincs fizetés és nincs automatikus előfizetés. A csomagokat kizárólag az Owner Centerből lehet kiosztani. A Free alapértelmezett; a Pro megnyitja az Automodot és a közösségi modulokat, az Ultimate pedig a Nexa AI-t, Anti-Nuke-ot és raidvédelmet is.</p><form method="post" action="/owner/global"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="field-grid"><div><label>Cél szerver ID</label><input type="text" name="premium_guild" inputmode="numeric" placeholder="Discord szerver ID" required></div><div><label>Kiosztott csomag</label><select name="premium_plan"><option value="pro">PRO</option><option value="ultimate">ULTIMATE</option></select></div><div><label>Időtartam</label><select name="premium_days"><option value="">Korlátlan idő</option><option value="30">30 nap</option><option value="90">90 nap</option><option value="365">1 év</option></select></div><div><label>Owner megjegyzés</label><input type="text" name="premium_note" maxlength="300" placeholder="Például: partner szerver"></div></div><div class="actions"><button class="btn green" name="operation" value="package_grant" type="submit">Csomag kiosztása</button><button class="btn secondary" name="operation" value="package_remove" type="submit">Visszaállítás Free csomagra</button></div></form><div style="overflow:auto;margin-top:20px"><table><thead><tr><th>Szerver ID</th><th>Csomag</th><th>Lejárat</th><th>Megjegyzés</th></tr></thead><tbody>${packageRows}</tbody></table></div></section>
+<section class="card section"><div class="section-kicker">Owner jogosultságkezelés</div><h2 class="section-title">✦ Ingyenes csomag kiosztása</h2><p class="muted">Nincs fizetés és nincs automatikus előfizetés. A csomagokat kizárólag az Owner Centerből lehet kiosztani. A Free tartalmazza a hitelesítést és emlékeztetőket; a Pro megnyitja az Automodot, Starboardot és közösségi modulokat; az Ultimate pedig a Nexa AI-t, Anti-Nuke-ot és raidvédelmet is.</p><form method="post" action="/owner/global"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="field-grid"><div><label>Cél szerver ID</label><input type="text" name="premium_guild" inputmode="numeric" placeholder="Discord szerver ID" required></div><div><label>Kiosztott csomag</label><select name="premium_plan"><option value="pro">PRO</option><option value="ultimate">ULTIMATE</option></select></div><div><label>Időtartam</label><select name="premium_days"><option value="">Korlátlan idő</option><option value="30">30 nap</option><option value="90">90 nap</option><option value="365">1 év</option></select></div><div><label>Owner megjegyzés</label><input type="text" name="premium_note" maxlength="300" placeholder="Például: partner szerver"></div></div><div class="actions"><button class="btn green" name="operation" value="package_grant" type="submit">Csomag kiosztása</button><button class="btn secondary" name="operation" value="package_remove" type="submit">Visszaállítás Free csomagra</button></div></form><div style="overflow:auto;margin-top:20px"><table><thead><tr><th>Szerver ID</th><th>Csomag</th><th>Lejárat</th><th>Megjegyzés</th></tr></thead><tbody>${packageRows}</tbody></table></div></section>
 <section class="card section"><div class="section-kicker">Globális vezérlés</div><h2 class="section-title">Maintenance, blacklist és közlemény</h2><form method="post" action="/owner/global"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="field-grid"><div><label>Maintenance mód</label><select name="maintenance"><option value="off"${settings.maintenance ? '' : ' selected'}>Kikapcsolva</option><option value="on"${settings.maintenance ? ' selected' : ''}>Bekapcsolva</option></select></div><div><label>Karbantartási üzenet</label><input type="text" name="maintenance_message" maxlength="500" value="${escapeHtml(settings.maintenanceMessage)}"></div><div><label>Szerver blacklist ID</label><input type="text" name="blacklist_guild" inputmode="numeric" placeholder="Discord szerver ID"></div><div><label>Felhasználó blacklist ID</label><input type="text" name="blacklist_user" inputmode="numeric" placeholder="Discord felhasználó ID"></div><div><label>Közlemény cél szerver ID</label><input type="text" name="premium_guild" inputmode="numeric" placeholder="Discord szerver ID"></div><div><label>Közlemény címe</label><input type="text" name="announcement_title" maxlength="200" placeholder="NEXA Bot közlemény"></div><div><label>Közlemény szövege</label><textarea name="announcement_text" maxlength="3000" placeholder="A kijelölt szerver bejelentési csatornájába küldi."></textarea></div><div><label>Globálisan letiltott modulok</label><select name="disabled_modules" multiple size="7">${MODULE_KEYS.filter((key) => key !== 'bvi').map((key) => `<option value="${key}"${settings.remoteDisabledModules.includes(key) ? ' selected' : ''}>${key}</option>`).join('')}</select><div class="help">Vészkapcsoló: minden szerveren leállítja a kijelölt modulokat.</div></div></div><div class="actions"><button class="btn" name="operation" value="save" type="submit">Globális mentés</button><button class="btn secondary" name="operation" value="blacklist_guild_toggle" type="submit">Szerver blacklist váltás</button><button class="btn secondary" name="operation" value="blacklist_user_toggle" type="submit">User blacklist váltás</button><button class="btn" name="operation" value="announcement" type="submit">Közlemény küldése</button></div></form></section>
 ${isBotOwner(session.user.id) ? `<section class="card section"><div class="section-kicker">Bizalmi hozzáférés</div><h2 class="section-title">Owner-kezelők</h2><form method="post" action="/owner/access"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="field-grid"><div><label>Discord felhasználói ID</label><input name="user_id" type="text" inputmode="numeric" required></div><div style="align-self:end"><button class="btn green" type="submit">+ Owner-kezelő hozzáadása</button></div></div></form><div class="grid" style="margin-top:18px">${ownerCards}</div></section>` : ''}
 <section class="card section"><div class="section-kicker">Privát hozzáférés</div><h2 class="section-title">✨ Nexa AI engedélylista</h2><p class="muted">Rajtat kívül csak az itt hozzáadott Discord-fiókok használhatják az AI-t szerveren vagy privátban.</p><form method="post" action="/owner/ai-access"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="field-grid"><div><label for="user_id">Discord felhasználói azonosító</label><input id="user_id" name="user_id" type="text" inputmode="numeric" maxlength="22" placeholder="Például: 123456789012345678" required></div><div style="align-self:end"><button class="btn green" type="submit">+ AI-hozzáférés hozzáadása</button></div></div></form><div class="grid" style="margin-top:18px">${accessCards}</div></section>
@@ -2738,7 +2782,7 @@ async function ownerGuildPage(guild, session) {
   const errorRows = errors.length ? errors.map((item) => `<tr><td>${escapeHtml(item.created_at || item.createdAt || '')}</td><td>${escapeHtml(item.error_type || item.errorType)}</td><td>${escapeHtml(item.message)}</td></tr>`).join('') : '<tr><td colspan="3" class="status-ok">Nincs rögzített hiba ennél a szervernél.</td></tr>';
   const securityReady = !readiness.missingPermissions.length && !readiness.higherBots.length;
   const joinedAt = botMember?.joinedAt ? botMember.joinedAt.toLocaleString('hu-HU') : 'Ismeretlen';
-  const content = `<div class="page-head"><div>${guildIcon(guild)}<div class="section-kicker">NEXA Bot 6.0 • Owner Server Inspector</div><h1>${escapeHtml(guild.name)}</h1><p class="muted">${escapeHtml(guild.id)} • részletes, csak tulajdonosi rendszerállapot</p></div><div class="actions"><a class="btn secondary" href="/owner">← Owner Center</a><a class="btn" href="/dashboard/guild/${escapeHtml(guild.id)}">Beállítások</a>${rpActive ? `<a class="btn green" href="/owner/documents/${escapeHtml(guild.id)}">Iratvezérlés</a>` : ''}</div></div>
+  const content = `<div class="page-head"><div>${guildIcon(guild)}<div class="section-kicker">NEXA Bot 6.1 • Owner Server Inspector</div><h1>${escapeHtml(guild.name)}</h1><p class="muted">${escapeHtml(guild.id)} • részletes, csak tulajdonosi rendszerállapot</p></div><div class="actions"><a class="btn secondary" href="/owner">← Owner Center</a><a class="btn" href="/dashboard/guild/${escapeHtml(guild.id)}">Beállítások</a>${rpActive ? `<a class="btn green" href="/owner/documents/${escapeHtml(guild.id)}">Iratvezérlés</a>` : ''}</div></div>
   ${blacklisted ? '<div class="notice error">🚫 Ez a szerver jelenleg blacklisten van, ezért a normál botfunkciók le vannak tiltva.</div>' : ''}
   <div class="stats"><div class="stat"><div class="stat-value">${Number(guild.memberCount || 0)}</div><div class="stat-label">Tag</div></div><div class="stat"><div class="stat-value">${guild.channels.cache.size}</div><div class="stat-label">Csatorna</div></div><div class="stat"><div class="stat-value">${guild.roles.cache.size}</div><div class="stat-label">Rang</div></div><div class="stat"><div class="stat-value">${planName(entitlement.plan)}</div><div class="stat-label">Csomag</div></div></div>
   <div class="grid"><section class="card"><div class="section-kicker">Azonosítás</div><h2>Szerveradatok</h2><div class="status-list"><div class="status-row"><strong>Tulajdonos</strong><span>${escapeHtml(owner?.user?.tag || owner?.displayName || guild.ownerId)}<br><span class="muted">${escapeHtml(guild.ownerId)}</span></span></div><div class="status-row"><strong>Bot csatlakozott</strong><span>${escapeHtml(joinedAt)}</span></div><div class="status-row"><strong>RP-rendszer</strong><span class="${rpActive ? 'status-ok' : 'muted'}">${rpActive ? '● Owner által engedélyezve' : '○ Kikapcsolva'}</span></div><div class="status-row"><strong>Csomag forrása</strong><span>${escapeHtml(entitlement.source || 'default')}</span></div></div></section>
@@ -2775,7 +2819,7 @@ function ownerDocumentsPage(guild, session, saved = false) {
     }).join('');
     return `<section class="section" style="margin-top:28px"><div class="page-head"><div><div class="section-kicker">Dokumentumcsoport</div><h2>${escapeHtml(categoryNames[groupKey] || groupKey)}</h2></div></div><div class="grid">${cards}</div></section>`;
   }).join('');
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 6.0 • Owner Document Control</div><h1>Irat- és jogosultságvezérlés</h1><p class="muted">${escapeHtml(guild.name)} • Itt állíthatod be, melyik Discord-rang használhatja a dokumentumpaneleket.</p></div><a class="btn secondary" href="/owner">← Owner Center</a></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 6.1 • Owner Document Control</div><h1>Irat- és jogosultságvezérlés</h1><p class="muted">${escapeHtml(guild.name)} • Itt állíthatod be, melyik Discord-rang használhatja a dokumentumpaneleket.</p></div><a class="btn secondary" href="/owner">← Owner Center</a></div>
 ${saved ? '<div class="notice">✅ A dokumentumszabályok mentve, a meglévő Discord-panelek frissítve.</div>' : ''}
 <div class="notice warn">Az egyszerű felhívások és tájékoztatások alapból nem kapnak ügyszámot. A hivatalos, jóváhagyásos iratok alapból igen.</div>
 <form method="post" action="/owner/documents/${escapeHtml(guild.id)}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><section class="card section"><div class="section-kicker">Globális jogosultság</div><h2 class="section-title">Ki használhatja a dokumentumrendszert?</h2><div class="field-grid"><div><label for="doc_default_role">Alapértelmezett használati rang</label><select id="doc_default_role" name="doc_default_role" required>${roleOptions(guild, defaultAccessRoleId, 'Válassz egy rangot')}</select><div class="help">Ez váltja le a korábbi, fix „Operatív állomány” korlátozást. A kiválasztott rang használhatja az összes olyan panelt, amelynél lent nem adsz meg külön rangot.</div></div></div></section>${sections}<div class="savebar"><span class="muted">A mentés után a bot frissíti a már kihelyezett dokumentumpaneleket is.</span><button class="btn green" type="submit">Minden szabály mentése</button></div></form>`;
@@ -2793,7 +2837,7 @@ async function dashboardList(client, session) {
   const persistence = isPersistentStore() ? '' : '<div class="notice warn">⚠️ Nincs DATABASE_URL beállítva. A módosítások újraindításkor elveszhetnek.</div>';
   const members = guilds.reduce((sum, item) => sum + Number(item.botGuild.memberCount || 0), 0);
   const modules = guilds.reduce((sum, item) => sum + Object.values(getGuildConfig(item.botGuild.id).modules).filter(Boolean).length, 0);
-  return layout('Szervereim', `<div class="page-head"><div><div class="section-kicker">NEXA Bot 6.0 • Command Deck</div><h1>Szerverhálózat</h1><p class="muted">Csak azok a szerverek láthatók, amelyekhez tulajdonosi, adminisztrátori vagy kijelölt kezelői jogosultságod van.</p></div></div><div class="stats"><div class="stat"><div class="stat-value">${guilds.length}</div><div class="stat-label">Kezelt szerver</div></div><div class="stat"><div class="stat-value">${members}</div><div class="stat-label">Összes tag</div></div><div class="stat"><div class="stat-value">${modules}</div><div class="stat-label">Konfigurált modul</div></div><div class="stat"><div class="stat-value">ONLINE</div><div class="stat-label">NEXA Core</div></div></div>${persistence}<div class="grid">${cards}</div>`, session);
+  return layout('Szervereim', `<div class="page-head"><div><div class="section-kicker">NEXA Bot 6.1 • Command Deck</div><h1>Szerverhálózat</h1><p class="muted">Csak azok a szerverek láthatók, amelyekhez tulajdonosi, adminisztrátori vagy kijelölt kezelői jogosultságod van.</p></div></div><div class="stats"><div class="stat"><div class="stat-value">${guilds.length}</div><div class="stat-label">Kezelt szerver</div></div><div class="stat"><div class="stat-value">${members}</div><div class="stat-label">Összes tag</div></div><div class="stat"><div class="stat-value">${modules}</div><div class="stat-label">Konfigurált modul</div></div><div class="stat"><div class="stat-value">ONLINE</div><div class="stat-label">NEXA Core</div></div></div>${persistence}<div class="grid">${cards}</div>`, session);
 }
 
 function option(value, label, selected) {
@@ -2879,19 +2923,20 @@ function settingsPage(guild, config, session, saved = false) {
     : `<div class="server-icon">${escapeHtml(guild.name.slice(0, 2).toUpperCase())}</div>`;
   const content = `<div class="page-head server">${icon}<div class="server-body"><div class="section-kicker">NEXA Command Deck</div><h1>${escapeHtml(guild.name)} <span class="badge ${plan}">${planName(plan)}</span></h1><div class="muted">Valós idejű modul-, csatorna- és jogosultságkezelés${entitlement.expiresAt ? ` • lejár: ${escapeHtml(entitlement.expiresAt.toLocaleDateString('hu-HU'))}` : ''}</div></div><a class="btn secondary" href="/dashboard">← Szerverek</a></div>
 <div class="stats"><div class="stat"><div class="stat-value">${guild.memberCount}</div><div class="stat-label">Tag</div></div><div class="stat"><div class="stat-value">${guild.channels.cache.size}</div><div class="stat-label">Csatorna</div></div><div class="stat"><div class="stat-value">${guild.roles.cache.size}</div><div class="stat-label">Rang</div></div><div class="stat"><div class="stat-value">${enabledModules}</div><div class="stat-label">Aktív modul</div></div></div>
-${saved ? '<div class="notice">✅ A NEXA Bot beállításai és a kiválasztott panelek frissültek.</div>' : ''}${!isPersistentStore() ? '<div class="notice warn">⚠️ Az adatbázis még nincs beállítva, ezért az AI-memória, XP és szolgálati statisztika újraindításkor elveszhet.</div>' : ''}${rpEnabled ? '<div class="notice">🎭 <strong>Owner RP aktív ezen a szerveren.</strong> Discordon a /telepites paranccsal a teljes alap RP-rendszer, a /dokumentum-panelek paranccsal pedig kizárólag a meglévő csatornák dokumentumpaneljei telepíthetők.</div>' : ''}
+<div class="grid" style="margin:0 0 20px"><article class="card"><div class="feature-icon">✅</div><div class="section-kicker">IDENTITY GATEWAY</div><h3>Gombos tagellenőrzés</h3><p class="muted">Modern beléptetőpanel automatikus rangkiosztással és auditnaplóval.</p><span class="badge ${config.modules.verification ? 'ultimate' : ''}">${config.modules.verification ? 'AKTÍV' : 'KIKAPCSOLVA'}</span></article><article class="card"><div class="feature-icon">⭐</div><div class="section-kicker">COMMUNITY SIGNAL</div><h3>NEXA Starboard</h3><p class="muted">A közösség legjobb üzenetei automatikusan látványos kiemelést kapnak.</p><span class="badge ${config.modules.starboard ? 'ultimate' : ''}">${config.modules.starboard ? 'AKTÍV' : 'KIKAPCSOLVA'}</span></article><article class="card"><div class="feature-icon">⏰</div><div class="section-kicker">PERSISTENT JOBS</div><h3>Okos emlékeztetők</h3><p class="muted">PostgreSQL-alapú értesítések, amelyek újraindítás után is megmaradnak.</p><span class="badge ${config.modules.reminders ? 'ultimate' : ''}">${config.modules.reminders ? 'AKTÍV' : 'KIKAPCSOLVA'}</span></article></div>
+${saved ? '<div class="notice">✅ A NEXA Bot beállításai és a kiválasztott panelek frissültek.</div>' : ''}${!isPersistentStore() ? '<div class="notice warn">⚠️ Az adatbázis még nincs beállítva, ezért az AI-memória, XP, emlékeztetők és szolgálati statisztika újraindításkor elveszhet.</div>' : ''}${rpEnabled ? '<div class="notice">🎭 <strong>Owner RP aktív ezen a szerveren.</strong> Discordon a /telepites paranccsal a teljes alap RP-rendszer, a /dokumentum-panelek paranccsal pedig kizárólag a meglévő csatornák dokumentumpaneljei telepíthetők.</div>' : ''}
 <form method="post" action="/dashboard/guild/${escapeHtml(guild.id)}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="settings">
-<section id="modules" class="card section"><div class="section-kicker">Alaprendszer • ${planName(plan)}</div><h2 class="section-title">⬡ Modulmátrix</h2><div class="field-grid"><div><label for="language">Bot nyelve ezen a szerveren</label><select id="language" name="language">${option('hu','Magyar (alapértelmezett)',config.language)}${option('en','English',config.language)}</select><div class="help">A panelek és a Discord-válaszok a kiválasztott nyelven jelennek meg.</div></div></div><div class="module-grid">${moduleCheck(guild.id,'protection','module_protection','Automod és védelem',config.modules.protection,'Spam-, link- és tartalomvédelem. Anti-Nuke és raid csak Ultimate csomagban.')}${moduleCheck(guild.id,'moderation','module_moderation','Moderáció',config.modules.moderation,'Case ID és tagválasztós moderációs panel.')}${moduleCheck(guild.id,'logging','module_logging','Részletes naplózás',config.modules.logging)}${moduleCheck(guild.id,'tickets','module_tickets','Ticket és segítségkérés',config.modules.tickets,'Privát ügyintézés és HTML transcript.')}${moduleCheck(guild.id,'welcome','module_welcome','Welcome és Auto Role',config.modules.welcome)}${moduleCheck(guild.id,'levels','module_levels','XP és szintrendszer',config.modules.levels)}${moduleCheck(guild.id,'reactionRoles','module_reactionRoles','Button / Reaction Role',config.modules.reactionRoles)}${moduleCheck(guild.id,'customCommands','module_customCommands','Custom Commands',config.modules.customCommands)}${moduleCheck(guild.id,'giveaways','module_giveaways','Giveaway',config.modules.giveaways)}${moduleCheck(guild.id,'suggestions','module_suggestions','Közösségi extrák',config.modules.suggestions,'Ötletek, szavazás és bejelentés.')}${moduleCheck(guild.id,'shift','module_shift','Shift Management',config.modules.shift,'Szolgálat, szünet, statisztika és napló.')}${moduleCheck(guild.id,'ai','module_ai','Nexa AI és memória',config.modules.ai,'Csak Owner által engedélyezett felhasználók használhatják.')}${moduleCheck(guild.id,'tempVoice','module_tempVoice','Ideiglenes hangcsatornák',config.modules.tempVoice)}</div><div class="actions"><a class="btn secondary" href="/dashboard/guild/${escapeHtml(guild.id)}/commands">Custom Command kezelő →</a></div></section>
+<section id="modules" class="card section"><div class="section-kicker">Alaprendszer • ${planName(plan)}</div><h2 class="section-title">⬡ Modulmátrix</h2><div class="field-grid"><div><label for="language">Bot nyelve ezen a szerveren</label><select id="language" name="language">${option('hu','Magyar (alapértelmezett)',config.language)}${option('en','English',config.language)}</select><div class="help">A panelek és a Discord-válaszok a kiválasztott nyelven jelennek meg.</div></div></div><div class="module-grid">${moduleCheck(guild.id,'protection','module_protection','Automod és védelem',config.modules.protection,'Spam-, link- és tartalomvédelem. Anti-Nuke és raid csak Ultimate csomagban.')}${moduleCheck(guild.id,'moderation','module_moderation','Moderáció',config.modules.moderation,'Case ID és tagválasztós moderációs panel.')}${moduleCheck(guild.id,'logging','module_logging','Részletes naplózás',config.modules.logging)}${moduleCheck(guild.id,'tickets','module_tickets','Ticket és segítségkérés',config.modules.tickets,'Privát ügyintézés és HTML transcript.')}${moduleCheck(guild.id,'welcome','module_welcome','Welcome és Auto Role',config.modules.welcome)}${moduleCheck(guild.id,'levels','module_levels','XP és szintrendszer',config.modules.levels)}${moduleCheck(guild.id,'reactionRoles','module_reactionRoles','Button / Reaction Role',config.modules.reactionRoles)}${moduleCheck(guild.id,'customCommands','module_customCommands','Custom Commands',config.modules.customCommands)}${moduleCheck(guild.id,'giveaways','module_giveaways','Giveaway',config.modules.giveaways)}${moduleCheck(guild.id,'suggestions','module_suggestions','Közösségi extrák',config.modules.suggestions,'Ötletek, szavazás és bejelentés.')}${moduleCheck(guild.id,'shift','module_shift','Shift Management',config.modules.shift,'Szolgálat, szünet, statisztika és napló.')}${moduleCheck(guild.id,'ai','module_ai','Nexa AI és memória',config.modules.ai,'Csak Owner által engedélyezett felhasználók használhatják.')}${moduleCheck(guild.id,'tempVoice','module_tempVoice','Ideiglenes hangcsatornák',config.modules.tempVoice)}${moduleCheck(guild.id,'verification','module_verification','Gombos tagellenőrzés',config.modules.verification,'Egy kattintással adja az ellenőrzött tag rangot.')}${moduleCheck(guild.id,'starboard','module_starboard','Starboard',config.modules.starboard,'A legtöbb csillagot kapott üzenetek automatikus kiemelése.')}${moduleCheck(guild.id,'reminders','module_reminders','Emlékeztetők',config.modules.reminders,'Adatbázisos személyes emlékeztetők.')}</div><div class="actions"><a class="btn secondary" href="/dashboard/guild/${escapeHtml(guild.id)}/commands">Custom Command kezelő →</a></div></section>
 
 <section class="card section"><div class="section-kicker">Eseményfigyelés</div><h2 class="section-title">📋 Külön kapcsolható logok</h2><div class="module-grid">${check('log_messageDelete','Üzenettörlés',config.logging.messageDelete)}${check('log_messageEdit','Üzenetszerkesztés',config.logging.messageEdit)}${check('log_memberJoin','Belépés',config.logging.memberJoin)}${check('log_memberLeave','Kilépés',config.logging.memberLeave)}${check('log_ban','Ban / unban',config.logging.ban)}${check('log_timeout','Timeout',config.logging.timeout)}${check('log_roleUpdate','Rangváltozás',config.logging.roleUpdate)}${check('log_channelUpdate','Csatornaváltozás',config.logging.channelUpdate)}${check('log_voiceJoin','Voice belépés',config.logging.voiceJoin)}${check('log_voiceLeave','Voice kilépés',config.logging.voiceLeave)}${check('log_nicknameChange','Becenév',config.logging.nicknameChange)}${check('log_invite','Meghívók',config.logging.invite)}${check('log_moderation','Moderáció',config.logging.moderation)}${check('log_automod','Automod',config.logging.automod)}${check('log_security','Security',config.logging.security)}</div></section>
 
-<section id="channels" class="card section"><div class="section-kicker">Útvonalak</div><h2 class="section-title"># Csatornák és kategóriák</h2><div class="field-grid">${selectField('channel_controlCenter','NexaBot fő vezérlőpanel',textChannels(config.channels.controlCenter),'Ide kerül a teljes gombos Discord-panel.')}${selectField('channel_ai','Nexa AI beszélgetőcsatorna',textChannels(config.channels.ai),'Itt minden nem-bot üzenetre válaszol a Nexa AI.')}${selectField('channel_logs','Moderációs napló',textChannels(config.channels.logs))}${selectField('channel_warnings','Figyelmeztetések',textChannels(config.channels.warnings))}${selectField('channel_moderationPanel','Moderációs panel',textChannels(config.channels.moderationPanel))}${selectField('channel_ticketPanel','Segítségkérő panel',textChannels(config.channels.ticketPanel))}${selectField('channel_ticketCategory','Ticket kategória',categories(config.channels.ticketCategory))}${selectField('channel_welcome','Üdvözlőcsatorna',textChannels(config.channels.welcome))}${selectField('channel_goodbye','Búcsúzócsatorna',textChannels(config.channels.goodbye))}${selectField('channel_levels','Szintlépési értesítések',textChannels(config.channels.levels),'Ha nincs kiválasztva, az aktuális csatornába ír.')}${selectField('channel_suggestions','Ötletek csatornája',textChannels(config.channels.suggestions))}${selectField('channel_shiftLogs','Szolgálati napló',textChannels(config.channels.shiftLogs))}${selectField('channel_announcements','Bejelentések csatornája',textChannels(config.channels.announcements))}${selectField('channel_tempVoiceLobby','Ideiglenes hangszoba belépő',voiceChannels(config.channels.tempVoiceLobby))}${selectField('channel_tempVoiceCategory','Ideiglenes hangszobák kategóriája',categories(config.channels.tempVoiceCategory))}</div></section>
+<section id="channels" class="card section"><div class="section-kicker">Útvonalak</div><h2 class="section-title"># Csatornák és kategóriák</h2><div class="field-grid">${selectField('channel_controlCenter','NexaBot fő vezérlőpanel',textChannels(config.channels.controlCenter),'Ide kerül a teljes gombos Discord-panel.')}${selectField('channel_ai','Nexa AI beszélgetőcsatorna',textChannels(config.channels.ai),'Itt minden nem-bot üzenetre válaszol a Nexa AI.')}${selectField('channel_logs','Moderációs napló',textChannels(config.channels.logs))}${selectField('channel_warnings','Figyelmeztetések',textChannels(config.channels.warnings))}${selectField('channel_moderationPanel','Moderációs panel',textChannels(config.channels.moderationPanel))}${selectField('channel_ticketPanel','Segítségkérő panel',textChannels(config.channels.ticketPanel))}${selectField('channel_ticketCategory','Ticket kategória',categories(config.channels.ticketCategory))}${selectField('channel_welcome','Üdvözlőcsatorna',textChannels(config.channels.welcome))}${selectField('channel_goodbye','Búcsúzócsatorna',textChannels(config.channels.goodbye))}${selectField('channel_levels','Szintlépési értesítések',textChannels(config.channels.levels),'Ha nincs kiválasztva, az aktuális csatornába ír.')}${selectField('channel_suggestions','Ötletek csatornája',textChannels(config.channels.suggestions))}${selectField('channel_shiftLogs','Szolgálati napló',textChannels(config.channels.shiftLogs))}${selectField('channel_announcements','Bejelentések csatornája',textChannels(config.channels.announcements))}${selectField('channel_verification','Tagellenőrző panel',textChannels(config.channels.verification),'Ide kerül az egykattintásos ellenőrzőpanel.')}${selectField('channel_starboard','Starboard csatorna',textChannels(config.channels.starboard),'A legtöbb csillagot kapott üzenetek kiemelt csatornája.')}${selectField('channel_tempVoiceLobby','Ideiglenes hangszoba belépő',voiceChannels(config.channels.tempVoiceLobby))}${selectField('channel_tempVoiceCategory','Ideiglenes hangszobák kategóriája',categories(config.channels.tempVoiceCategory))}</div></section>
 
-<section id="roles" class="card section"><div class="section-kicker">Jogosultságok</div><h2 class="section-title">◇ Rangok és hozzáférés</h2><div class="field-grid">${selectField('role_staff','Staff rang',roles(config.roles.staff),'Moderáció, linkküldés és ticketkezelés.')}${selectField('role_human','Automatikus ember rang',roles(config.roles.human || config.roles.auto))}${selectField('role_bot','Automatikus bot rang',roles(config.roles.bot))}${selectField('role_dashboard','Webes kezelői rang',roles(config.roles.dashboard),'A tulajdonos és adminok mellett ez az egy rang léphet be.')}${selectField('role_shift','Szolgálati rang',roles(config.roles.shift),'Ez a rang használhatja a Shift Management panelt.')}<div><label for="role_selfRoles">Önkiszolgáló rangok</label><select id="role_selfRoles" name="role_selfRoles" multiple size="7">${roleOptionsMulti(guild, config.community.selfRoles)}</select><div class="help">Legfeljebb 10 rang. Telefonon tartsd nyomva a több kijelöléshez.</div></div></div></section>
+<section id="roles" class="card section"><div class="section-kicker">Jogosultságok</div><h2 class="section-title">◇ Rangok és hozzáférés</h2><div class="field-grid">${selectField('role_staff','Staff rang',roles(config.roles.staff),'Moderáció, linkküldés és ticketkezelés.')}${selectField('role_human','Automatikus ember rang',roles(config.roles.human || config.roles.auto))}${selectField('role_bot','Automatikus bot rang',roles(config.roles.bot))}${selectField('role_dashboard','Webes kezelői rang',roles(config.roles.dashboard),'A tulajdonos és adminok mellett ez az egy rang léphet be.')}${selectField('role_shift','Szolgálati rang',roles(config.roles.shift),'Ez a rang használhatja a Shift Management panelt.')}${selectField('role_verified','Ellenőrzött tag rang',roles(config.roles.verified),'A tag ezt kapja az ellenőrzőgomb megnyomásakor.')}<div><label for="role_selfRoles">Önkiszolgáló rangok</label><select id="role_selfRoles" name="role_selfRoles" multiple size="7">${roleOptionsMulti(guild, config.community.selfRoles)}</select><div class="help">Legfeljebb 10 rang. Telefonon tartsd nyomva a több kijelöléshez.</div></div></div></section>
 
 <section class="card section"><div class="section-kicker">Kommunikáció</div><h2 class="section-title">💬 Botüzenetek</h2><div class="field-grid"><div><label for="message_welcome">Üdvözlőszöveg</label><textarea id="message_welcome" name="message_welcome">${escapeHtml(config.messages.welcome)}</textarea><div class="help">Használható: {tag}, {username}, {server}, {memberCount}</div></div><div><label for="message_goodbye">Búcsúzó szöveg</label><textarea id="message_goodbye" name="message_goodbye">${escapeHtml(config.messages.goodbye)}</textarea></div><div><label for="message_levelUp">Szintlépési szöveg</label><textarea id="message_levelUp" name="message_levelUp">${escapeHtml(config.messages.levelUp)}</textarea><div class="help">Használható: {tag}, {level}, {server}</div></div><div><label for="message_ticket">Segítségkérő panel szövege</label><textarea id="message_ticket" name="message_ticket">${escapeHtml(config.messages.ticket)}</textarea></div></div></section>
 
-<section id="community" class="card section"><div class="section-kicker">Aktivitás</div><h2 class="section-title">★ Közösségi rendszer</h2><div class="field-grid"><div><label for="community_xpCooldownSeconds">XP-időkorlát másodpercben</label><input id="community_xpCooldownSeconds" name="community_xpCooldownSeconds" type="number" min="15" max="300" value="${config.community.xpCooldownSeconds}"></div><div><label for="community_xpMin">Minimum XP üzenetenként</label><input id="community_xpMin" name="community_xpMin" type="number" min="1" max="50" value="${config.community.xpMin}"></div><div><label for="community_xpMax">Maximum XP üzenetenként</label><input id="community_xpMax" name="community_xpMax" type="number" min="1" max="100" value="${config.community.xpMax}"></div><div><label>Szintjutalom rangok</label><textarea name="community_rewardRoles" placeholder="5:123456789012345678">${escapeHtml(config.community.rewardRoles.map((item) => `${item.level}:${item.roleId}`).join('\n'))}</textarea><div class="help">Soronként: szint:rangkód. Legfeljebb 25 jutalom.</div></div></div></section>
+<section id="community" class="card section"><div class="section-kicker">Aktivitás</div><h2 class="section-title">★ Közösségi rendszer</h2><div class="field-grid"><div><label for="community_xpCooldownSeconds">XP-időkorlát másodpercben</label><input id="community_xpCooldownSeconds" name="community_xpCooldownSeconds" type="number" min="15" max="300" value="${config.community.xpCooldownSeconds}"></div><div><label for="community_xpMin">Minimum XP üzenetenként</label><input id="community_xpMin" name="community_xpMin" type="number" min="1" max="50" value="${config.community.xpMin}"></div><div><label for="community_xpMax">Maximum XP üzenetenként</label><input id="community_xpMax" name="community_xpMax" type="number" min="1" max="100" value="${config.community.xpMax}"></div><div><label for="community_starboardThreshold">Starboard küszöb</label><input id="community_starboardThreshold" name="community_starboardThreshold" type="number" min="2" max="25" value="${config.community.starboardThreshold}"><div class="help">Ennyi ⭐ reakció után kerül ki az üzenet.</div></div><div><label>Szintjutalom rangok</label><textarea name="community_rewardRoles" placeholder="5:123456789012345678">${escapeHtml(config.community.rewardRoles.map((item) => `${item.level}:${item.roleId}`).join('\n'))}</textarea><div class="help">Soronként: szint:rangkód. Legfeljebb 25 jutalom.</div></div></div></section>
 
 <section id="shift" class="card section"><div class="section-kicker">Állománykezelés</div><h2 class="section-title">◷ Shift Management</h2><div class="module-grid">${check('shift_trackBreaks','Szünetek követése',config.shift.trackBreaks,'A szünet nem számít bele az aktív szolgálatba.')}${check('shift_showLeaderboard','Havi szolgálati ranglista',config.shift.showLeaderboard,'A saját profilban és a szolgálati rendszerben látható.')}</div><div class="help">A szolgálat a Discord fő vezérlőpaneljéről, gombokkal kezelhető.</div></section>
 
@@ -2964,6 +3009,9 @@ function configFromForm(guild, form) {
       shift: form.has('module_shift'),
       ai: form.has('module_ai'),
       tempVoice: form.has('module_tempVoice'),
+      verification: form.has('module_verification'),
+      starboard: form.has('module_starboard'),
+      reminders: form.has('module_reminders'),
       bvi: false
     },
     channels: {
@@ -2981,6 +3029,8 @@ function configFromForm(guild, form) {
       suggestions: validChannelId(guild, form.get('channel_suggestions')),
       shiftLogs: validChannelId(guild, form.get('channel_shiftLogs')),
       announcements: validChannelId(guild, form.get('channel_announcements')),
+      verification: validChannelId(guild, form.get('channel_verification')),
+      starboard: validChannelId(guild, form.get('channel_starboard')),
       tempVoiceLobby: validVoiceId(guild, form.get('channel_tempVoiceLobby')),
       tempVoiceCategory: validChannelId(guild, form.get('channel_tempVoiceCategory'), true)
     },
@@ -2990,7 +3040,8 @@ function configFromForm(guild, form) {
       human: validRoleId(guild, form.get('role_human')),
       bot: validRoleId(guild, form.get('role_bot')),
       dashboard: validRoleId(guild, form.get('role_dashboard')),
-      shift: validRoleId(guild, form.get('role_shift'))
+      shift: validRoleId(guild, form.get('role_shift')),
+      verified: validRoleId(guild, form.get('role_verified'))
     },
     messages: {
       welcome: form.get('message_welcome'),
@@ -3033,6 +3084,7 @@ function configFromForm(guild, form) {
       xpCooldownSeconds: form.get('community_xpCooldownSeconds'),
       xpMin: form.get('community_xpMin'),
       xpMax: form.get('community_xpMax'),
+      starboardThreshold: form.get('community_starboardThreshold'),
       selfRoles: form.getAll('role_selfRoles').map((id) => validRoleId(guild, id)).filter(Boolean),
       rewardRoles: String(form.get('community_rewardRoles') || '').split(/\r?\n/).map((line) => {
         const [level, roleId] = line.split(':').map((item) => item.trim());
@@ -3108,6 +3160,11 @@ function validateConfiguration(config, guildId = null) {
     if (!config.channels.shiftLogs) missing.push('szolgálati naplócsatorna');
     if (!config.roles.shift) missing.push('szolgálati rang');
   }
+  if (config.modules.verification) {
+    if (!config.channels.verification) missing.push('tagellenőrző csatorna');
+    if (!config.roles.verified) missing.push('ellenőrzött tag rang');
+  }
+  if (config.modules.starboard && !config.channels.starboard) missing.push('Starboard csatorna');
   if (config.modules.tempVoice && !config.channels.tempVoiceLobby) missing.push('ideiglenes hangszoba belépő');
   if (missing.length) {
     throw new Error(`A bekapcsolt funkciókhoz még válaszd ki: ${[...new Set(missing)].join(', ')}.`);
@@ -3147,6 +3204,10 @@ async function syncConfiguredPanels(guild, config, botUser) {
     const roleName = config.roles.staff ? guild.roles.cache.get(config.roles.staff)?.name : NAMES.staffRole;
     await upsertPanel(channel, botUser.id, '🛡️ NEXA', staffPanel(roleName || 'Staff', config.language));
   }
+  if (moduleEnabled(guild.id, 'verification') && config.channels.verification) {
+    const channel = guild.channels.cache.get(config.channels.verification);
+    if (channel?.isTextBased()) await upsertVerificationPanel(guild, channel, botUser.id);
+  }
 }
 
 async function exchangeCode(code) {
@@ -3179,7 +3240,7 @@ function defaultHealthSnapshot(client) {
   const startup = process.uptime() < 180;
   return {
     name: 'NexaBot',
-    version: '6.0.0',
+    version: '6.1.0',
     healthy: ready || startup,
     status: ready ? 'online' : startup ? 'starting' : 'offline',
     guilds: client.guilds?.cache?.size || 0,
@@ -4340,6 +4401,410 @@ module.exports = {
 };
 
 },
+"src/engagement.js": function(module, exports, require) {
+const {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder,
+  MessageFlags,
+  PermissionFlagsBits,
+  SlashCommandBuilder
+} = require('discord.js');
+const {
+  configuredChannel,
+  configuredRole,
+  dbQuery,
+  getGuildConfig,
+  moduleEnabled
+} = require('./config');
+const { COLORS } = require('./constants');
+const { baseEmbed, ephemeralError } = require('./utils');
+const { pick } = require('./i18n');
+const { recordAudit, recordError, recordUsage } = require('./telemetry');
+
+const EPHEMERAL = MessageFlags.Ephemeral;
+const reminderFallback = new Map();
+const starboardFallback = new Map();
+let fallbackReminderId = 1;
+
+function parseDuration(value) {
+  const match = String(value || '').trim().toLowerCase().match(/^(\d{1,4})\s*(m|h|d|w)$/);
+  if (!match) return null;
+  const amount = Number.parseInt(match[1], 10);
+  const multipliers = { m: 60_000, h: 3_600_000, d: 86_400_000, w: 604_800_000 };
+  const milliseconds = amount * multipliers[match[2]];
+  return milliseconds >= 60_000 && milliseconds <= 30 * 86_400_000 ? milliseconds : null;
+}
+
+function durationLabel(milliseconds, language = 'hu') {
+  const units = [
+    [604_800_000, language === 'en' ? 'week' : 'hét'],
+    [86_400_000, language === 'en' ? 'day' : 'nap'],
+    [3_600_000, language === 'en' ? 'hour' : 'óra'],
+    [60_000, language === 'en' ? 'minute' : 'perc']
+  ];
+  const [size, label] = units.find(([size]) => milliseconds >= size) || units.at(-1);
+  const amount = Math.max(1, Math.round(milliseconds / size));
+  return language === 'en' && amount !== 1 ? `${amount} ${label}s` : `${amount} ${label}`;
+}
+
+function engagementCommands() {
+  return [
+    new SlashCommandBuilder()
+      .setName('hitelesites')
+      .setDescription('A gombos tagellenőrző rendszer kezelése.')
+      .setDescriptionLocalizations({ 'en-US': 'Manage the button verification system.', 'en-GB': 'Manage the button verification system.' })
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+      .setDMPermission(false)
+      .addSubcommand((subcommand) => subcommand
+        .setName('panel')
+        .setDescription('Kihelyezi vagy frissíti az ellenőrzőpanelt.')),
+    new SlashCommandBuilder()
+      .setName('emlekezteto')
+      .setDescription('Személyes, újraindítás után is megmaradó emlékeztetők.')
+      .setDescriptionLocalizations({ 'en-US': 'Create persistent personal reminders.', 'en-GB': 'Create persistent personal reminders.' })
+      .setDMPermission(false)
+      .addSubcommand((subcommand) => subcommand
+        .setName('letrehozas')
+        .setDescription('Új emlékeztető létrehozása.')
+        .addStringOption((option) => option
+          .setName('ido')
+          .setDescription('Például: 10m, 2h, 3d vagy 1w.')
+          .setRequired(true)
+          .setMaxLength(8))
+        .addStringOption((option) => option
+          .setName('uzenet')
+          .setDescription('Mire emlékeztesselek?')
+          .setRequired(true)
+          .setMaxLength(1000)))
+      .addSubcommand((subcommand) => subcommand
+        .setName('lista')
+        .setDescription('Megmutatja az aktív emlékeztetőidet.'))
+      .addSubcommand((subcommand) => subcommand
+        .setName('torles')
+        .setDescription('Töröl egy emlékeztetőt.')
+        .addIntegerOption((option) => option
+          .setName('azonosito')
+          .setDescription('Az emlékeztető listában látható azonosító.')
+          .setRequired(true)
+          .setMinValue(1)))
+  ];
+}
+
+function verificationPanel(language = 'hu') {
+  const english = language === 'en';
+  const embed = new EmbedBuilder()
+    .setColor(COLORS.primary)
+    .setTitle(english ? '✅ NEXA Member Verification' : '✅ NEXA tagellenőrzés')
+    .setDescription(english
+      ? 'Press the button below to confirm that you have read the server rules and receive the verified member role.'
+      : 'Nyomd meg az alábbi gombot annak megerősítéséhez, hogy elolvastad a szerver szabályait. Ezután automatikusan megkapod az ellenőrzött tag rangot.')
+    .addFields(
+      { name: english ? 'Fast' : 'Gyors', value: english ? 'One click, no commands.' : 'Egyetlen kattintás, parancs nélkül.', inline: true },
+      { name: english ? 'Secure' : 'Biztonságos', value: english ? 'The role is granted by NEXA.' : 'A rangot közvetlenül a NEXA adja.', inline: true },
+      { name: english ? 'Having trouble?' : 'Nem működik?', value: english ? 'Contact the server staff.' : 'Keresd a szerver Staff csapatát.', inline: true }
+    )
+    .setFooter({ text: 'NEXA Identity Gateway • 6.1' });
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('engagement_verify')
+      .setLabel(english ? 'Verify me' : 'Ellenőrzés és belépés')
+      .setEmoji('✅')
+      .setStyle(ButtonStyle.Success)
+  );
+  return { embeds: [embed], components: [row] };
+}
+
+async function upsertVerificationPanel(guild, channel, botId) {
+  const language = getGuildConfig(guild.id).language;
+  const messages = await channel.messages.fetch({ limit: 50 }).catch(() => null);
+  const existing = messages?.find((message) =>
+    message.author.id === botId && message.components.some((row) =>
+      row.components.some((component) => component.customId === 'engagement_verify')
+    )
+  );
+  if (existing) {
+    await existing.edit(verificationPanel(language));
+    return existing;
+  }
+  return channel.send(verificationPanel(language));
+}
+
+async function handleVerificationButton(interaction) {
+  if (!moduleEnabled(interaction.guildId, 'verification')) {
+    return ephemeralError(interaction, pick(interaction.guildId, 'A tagellenőrzés ki van kapcsolva.', 'Member verification is disabled.'));
+  }
+  const role = configuredRole(interaction.guild, 'verified');
+  if (!role) return ephemeralError(interaction, 'Nincs beállítva ellenőrzött tag rang a webes dashboardon.');
+  if (!role.editable) return ephemeralError(interaction, 'A NEXA rangja legyen az ellenőrzött tag rang fölött.');
+  if (interaction.member.roles.cache.has(role.id)) {
+    return interaction.reply({ content: `✅ Már rendelkezel a **${role.name}** ranggal.`, flags: EPHEMERAL });
+  }
+  await interaction.member.roles.add(role, `NEXA ellenőrzés: ${interaction.user.tag}`);
+  await recordAudit('member_verified', {
+    actorId: interaction.user.id,
+    guildId: interaction.guildId,
+    targetId: role.id
+  });
+  return interaction.reply({ content: `✅ Sikeres ellenőrzés! Megkaptad a **${role.name}** rangot.`, flags: EPHEMERAL });
+}
+
+async function createReminder(interaction, milliseconds, text) {
+  const dueAt = new Date(Date.now() + milliseconds);
+  const result = await dbQuery(
+    `INSERT INTO nexabot_reminders (guild_id, channel_id, user_id, message, due_at)
+     VALUES ($1, $2, $3, $4, $5) RETURNING id, due_at`,
+    [interaction.guildId, interaction.channelId, interaction.user.id, text, dueAt]
+  ).catch(() => null);
+  if (result?.rows?.[0]) return { id: Number(result.rows[0].id), dueAt: new Date(result.rows[0].due_at) };
+  const id = fallbackReminderId++;
+  reminderFallback.set(id, {
+    id,
+    guildId: interaction.guildId,
+    channelId: interaction.channelId,
+    userId: interaction.user.id,
+    message: text,
+    dueAt,
+    sent: false
+  });
+  return { id, dueAt };
+}
+
+async function listReminders(guildId, userId) {
+  const result = await dbQuery(
+    `SELECT id, message, due_at FROM nexabot_reminders
+     WHERE guild_id = $1 AND user_id = $2 AND sent = FALSE AND due_at > NOW()
+     ORDER BY due_at ASC LIMIT 20`,
+    [guildId, userId]
+  ).catch(() => null);
+  if (result) return result.rows;
+  return [...reminderFallback.values()]
+    .filter((item) => item.guildId === guildId && item.userId === userId && !item.sent && item.dueAt > new Date())
+    .sort((a, b) => a.dueAt - b.dueAt)
+    .slice(0, 20)
+    .map((item) => ({ id: item.id, message: item.message, due_at: item.dueAt }));
+}
+
+async function deleteReminder(guildId, userId, id) {
+  const result = await dbQuery(
+    'DELETE FROM nexabot_reminders WHERE id = $1 AND guild_id = $2 AND user_id = $3 AND sent = FALSE RETURNING id',
+    [id, guildId, userId]
+  ).catch(() => null);
+  if (result) return result.rowCount > 0;
+  const item = reminderFallback.get(id);
+  if (!item || item.guildId !== guildId || item.userId !== userId || item.sent) return false;
+  reminderFallback.delete(id);
+  return true;
+}
+
+async function handleEngagementCommand(interaction) {
+  if (interaction.commandName === 'hitelesites') {
+    if (!moduleEnabled(interaction.guildId, 'verification')) {
+      return ephemeralError(interaction, 'A tagellenőrzés előbb legyen bekapcsolva a webes dashboardon.');
+    }
+    if (!interaction.member.permissions.has(PermissionFlagsBits.ManageGuild)) {
+      return ephemeralError(interaction, 'Ehhez Szerver kezelése jogosultság szükséges.');
+    }
+    const channel = configuredChannel(interaction.guild, 'verification') || interaction.channel;
+    if (!channel?.isTextBased()) return ephemeralError(interaction, 'Válassz szöveges ellenőrzőcsatornát a webes dashboardon.');
+    await interaction.deferReply({ flags: EPHEMERAL });
+    await upsertVerificationPanel(interaction.guild, channel, interaction.client.user.id);
+    await recordAudit('verification_panel_publish', { actorId: interaction.user.id, guildId: interaction.guildId, targetId: channel.id });
+    return interaction.editReply(`✅ Az ellenőrzőpanel elkészült: ${channel}`);
+  }
+  if (interaction.commandName !== 'emlekezteto') return false;
+  if (!moduleEnabled(interaction.guildId, 'reminders')) {
+    return ephemeralError(interaction, 'Az emlékeztetők ki vannak kapcsolva ezen a szerveren.');
+  }
+  const action = interaction.options.getSubcommand();
+  if (action === 'letrehozas') {
+    const milliseconds = parseDuration(interaction.options.getString('ido', true));
+    if (!milliseconds) return ephemeralError(interaction, 'Az idő 1 perc és 30 nap közötti legyen. Példák: `10m`, `2h`, `3d`, `1w`.');
+    const message = interaction.options.getString('uzenet', true).trim();
+    const reminder = await createReminder(interaction, milliseconds, message);
+    await recordUsage('reminder_create', { guildId: interaction.guildId, userId: interaction.user.id });
+    return interaction.reply({
+      content: `⏰ **Emlékeztető #${reminder.id} létrehozva**\nIdő: **${durationLabel(milliseconds, getGuildConfig(interaction.guildId).language)}**\nÉrkezés: <t:${Math.floor(reminder.dueAt.getTime() / 1000)}:F>`,
+      flags: EPHEMERAL
+    });
+  }
+  if (action === 'lista') {
+    const reminders = await listReminders(interaction.guildId, interaction.user.id);
+    if (!reminders.length) return interaction.reply({ content: '📭 Nincs aktív emlékeztetőd.', flags: EPHEMERAL });
+    const lines = reminders.map((item) => `**#${item.id}** • <t:${Math.floor(new Date(item.due_at).getTime() / 1000)}:R>\n${String(item.message).slice(0, 180)}`);
+    return interaction.reply({ embeds: [baseEmbed('⏰ Aktív emlékeztetők', lines.join('\n\n'), COLORS.primary)], flags: EPHEMERAL });
+  }
+  if (action === 'torles') {
+    const id = interaction.options.getInteger('azonosito', true);
+    const deleted = await deleteReminder(interaction.guildId, interaction.user.id, id);
+    return interaction.reply({ content: deleted ? `✅ Az emlékeztető #${id} törölve.` : '❌ Nem található ilyen aktív, saját emlékeztető.', flags: EPHEMERAL });
+  }
+  return true;
+}
+
+async function dueReminderRows() {
+  const result = await dbQuery(
+    `SELECT id, guild_id, channel_id, user_id, message, due_at
+     FROM nexabot_reminders WHERE sent = FALSE AND due_at <= NOW()
+     ORDER BY due_at ASC LIMIT 100`
+  ).catch(() => null);
+  if (result) return result.rows;
+  return [...reminderFallback.values()].filter((item) => !item.sent && item.dueAt <= new Date()).slice(0, 100);
+}
+
+async function markReminderSent(id) {
+  const result = await dbQuery('UPDATE nexabot_reminders SET sent = TRUE, sent_at = NOW() WHERE id = $1', [id]).catch(() => null);
+  if (!result) {
+    const item = reminderFallback.get(Number(id));
+    if (item) item.sent = true;
+  }
+}
+
+async function deliverDueReminders(client) {
+  if (!client.isReady?.()) return 0;
+  const rows = await dueReminderRows();
+  let delivered = 0;
+  for (const row of rows) {
+    const channelId = String(row.channel_id || row.channelId || '');
+    const userId = String(row.user_id || row.userId || '');
+    const message = String(row.message || '').slice(0, 1000);
+    try {
+      const channel = channelId ? await client.channels.fetch(channelId).catch(() => null) : null;
+      const payload = {
+        content: `<@${userId}>`,
+        embeds: [baseEmbed('⏰ NEXA emlékeztető', message, COLORS.primary).setFooter({ text: `Emlékeztető #${row.id}` })],
+        allowedMentions: { users: [userId] }
+      };
+      if (channel?.isTextBased()) await channel.send(payload);
+      else {
+        const user = await client.users.fetch(userId);
+        await user.send({ embeds: payload.embeds });
+      }
+      await markReminderSent(row.id);
+      delivered += 1;
+    } catch (error) {
+      await recordError(error, { command: 'reminder_delivery', guildId: row.guild_id || row.guildId, userId });
+    }
+  }
+  return delivered;
+}
+
+function starboardKey(guildId, messageId) {
+  return `${guildId}:${messageId}`;
+}
+
+async function starboardRecord(guildId, messageId) {
+  const result = await dbQuery(
+    'SELECT channel_id, starboard_message_id, score FROM nexabot_starboard WHERE guild_id = $1 AND message_id = $2',
+    [guildId, messageId]
+  ).catch(() => null);
+  return result ? result.rows[0] || null : starboardFallback.get(starboardKey(guildId, messageId)) || null;
+}
+
+async function saveStarboardRecord(guildId, messageId, channelId, starboardMessageId, score) {
+  const result = await dbQuery(
+    `INSERT INTO nexabot_starboard (guild_id, message_id, channel_id, starboard_message_id, score)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (guild_id, message_id) DO UPDATE SET
+       channel_id = EXCLUDED.channel_id,
+       starboard_message_id = EXCLUDED.starboard_message_id,
+       score = EXCLUDED.score,
+       updated_at = NOW()`,
+    [guildId, messageId, channelId, starboardMessageId, score]
+  ).catch(() => null);
+  if (!result) starboardFallback.set(starboardKey(guildId, messageId), { channel_id: channelId, starboard_message_id: starboardMessageId, score });
+}
+
+async function deleteStarboardRecord(guildId, messageId) {
+  const result = await dbQuery('DELETE FROM nexabot_starboard WHERE guild_id = $1 AND message_id = $2', [guildId, messageId]).catch(() => null);
+  if (!result) starboardFallback.delete(starboardKey(guildId, messageId));
+}
+
+function starboardPayload(message, score) {
+  const attachment = message.attachments.find((item) => item.contentType?.startsWith('image/'));
+  const embed = new EmbedBuilder()
+    .setColor(COLORS.warning)
+    .setAuthor({ name: message.author.globalName || message.author.username, iconURL: message.author.displayAvatarURL() })
+    .setDescription(String(message.content || '*Csak csatolmányt tartalmazó üzenet*').slice(0, 3500))
+    .addFields(
+      { name: 'Csatorna', value: `${message.channel}`, inline: true },
+      { name: 'Csillagok', value: `⭐ ${score}`, inline: true },
+      { name: 'Eredeti üzenet', value: `[Megnyitás](${message.url})`, inline: true }
+    )
+    .setTimestamp(message.createdAt)
+    .setFooter({ text: `NEXA Starboard • ${message.id}` });
+  if (attachment?.url) embed.setImage(attachment.url);
+  return { content: `⭐ **${score}** • ${message.channel}`, embeds: [embed] };
+}
+
+async function handleStarboardReaction(reaction, user) {
+  if (user.bot || reaction.emoji.name !== '⭐') return;
+  if (reaction.partial) await reaction.fetch().catch(() => null);
+  if (reaction.message.partial) await reaction.message.fetch().catch(() => null);
+  const message = reaction.message;
+  const guild = message.guild;
+  if (!guild || message.author?.bot || !moduleEnabled(guild.id, 'starboard')) return;
+  const target = configuredChannel(guild, 'starboard');
+  if (!target?.isTextBased() || message.channelId === target.id) return;
+  const threshold = getGuildConfig(guild.id).community.starboardThreshold;
+  const score = Number(reaction.count || 0);
+  const existing = await starboardRecord(guild.id, message.id);
+  if (score < threshold) {
+    if (existing) {
+      const starMessage = await target.messages.fetch(existing.starboard_message_id).catch(() => null);
+      await starMessage?.delete().catch(() => null);
+      await deleteStarboardRecord(guild.id, message.id);
+    }
+    return;
+  }
+  if (existing) {
+    const starMessage = await target.messages.fetch(existing.starboard_message_id).catch(() => null);
+    if (starMessage) {
+      await starMessage.edit(starboardPayload(message, score));
+      await saveStarboardRecord(guild.id, message.id, message.channelId, starMessage.id, score);
+      return;
+    }
+  }
+  const starMessage = await target.send(starboardPayload(message, score));
+  await saveStarboardRecord(guild.id, message.id, message.channelId, starMessage.id, score);
+  await recordUsage('starboard_publish', { guildId: guild.id, userId: message.author.id });
+}
+
+function startEngagementJobs(client, intervalMs = 30_000) {
+  let running = false;
+  const run = async () => {
+    if (running) return 0;
+    running = true;
+    try {
+      return await deliverDueReminders(client);
+    } finally {
+      running = false;
+    }
+  };
+  const timer = setInterval(() => run().catch((error) => recordError(error, { command: 'engagement_jobs' })), Math.max(5_000, intervalMs));
+  timer.unref();
+  run().catch((error) => recordError(error, { command: 'engagement_jobs_startup' }));
+  return { run, stop: () => clearInterval(timer) };
+}
+
+module.exports = {
+  createReminder,
+  deleteReminder,
+  deliverDueReminders,
+  durationLabel,
+  engagementCommands,
+  handleEngagementCommand,
+  handleStarboardReaction,
+  handleVerificationButton,
+  listReminders,
+  parseDuration,
+  startEngagementJobs,
+  upsertVerificationPanel,
+  verificationPanel
+};
+
+},
 "src/events.js": function(module, exports, require) {
 const { Events } = require('discord.js');
 const { NAMES, COLORS } = require('./constants');
@@ -4356,6 +4821,7 @@ const { handleMessageXp, handleTempVoice, handleReactionRole } = require('./comm
 const { handleAiMessage } = require('./ai');
 const { handleCustomCommand } = require('./custom-commands');
 const { pick } = require('./i18n');
+const { handleStarboardReaction } = require('./engagement');
 
 function registerEvents(client) {
   client.on(Events.GuildMemberAdd, async (member) => {
@@ -4420,8 +4886,14 @@ function registerEvents(client) {
   client.on(Events.MessageCreate, handleMessageXp);
   client.on(Events.MessageCreate, handleAiMessage);
   client.on(Events.MessageCreate, handleCustomCommand);
-  client.on(Events.MessageReactionAdd, (reaction, user) => handleReactionRole(reaction, user, true));
-  client.on(Events.MessageReactionRemove, (reaction, user) => handleReactionRole(reaction, user, false));
+  client.on(Events.MessageReactionAdd, (reaction, user) => {
+    handleReactionRole(reaction, user, true).catch(() => null);
+    handleStarboardReaction(reaction, user).catch(() => null);
+  });
+  client.on(Events.MessageReactionRemove, (reaction, user) => {
+    handleReactionRole(reaction, user, false).catch(() => null);
+    handleStarboardReaction(reaction, user).catch(() => null);
+  });
   client.on(Events.VoiceStateUpdate, handleTempVoice);
 
   client.on(Events.MessageDelete, async (message) => {
@@ -4528,8 +5000,8 @@ const CATEGORIES = Object.freeze({
   utility: {
     emoji: '🧰',
     title: 'Utility',
-    text: '`/userinfo` `/serverinfo` `/avatar` `/beallitas`',
-    en: '`/userinfo` `/serverinfo` `/avatar` `/beallitas` (opens the web dashboard)'
+    text: '`/userinfo` `/serverinfo` `/avatar` `/beallitas`\n`/emlekezteto letrehozas|lista|torles`\n`/hitelesites panel` – admin tagellenőrző panel',
+    en: '`/userinfo` `/serverinfo` `/avatar` `/beallitas`\n`/emlekezteto letrehozas|lista|torles`\n`/hitelesites panel` – admin verification panel'
   },
   security: {
     emoji: '🔒',
@@ -4546,8 +5018,8 @@ const CATEGORIES = Object.freeze({
   levels: {
     emoji: '⭐',
     title: 'Levels',
-    text: '`/szint` – saját vagy más tag szintje\n`/szint-ranglista` – szerver ranglista',
-    en: '`/szint` – your or another member\'s level\n`/szint-ranglista` – server leaderboard'
+    text: '`/szint` – saját vagy más tag szintje\n`/szint-ranglista` – szerver ranglista\n⭐ Starboard – automatikus kiemelés a beállított reakciószámnál',
+    en: '`/szint` – your or another member\'s level\n`/szint-ranglista` – server leaderboard\n⭐ Starboard – automatic highlights at the configured reaction threshold'
   },
   giveaway: {
     emoji: '🎁',
@@ -4591,7 +5063,7 @@ function helpEmbed(category = null, language = 'hu') {
       .setTitle(language === 'en' ? '✨ NEXA Bot Help Center' : '✨ NEXA Bot Súgóközpont')
       .setDescription(language === 'en' ? 'Choose a category below. I will show only the commands and usage for that system.' : 'Válassz egy kategóriát az alábbi menüből. Csak az adott rendszer parancsait és használatát mutatom meg.')
       .addFields({ name: language === 'en' ? 'Tip' : 'Tipp', value: language === 'en' ? 'Most features are also available through buttons in the Discord Control Center and the web dashboard.' : 'A legtöbb funkció a Discord Control Center gombjaival és a webes dashboardon is használható.' })
-      .setFooter({ text: 'NEXA Bot 6.0 • Management Platform' });
+      .setFooter({ text: 'NEXA Bot 6.1 • Management Platform' });
   }
   const item = CATEGORIES[category];
   const englishTitles = { moderation: 'Moderation', utility: 'Utility', security: 'Security', tickets: 'Tickets', levels: 'Levels', giveaway: 'Giveaway', ai: 'AI', admin: 'Admin' };
@@ -4599,7 +5071,7 @@ function helpEmbed(category = null, language = 'hu') {
     .setColor(COLORS.primary)
     .setTitle(`${item.emoji} ${language === 'en' ? englishTitles[category] : item.title}`)
     .setDescription(language === 'en' ? item.en : item.text)
-    .setFooter({ text: language === 'en' ? 'NEXA Bot 6.0 • Choose another category from the menu' : 'NEXA Bot 6.0 • Válassz másik kategóriát a menüből' });
+    .setFooter({ text: language === 'en' ? 'NEXA Bot 6.1 • Choose another category from the menu' : 'NEXA Bot 6.1 • Válassz másik kategóriát a menüből' });
 }
 
 function buildHelpCommand() {
@@ -4674,6 +5146,7 @@ const { buildShiftCommand } = require('./shifts');
 const { communityCommands, restoreGiveaways } = require('./community');
 const { moderationCommands } = require('./moderation');
 const { buildHelpCommand } = require('./help');
+const { engagementCommands, startEngagementJobs } = require('./engagement');
 const { recordError, pruneTelemetry } = require('./telemetry');
 const { createRuntimeSupervisor, positiveInteger } = require('./runtime');
 
@@ -4725,6 +5198,7 @@ async function registerCommands() {
         buildAiCommand(),
         buildShiftCommand(),
         buildHelpCommand(),
+        ...engagementCommands(),
         ...moderationCommands(),
         ...communityCommands()
       ].map((item) => item.toJSON())
@@ -4749,7 +5223,7 @@ client.once(Events.ClientReady, async (readyClient) => {
     await registerCommands();
     console.log(`NexaBot elindult: ${readyClient.user.tag}`);
     await restoreGiveaways(readyClient);
-    console.log('A NEXA Bot 6.0 production platform használatra kész.');
+    console.log('A NEXA Bot 6.1 engagement platform használatra kész.');
   } catch (error) {
     console.error('A parancs regisztrálása nem sikerült:', error);
     await recordError(error, { command: 'registerCommands' });
@@ -4772,6 +5246,7 @@ let runtimeSupervisor = null;
 let premiumTimer = null;
 let databaseTimer = null;
 let telemetryTimer = null;
+let engagementJobs = null;
 let stopping = false;
 let restartRequested = false;
 
@@ -4795,6 +5270,7 @@ async function terminate(code, reason) {
   if (premiumTimer) clearInterval(premiumTimer);
   if (databaseTimer) clearInterval(databaseTimer);
   if (telemetryTimer) clearInterval(telemetryTimer);
+  engagementJobs?.stop();
   runtimeSupervisor?.stop();
   client.destroy();
   const forcedExit = setTimeout(() => process.exit(code), 5_000);
@@ -4856,6 +5332,7 @@ async function start() {
   }, databaseRetryMs);
   databaseTimer.unref();
   await client.login(process.env.DISCORD_TOKEN);
+  engagementJobs = startEngagementJobs(client);
 }
 
 start().catch((error) => {
@@ -4964,6 +5441,7 @@ const { saveTranscript } = require('./transcripts');
 const { recordUsage, recordAudit, recordError } = require('./telemetry');
 const { pick } = require('./i18n');
 const { checkInteractionRate } = require('./rate-limit');
+const { handleEngagementCommand, handleVerificationButton } = require('./engagement');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const applicationDrafts = new Map();
@@ -5054,6 +5532,8 @@ async function createTicket(interaction, type, details = null) {
 
 async function handleCommand(interaction) {
   if (interaction.commandName === 'help') return handleHelpCommand(interaction);
+  const engagementResult = await handleEngagementCommand(interaction);
+  if (engagementResult !== false) return engagementResult;
   if (await handleModerationCommand(interaction)) return;
   if (interaction.commandName === 'beallitas') {
     return interaction.reply({
@@ -5111,6 +5591,8 @@ async function handleCommand(interaction) {
 async function handleButton(interaction) {
   const id = interaction.customId;
   const language = interaction.guildId ? getGuildConfig(interaction.guildId).language : 'hu';
+
+  if (id === 'engagement_verify') return handleVerificationButton(interaction);
 
   if (id.startsWith('center_ai') && !isAiAllowedUser(interaction.user.id)) {
     return ephemeralError(interaction, 'A Nexa AI használatához a bot tulajdonosának engedélye szükséges.');
@@ -6603,7 +7085,7 @@ module.exports = {
 const { Events, Status } = require('discord.js');
 const { databaseHealth } = require('./config');
 
-const APP_VERSION = '6.0.0';
+const APP_VERSION = '6.1.0';
 
 function positiveInteger(value, fallback, minimum = 1_000, maximum = 60 * 60 * 1000) {
   const parsed = Number.parseInt(value, 10);
