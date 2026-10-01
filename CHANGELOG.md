@@ -1,5 +1,18 @@
 # NEXA Bot változásnapló
 
+## 7.0.0 – Owner Operations & ER:LC Bridge
+
+- új, külön Platform oldal látható aktív navigációval és magyar/angol nyelvváltással;
+- Owner Workflow Studio saját dokumentum- és ügyiratsablonokkal, legfeljebb öt egyedi kérdéssel;
+- sablononkénti célcsatorna, használati rang, személyping, ügyszám és vezetői jóváhagyás;
+- Owner Shift Operations aktív és lezárt szolgálatok szerkesztésével, törlésével és nullázásával;
+- minden szolgálati adminművelet auditálása és veszélyes teljes reset kötelező megerősítése;
+- ER:LC Bridge titkosított, szerverenkénti Server Key tárolással;
+- élő ER:LC szerver-, játékos-, staff- és queue-áttekintés;
+- owner-only, külön megerősítéses ER:LC távoli parancskonzol;
+- API timeout, rövid cache, helyi rate limit és biztonságos hibakezelés;
+- új PostgreSQL migráció és ER:LC integrációs állapottábla.
+
 ## 6.1.0 – Engagement Suite
 
 - egykattintásos, kétnyelvű tagellenőrzőpanel automatikus rangkiosztással;

@@ -1,4 +1,4 @@
-# NEXA Bot 6.1 Engagement Platform
+# NEXA Bot 7.0 Operations Platform
 
 Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Az opcionális RP- és dokumentumrendszert kizárólag a bot tulajdonosa vagy az általa kijelölt Owner-kezelő kapcsolhatja be egy kiválasztott szerveren.
 
@@ -14,6 +14,9 @@
 - Owner által ingyen kiosztható Free, Pro és Ultimate jogosultsági csomagok, megadható lejárattal vagy korlátlan időre;
 - Owner-only RP modul: szerverenkénti engedélyezés, TGF, részletes dokumentumpanelek és vezetői jóváhagyás;
 - Owner Document Control: az Owner Centerben szerverenként kiválasztható alapértelmezett használati rang, dokumentumtípusonkénti rangfelülírás, kapcsolható ügyszám és Discord-listás személymegjelölés; a felhívások és egyszerű közlemények alapból nem kapnak ügyszámot;
+- Workflow Studio: az Owner Centerben saját dokumentum- és ügyiratsablon készíthető legfeljebb öt egyedi kérdéssel, célcsatornával, használati ranggal, pinggel, automatikus ügyszámmal és opcionális vezetői jóváhagyással;
+- teljes Owner Shift Operations: aktív és lezárt szolgálatok áttekintése, budapesti idő szerinti javítása, szünetidő-módosítás, rekordtörlés, tagonkénti vagy teljes nullázás kötelező megerősítéssel és audittal;
+- ER:LC Bridge: szerverenkénti, AES-256-GCM titkosított Server Key, élő szerver-/játékos-/staff-/queue-nézet és megerősítéshez kötött owner parancskonzol;
 - moderációs Case ID és adatbázis: ban, unban, kick, timeout, untimeout, warn, warnings, clearwarns, clear, slowmode, lock, unlock és nick;
 - Automod: spam/flood, ismétlés, mass mention, invite, link, scam, tiltott szavak, caps és emoji spam;
 - whitelist felhasználó, rang és csatorna szerint;
@@ -58,6 +61,7 @@ src/
   runtime.js           gateway watchdog, health állapot és öngyógyító újraindítás
   config.js            PostgreSQL, migrációk, szerver- és owner-beállítás
   dashboard.js         OAuth2 Command Deck, Owner Center, publikus oldalak
+  erlc.js              titkosított ER:LC API-kapcsolat, cache és rate limit
   interactions.js      gombok, select menük, modalok és ticket workflow
   engagement.js        tagellenőrzés, Starboard és tartós emlékeztetők
   moderation.js        slash moderáció és Case ID
@@ -77,6 +81,7 @@ src/
 - PostgreSQL adatbázis;
 - HTTPS publikus URL az OAuth dashboardhoz;
 - opcionálisan OpenAI API-kulcs és aktív API-egyenleg.
+- az ER:LC integrációhoz megvásárolt ER:LC API pack és Server Key.
 
 ## Környezeti változók
 
@@ -91,6 +96,10 @@ src/
 | `SESSION_SECRET` | ajánlott | Legalább 32 karakteres véletlen titok |
 | `OPENAI_API_KEY` | csak AI-hoz | Kizárólag szerveroldali environment variable |
 | `OPENAI_MODEL` | nem | Alapérték: `gpt-5-mini` |
+| `ERLC_ENCRYPTION_KEY` | ER:LC webes mentéshez | Legalább 32 karakter; a szerverenkénti ER:LC kulcsok titkosításához |
+| `ERLC_API_KEY` | nem | Opcionális egyetlen környezeti Server Key; csak az `ERLC_GUILD_ID` szerveren használható |
+| `ERLC_GUILD_ID` | `ERLC_API_KEY` mellé | A globális Server Key-hez tartozó Discord szerver ID-je |
+| `ERLC_PUBLIC_APP_TOKEN` | nem | Hivatalosan regisztrált nyilvános ER:LC alkalmazás Authorization értéke |
 | `DB_POOL_MAX` | nem | Pool méret, alapérték 10, maximum 20 |
 | `DB_RETRY_MS` | nem | Adatbázis-visszacsatlakozás gyakorisága; alapérték 60 000 ms |
 | `DISCORD_MAX_OFFLINE_MS` | nem | Ennyi tartós Discord-kiesés után indul újra a process; alapérték 180 000 ms |
@@ -158,7 +167,7 @@ Az állapotvégpontok:
 A sikeres logban ez jelenik meg:
 
 ```text
-A NEXA Bot 6.1 engagement platform használatra kész.
+A NEXA Bot 7.0 operations platform használatra kész.
 ```
 
 ## Használat
@@ -176,6 +185,9 @@ A NEXA Bot 6.1 engagement platform használatra kész.
 - Csomag kiosztása: az Owner Center **Ingyenes csomag kiosztása** részében válaszd ki a Pro vagy Ultimate csomagot és a lejáratot; a szerverkártyán egy mozdulattal visszaállítható Free-re.
 - RP-rendszer: az Owner Center szerverlistáján nyomd meg az **RP bekapcsolása** gombot. Ezután Discordon a `/telepites` a teljes alap RP-rendszert, a `/dokumentum-panelek` pedig a már meglévő dokumentumcsatornák paneljeit telepíti.
 - Dokumentumjogosultság: az Owner Center szerverkártyáján nyisd meg az **Iratvezérlés** oldalt, válaszd ki az **Alapértelmezett használati rangot**, majd ments. Ettől kezdve nem a fix „Operatív állomány”, hanem a kiválasztott rang használhatja a paneleket. Egyes dokumentumtípusokhoz külön rang is megadható.
+- Egyedi ügyirat: **Owner Center → szerver → Workflow Studio**. Add meg a kérdéseket, célcsatornát és szabályokat, mentsd, majd nyomd meg a **Panel kihelyezése** gombot.
+- Szolgálati adatok: **Owner Center → szerver → Szolgálatkezelés**. Itt javítható vagy törölhető egy rekord, és külön megerősítéssel nullázható egy tag vagy a teljes szerver szolgálati előzménye.
+- ER:LC: először állítsd be Renderen az `ERLC_ENCRYPTION_KEY` értéket, majd nyisd meg az **Owner Center → szerver → ER:LC Bridge** oldalt, és ott add meg a Server Key-t. A kulcs mentés előtt élőben ellenőrzésre kerül, és utána csak maszkolva látható.
 
 ### Teljes Anti-Raid bekapcsolása
 
@@ -194,6 +206,7 @@ A NEXA Bot 6.1 engagement platform használatra kész.
 - Discord jogosultság és rangsorrend ellenőrzése;
 - a szervertulajdonos, Admin/Vezetőség, külön whitelistelt tagok és engedélyezett bot-ID-k biztonságos kivétele;
 - az AI kulcs és Discord token nem jelenik meg a dashboardon vagy logokban;
+- az ER:LC Server Key nem kerül a GitHubba vagy a böngészőbe vissza; adatbázisban hitelesített AES-256-GCM titkosítással tárolódik;
 - az Owner Center AI-statisztikát mutat, privát beszélgetésszöveget nem.
 
 ## Skálázás

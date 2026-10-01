@@ -1,8 +1,8 @@
 {
   "name": "nexabot",
-  "version": "6.1.0",
+  "version": "7.0.0",
   "private": true,
-  "description": "NEXA Bot 6.1 több szerveres Discord platform Owner Centerrel, NEXA Shielddel és Engagement Suite-tal",
+  "description": "NEXA Bot 7.0 több szerveres Discord operations platform Workflow Studióval, ER:LC Bridge-dzsel és Owner Centerrel",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {

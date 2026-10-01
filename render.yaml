@@ -25,6 +25,14 @@ services:
         sync: false
       - key: OPENAI_MODEL
         value: "gpt-5-mini"
+      - key: ERLC_ENCRYPTION_KEY
+        generateValue: true
+      - key: ERLC_API_KEY
+        sync: false
+      - key: ERLC_GUILD_ID
+        sync: false
+      - key: ERLC_PUBLIC_APP_TOKEN
+        sync: false
       - key: SESSION_SECRET
         generateValue: true
       - key: DB_POOL_MAX
