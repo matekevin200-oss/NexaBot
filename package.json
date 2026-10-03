@@ -1,6 +1,6 @@
 {
   "name": "nexabot",
-  "version": "10.0.0",
+  "version": "10.0.1",
   "private": true,
   "description": "NEXA Bot 10.0 több szerveres Discord operations platform ChronoGuard Digital Twinnel, Owner Centerrel és biztonságos helyreállítással",
   "main": "index.js",

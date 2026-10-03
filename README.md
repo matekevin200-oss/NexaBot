@@ -6,7 +6,7 @@
 
 - szerverenként külön mentett modulok, csatornák, rangok, nyelv és arculat;
 - magyar alapnyelv, szerverenként választható angol Discord-felület;
-- professzionális, kétnyelvű publikus bemutatóoldal élő szerver-, tagszám-, ping-, uptime- és adatbázis-állapottal;
+- teljesen új NEXA Operations webes arculat: PC-re optimalizált, prémium irányítópult, rendezett Owner-szerverlista és kétnyelvű publikus bemutatóoldal élő szerver-, tagszám-, ping-, uptime- és adatbázis-állapottal;
 - Discord OAuth2 dashboard tulajdonos, admin és egy kijelölt kezelői rang részére;
 - külön Owner Center: szerverhálózat, uptime, ping, memória, adatbázis, használat, hibák és audit;
 - ChronoGuard Digital Twin: aláírt szerverpillanatképek, magyarázható eltérés- és kockázatelemzés, Incident Capsule export és biztonságos helyreállítás;
@@ -66,6 +66,7 @@ src/
   runtime.js           gateway watchdog, health állapot és öngyógyító újraindítás
   config.js            PostgreSQL, migrációk, szerver- és owner-beállítás
   dashboard.js         OAuth2 Command Deck, Owner Center, publikus oldalak
+  dashboard-theme.js   NEXA Operations felület és reszponzív megjelenés
   applications.js      TGF Forge, vak bírálat, időkapszula és Integrity Pulse
   chronoguard.js        digitális szerveriker, Shadow Scan, incidenskapszula és helyreállítás
   erlc.js              titkosított ER:LC API-kapcsolat, cache és rate limit

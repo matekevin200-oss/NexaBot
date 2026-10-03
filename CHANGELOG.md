@@ -1,5 +1,15 @@
 # NEXA Bot változásnapló
 
+## 10.0.1 – NEXA Operations Interface
+
+- teljesen új, asztali gépre optimalizált NEXA Operations webes arculat;
+- prémium, letisztult irányítóközpont rácsozott háttérrel és visszafogott rendszerállapot-jelzésekkel;
+- áttervezett fejléc, oldalsó navigáció, űrlapok, táblázatok, kapcsolók és mentősáv;
+- rendezett, kétoszlopos Owner-szerverlista javított statisztikákkal és műveleti gombokkal;
+- új publikus termékbemutató, élő hálózati sáv, platformmátrix és biztonsági eseménykonzol;
+- szélesebb PC-s munkaterület, javított laptopos töréspontok és külön telefonos egyszerűsítés;
+- az összes meglévő NEXA Bot, Owner, ChronoGuard, RP és Discord funkció változatlanul megmaradt.
+
 ## 10.0.0 – ChronoGuard Digital Twin
 
 - új, Owner-only ChronoGuard szerver-időgép és incidensközpont;
