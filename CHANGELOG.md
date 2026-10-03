@@ -1,5 +1,17 @@
 # NEXA Bot változásnapló
 
+## 11.0.0 – AEGIS Permission DNA
+
+- új Owner-only AEGIS jogosultsági intelligencia és külön Owner Center oldal;
+- veszélyes Discord-jogok, privilegizált emberek, ismeretlen botok és nem elszigetelhető identitások elemzése;
+- 0–100 biztonsági pontszám és minden találathoz emberileg olvasható kockázati magyarázat;
+- kriptográfiai Permission DNA, jóváhagyott bázis és későbbi jogosultsági drift összehasonlítása;
+- új `/aegis statusz`, `/aegis vizsgalat` és `/aegis bazis` Owner-parancs;
+- új PostgreSQL migráció az AEGIS vizsgálatokhoz és egyetlen aktív bázishoz;
+- teljes magyar–angol Tudásközpont 14 fő rendszer gyakorlati leírásával;
+- új, szemkímélő grafit–réz webes arculat visszafogott rendszerállapot-jelzésekkel;
+- célzott AEGIS automatizált tesztek, változatlanul megőrzött korábbi modulok.
+
 ## 10.0.1 – NEXA Operations Interface
 
 - teljesen új, asztali gépre optimalizált NEXA Operations webes arculat;

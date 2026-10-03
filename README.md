@@ -1,4 +1,4 @@
-# NEXA Bot 10.0 Operations Platform
+# NEXA Bot 11.0 AEGIS Operations Platform
 
 Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Az opcionális RP- és dokumentumrendszert kizárólag a bot tulajdonosa vagy az általa kijelölt Owner-kezelő kapcsolhatja be egy kiválasztott szerveren.
 
@@ -6,10 +6,12 @@
 
 - szerverenként külön mentett modulok, csatornák, rangok, nyelv és arculat;
 - magyar alapnyelv, szerverenként választható angol Discord-felület;
-- teljesen új NEXA Operations webes arculat: PC-re optimalizált, prémium irányítópult, rendezett Owner-szerverlista és kétnyelvű publikus bemutatóoldal élő szerver-, tagszám-, ping-, uptime- és adatbázis-állapottal;
+- teljesen új grafit–réz NEXA Operations webes arculat: PC-re optimalizált, nyugodt prémium irányítópult, rendezett Owner-szerverlista és kétnyelvű publikus bemutatóoldal élő szerver-, tagszám-, ping-, uptime- és adatbázis-állapottal;
+- kétnyelvű Tudásközpont 14 rendszer részletes, gyakorlati magyarázatával: mit csinál, ki használhatja, hol állítható és mi kell hozzá;
 - Discord OAuth2 dashboard tulajdonos, admin és egy kijelölt kezelői rang részére;
 - külön Owner Center: szerverhálózat, uptime, ping, memória, adatbázis, használat, hibák és audit;
 - ChronoGuard Digital Twin: aláírt szerverpillanatképek, magyarázható eltérés- és kockázatelemzés, Incident Capsule export és biztonságos helyreállítás;
+- AEGIS Permission DNA: veszélyes jogosultságok, identitásonkénti robbanási sugár, ranghierarchia és elszigetelhetőség elemzése; kriptográfiai bázis és jogosultság-drift az Owner Centerben;
 - kereshető, lapozott Owner szerverlista és szerverenkénti részletes állapotlap modul-, csatorna-, rang-, jogosultság-, NEXA Shield-, audit- és hibanézettel;
 - owner-kezelők, AI-engedélylista, user/guild blacklist, maintenance és globális modul-vészkapcsoló;
 - Owner által ingyen kiosztható Free, Pro és Ultimate jogosultsági csomagok, megadható lejárattal vagy korlátlan időre;
@@ -69,6 +71,7 @@ src/
   dashboard-theme.js   NEXA Operations felület és reszponzív megjelenés
   applications.js      TGF Forge, vak bírálat, időkapszula és Integrity Pulse
   chronoguard.js        digitális szerveriker, Shadow Scan, incidenskapszula és helyreállítás
+  aegis.js              Permission DNA, kockázati térkép és jogosultság-drift
   erlc.js              titkosított ER:LC API-kapcsolat, cache és rate limit
   interactions.js      gombok, select menük, modalok és ticket workflow
   engagement.js        tagellenőrzés, Starboard és tartós emlékeztetők
@@ -176,7 +179,7 @@ Az állapotvégpontok:
 A sikeres logban ez jelenik meg:
 
 ```text
-A NEXA Bot 10.0 operations platform használatra kész.
+A NEXA Bot 11.0 AEGIS operations platform használatra kész.
 ```
 
 ## Használat
@@ -184,6 +187,7 @@ A NEXA Bot 10.0 operations platform használatra kész.
 - `/beallitas`: megnyitja az adott szerver dashboardját;
 - `/help`: kategóriás súgó;
 - `/chronoguard statusz`, `/chronoguard vizsgalat`, `/chronoguard pillanatkep`: Owner-only digitális iker kezelés;
+- `/aegis statusz`, `/aegis vizsgalat`, `/aegis bazis`: Owner-only jogosultsági kockázatelemzés és Permission DNA-bázis;
 - `/hitelesites panel`: kihelyezi vagy frissíti a gombos tagellenőrzőpanelt;
 - `/emlekezteto letrehozas`: személyes emlékeztetőt készít (`10m`, `2h`, `3d`, `1w` formátum);
 - `/emlekezteto lista` és `/emlekezteto torles`: kezeli a saját aktív emlékeztetőket;
@@ -201,6 +205,8 @@ A NEXA Bot 10.0 operations platform használatra kész.
 - Szolgálati adatok: **Owner Center → szerver → Szolgálatkezelés**. Itt javítható vagy törölhető egy rekord, és külön megerősítéssel nullázható egy tag vagy a teljes szerver szolgálati előzménye.
 - ER:LC: először állítsd be Renderen az `ERLC_ENCRYPTION_KEY` értéket, majd nyisd meg az **Owner Center → szerver → ER:LC Bridge** oldalt, és ott add meg a Server Key-t. A kulcs mentés előtt élőben ellenőrzésre kerül, és utána csak maszkolva látható.
 - ChronoGuard: **Owner Center → szerver → ChronoGuard 10.0**. Először készíts bázispillanatképet, jelöld ki a védett rangokat és csatornákat, majd kapcsold be az automatikus megfigyelést. Helyreállítás előtt mindig ellenőrizd a drift-térképet.
+- AEGIS: **Owner Center → szerver → Részletes állapot → AEGIS Permission DNA**. Futtass teljes vizsgálatot, rendezd a NEXA fölött lévő kockázatos rangokat, majd rögzíts jóváhagyott bázist.
+- Tudásközpont: a publikus felső menü **Tudásközpont** pontja vagy közvetlenül a `/tudaskozpont` útvonal; angolul a `?lang=en` kapcsolóval érhető el.
 
 ### Teljes Anti-Raid bekapcsolása
 
