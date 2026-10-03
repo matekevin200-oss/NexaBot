@@ -35,6 +35,8 @@ services:
         sync: false
       - key: SESSION_SECRET
         generateValue: true
+      - key: CHRONOGUARD_SIGNING_KEY
+        generateValue: true
       - key: DB_POOL_MAX
         value: "10"
       - key: DB_RETRY_MS

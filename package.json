@@ -1,8 +1,8 @@
 {
   "name": "nexabot",
-  "version": "7.0.0",
+  "version": "10.0.0",
   "private": true,
-  "description": "NEXA Bot 7.0 több szerveres Discord operations platform Workflow Studióval, ER:LC Bridge-dzsel és Owner Centerrel",
+  "description": "NEXA Bot 10.0 több szerveres Discord operations platform ChronoGuard Digital Twinnel, Owner Centerrel és biztonságos helyreállítással",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {

@@ -1,5 +1,30 @@
 # NEXA Bot változásnapló
 
+## 10.0.0 – ChronoGuard Digital Twin
+
+- új, Owner-only ChronoGuard szerver-időgép és incidensközpont;
+- a rangok, csatornák, jogosultsági felülírások és fontos szerverbeállítások aláírt digitális ikre;
+- stabil SHA-256 állapotlenyomat és HMAC-lánc, amely kimutatja a tárolt pillanatkép manipulálását;
+- Causal Drift Engine: magyarázható eltéréslista, kritikus/magas/közepes/alacsony besorolás és 0–100 kockázati pontszám;
+- védett rangok és csatornák kijelölése, amelyek eltérése automatikusan kritikus riasztás;
+- automatikus, konfigurálható pillanatképezés, megőrzés és Shadow Scan a háttérben;
+- biztonságos helyreállítás: módosított elemek visszaállítása, hiányzó elemek opcionális újralétrehozása, új elemek törlése nélkül;
+- exportálható Incident Capsule teljes pillanatképpel, aktuális állapottal, eltéréssel és integritás-ellenőrzéssel;
+- új Owner Center oldal és owner-only `/chronoguard statusz|vizsgalat|pillanatkep` parancs;
+- PostgreSQL migrációk, indexek, auditok, hibakezelés és célzott ChronoGuard tesztkészlet.
+
+## 7.0.1 – TGF Forge & Zero-Form Broadcast
+
+- Owner Centerből létrehozható, szerkeszthető és Discordra kihelyezhető egyedi TGF-folyamatok;
+- legfeljebb 15 kérdés automatikus, ötkérdéses Discord-lépésekre bontással;
+- vak bírálat: a jelentkező személye csak a végleges döntés után válik láthatóvá;
+- TGF-időkapszula: minden beküldés a használt kérdéssor verziójával és teljes pillanatképével kerül PostgreSQL-be;
+- bírálói 1–10 pontozás, elutasításkor kötelező indoklás, automatikus privát értesítés és elfogadott rang;
+- NEXA Integrity Pulse döntést nem hozó kitöltöttségi, részletességi és ismétlődésjelzéssel;
+- kérdés, ügyszám és jóváhagyás nélküli Owner Zero-Form Broadcast, opcionális rangpinggel;
+- új TGF-statisztikák, auditbejegyzések, adatbázistáblák, indexek és automatikus migráció;
+- 82 automatikus teszt sikeresen lefut.
+
 ## 7.0.0 – Owner Operations & ER:LC Bridge
 
 - új, külön Platform oldal látható aktív navigációval és magyar/angol nyelvváltással;
@@ -12,6 +37,9 @@
 - owner-only, külön megerősítéses ER:LC távoli parancskonzol;
 - API timeout, rövid cache, helyi rate limit és biztonságos hibakezelés;
 - új PostgreSQL migráció és ER:LC integrációs állapottábla.
+- PC-re optimalizált, széles Owner Operations felület külön oldalsó navigációval és rögzített gyorsmenüvel;
+- átrendezett Owner Center, nagyobb munkaterület, olvasható táblázatok és közvetlen Saját iratok, Szolgálatkezelés és ER:LC gyorsgombok.
+- dokumentumonként választható értesítendő Discord-rang biztonságos automatikus rangpinggel.
 
 ## 6.1.0 – Engagement Suite
 

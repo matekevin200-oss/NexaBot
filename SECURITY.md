@@ -2,7 +2,9 @@
 
 ## Titkok kezelése
 
-A Discord token, OAuth2 client secret, adatbázis-cím, session secret és AI API-kulcs kizárólag szerveroldali environment variable lehet. Ezeket tilos GitHubra, Discordra, képernyőképre vagy kliensoldali JavaScriptbe másolni.
+A Discord token, OAuth2 client secret, adatbázis-cím, session secret, ChronoGuard-aláírókulcs és AI API-kulcs kizárólag szerveroldali environment variable lehet. Ezeket tilos GitHubra, Discordra, képernyőképre vagy kliensoldali JavaScriptbe másolni.
+
+A `CHRONOGUARD_SIGNING_KEY` legyen legalább 32 karakteres és különbözzön a többi kulcstól. Ha nincs beállítva, a rendszer a `SESSION_SECRET` értékét használja, de productionben külön kulcs ajánlott. A ChronoGuard helyreállítása kizárólag Owner-jogosultsággal és kötelező megerősítéssel indítható.
 
 Az ER:LC Server Key két biztonságos módon kezelhető:
 
@@ -27,4 +29,4 @@ Tokeneket, ER:LC-kulcsokat, session cookie-kat, teljes adatbázis-címeket és p
 
 ## Támogatott verzió
 
-A legújabb 7.x kiadás kap biztonsági javításokat. Régebbi csomag használatakor először frissíts a legújabb kiadásra.
+A legújabb 10.x kiadás kap biztonsági javításokat. Régebbi csomag használatakor először frissíts a legújabb kiadásra.

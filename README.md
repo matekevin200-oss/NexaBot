@@ -1,4 +1,4 @@
-# NEXA Bot 7.0 Operations Platform
+# NEXA Bot 10.0 Operations Platform
 
 Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Az opcionális RP- és dokumentumrendszert kizárólag a bot tulajdonosa vagy az általa kijelölt Owner-kezelő kapcsolhatja be egy kiválasztott szerveren.
 
@@ -9,12 +9,17 @@
 - professzionális, kétnyelvű publikus bemutatóoldal élő szerver-, tagszám-, ping-, uptime- és adatbázis-állapottal;
 - Discord OAuth2 dashboard tulajdonos, admin és egy kijelölt kezelői rang részére;
 - külön Owner Center: szerverhálózat, uptime, ping, memória, adatbázis, használat, hibák és audit;
+- ChronoGuard Digital Twin: aláírt szerverpillanatképek, magyarázható eltérés- és kockázatelemzés, Incident Capsule export és biztonságos helyreállítás;
 - kereshető, lapozott Owner szerverlista és szerverenkénti részletes állapotlap modul-, csatorna-, rang-, jogosultság-, NEXA Shield-, audit- és hibanézettel;
 - owner-kezelők, AI-engedélylista, user/guild blacklist, maintenance és globális modul-vészkapcsoló;
 - Owner által ingyen kiosztható Free, Pro és Ultimate jogosultsági csomagok, megadható lejárattal vagy korlátlan időre;
 - Owner-only RP modul: szerverenkénti engedélyezés, TGF, részletes dokumentumpanelek és vezetői jóváhagyás;
 - Owner Document Control: az Owner Centerben szerverenként kiválasztható alapértelmezett használati rang, dokumentumtípusonkénti rangfelülírás, kapcsolható ügyszám és Discord-listás személymegjelölés; a felhívások és egyszerű közlemények alapból nem kapnak ügyszámot;
 - Workflow Studio: az Owner Centerben saját dokumentum- és ügyiratsablon készíthető legfeljebb öt egyedi kérdéssel, célcsatornával, használati ranggal, pinggel, automatikus ügyszámmal és opcionális vezetői jóváhagyással;
+- NEXA TGF Forge: legfeljebb 15 egyedi kérdésből automatikusan többoldalas Discord-jelentkezést készít, külön nyitó-, bírálati és eredménycsatornával, hozzáférési/bírálói/elfogadott ranggal és újraküldési időkorláttal;
+- vak bírálat és TGF-időkapszula: a jelentkező személye a döntésig rejtett, a beküldés pedig a sablon pontos verziójával együtt marad meg akkor is, ha később átírod vagy törlöd a sablont;
+- NEXA Integrity Pulse: a kitöltöttség, részletesség és ismétlődő válaszminta alapján döntést nem hozó, bírálást segítő minőségjelzés;
+- Zero-Form Broadcast: az Owner Centerből kérdések, ügyszám és jóváhagyás nélkül küldhető egyszerű szöveg vagy prémium kártya bármely meglévő csatornába, opcionális biztonságos rangpinggel;
 - teljes Owner Shift Operations: aktív és lezárt szolgálatok áttekintése, budapesti idő szerinti javítása, szünetidő-módosítás, rekordtörlés, tagonkénti vagy teljes nullázás kötelező megerősítéssel és audittal;
 - ER:LC Bridge: szerverenkénti, AES-256-GCM titkosított Server Key, élő szerver-/játékos-/staff-/queue-nézet és megerősítéshez kötött owner parancskonzol;
 - moderációs Case ID és adatbázis: ban, unban, kick, timeout, untimeout, warn, warnings, clearwarns, clear, slowmode, lock, unlock és nick;
@@ -61,6 +66,8 @@ src/
   runtime.js           gateway watchdog, health állapot és öngyógyító újraindítás
   config.js            PostgreSQL, migrációk, szerver- és owner-beállítás
   dashboard.js         OAuth2 Command Deck, Owner Center, publikus oldalak
+  applications.js      TGF Forge, vak bírálat, időkapszula és Integrity Pulse
+  chronoguard.js        digitális szerveriker, Shadow Scan, incidenskapszula és helyreállítás
   erlc.js              titkosított ER:LC API-kapcsolat, cache és rate limit
   interactions.js      gombok, select menük, modalok és ticket workflow
   engagement.js        tagellenőrzés, Starboard és tartós emlékeztetők
@@ -94,6 +101,7 @@ src/
 | `DATABASE_URL` | productionben | PostgreSQL kapcsolat |
 | `PUBLIC_URL` | ajánlott | Például `https://nexabot-25vo.onrender.com` |
 | `SESSION_SECRET` | ajánlott | Legalább 32 karakteres véletlen titok |
+| `CHRONOGUARD_SIGNING_KEY` | ajánlott | Külön, legalább 32 karakteres HMAC-kulcs a pillanatképlánc aláírásához; hiányában a `SESSION_SECRET` használatos |
 | `OPENAI_API_KEY` | csak AI-hoz | Kizárólag szerveroldali environment variable |
 | `OPENAI_MODEL` | nem | Alapérték: `gpt-5-mini` |
 | `ERLC_ENCRYPTION_KEY` | ER:LC webes mentéshez | Legalább 32 karakter; a szerverenkénti ER:LC kulcsok titkosításához |
@@ -167,13 +175,14 @@ Az állapotvégpontok:
 A sikeres logban ez jelenik meg:
 
 ```text
-A NEXA Bot 7.0 operations platform használatra kész.
+A NEXA Bot 10.0 operations platform használatra kész.
 ```
 
 ## Használat
 
 - `/beallitas`: megnyitja az adott szerver dashboardját;
 - `/help`: kategóriás súgó;
+- `/chronoguard statusz`, `/chronoguard vizsgalat`, `/chronoguard pillanatkep`: Owner-only digitális iker kezelés;
 - `/hitelesites panel`: kihelyezi vagy frissíti a gombos tagellenőrzőpanelt;
 - `/emlekezteto letrehozas`: személyes emlékeztetőt készít (`10m`, `2h`, `3d`, `1w` formátum);
 - `/emlekezteto lista` és `/emlekezteto torles`: kezeli a saját aktív emlékeztetőket;
@@ -186,8 +195,11 @@ A NEXA Bot 7.0 operations platform használatra kész.
 - RP-rendszer: az Owner Center szerverlistáján nyomd meg az **RP bekapcsolása** gombot. Ezután Discordon a `/telepites` a teljes alap RP-rendszert, a `/dokumentum-panelek` pedig a már meglévő dokumentumcsatornák paneljeit telepíti.
 - Dokumentumjogosultság: az Owner Center szerverkártyáján nyisd meg az **Iratvezérlés** oldalt, válaszd ki az **Alapértelmezett használati rangot**, majd ments. Ettől kezdve nem a fix „Operatív állomány”, hanem a kiválasztott rang használhatja a paneleket. Egyes dokumentumtípusokhoz külön rang is megadható.
 - Egyedi ügyirat: **Owner Center → szerver → Workflow Studio**. Add meg a kérdéseket, célcsatornát és szabályokat, mentsd, majd nyomd meg a **Panel kihelyezése** gombot.
+- Egyedi TGF: **Owner Center → szerver → TGF Forge**. Add meg a kérdéseket soronként; a `?` jellel kezdődő kérdés opcionális. Mentés után használd a **Panel kihelyezése** gombot.
+- Kérdés nélküli kiírás: ugyanott, a **Gyors közzététel** részben válassz csatornát és opcionális rangpinget, majd küldd ki a szöveget a bot nevében.
 - Szolgálati adatok: **Owner Center → szerver → Szolgálatkezelés**. Itt javítható vagy törölhető egy rekord, és külön megerősítéssel nullázható egy tag vagy a teljes szerver szolgálati előzménye.
 - ER:LC: először állítsd be Renderen az `ERLC_ENCRYPTION_KEY` értéket, majd nyisd meg az **Owner Center → szerver → ER:LC Bridge** oldalt, és ott add meg a Server Key-t. A kulcs mentés előtt élőben ellenőrzésre kerül, és utána csak maszkolva látható.
+- ChronoGuard: **Owner Center → szerver → ChronoGuard 10.0**. Először készíts bázispillanatképet, jelöld ki a védett rangokat és csatornákat, majd kapcsold be az automatikus megfigyelést. Helyreállítás előtt mindig ellenőrizd a drift-térképet.
 
 ### Teljes Anti-Raid bekapcsolása
 
