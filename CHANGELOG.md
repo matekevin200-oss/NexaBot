@@ -1,5 +1,30 @@
 # NEXA Bot változásnapló
 
+## 11.0.6 – English Support Server Migration
+
+- A hivatalos NEXA Support szerver teljes kezelt rang-, kategória- és csatornaszerkezete angol alapnyelvet kapott.
+- Az új `/support-szerver angolositas` művelet a meglévő elemeket átnevezi, ezért a csatornaazonosítók, üzenetek és előzmények megmaradnak.
+- Minden nyilvános, staff- és owner tájékoztatópanel angol szöveget kapott.
+- A magyar nyelv választható maradt a `🇭🇺 Magyar` ranggal és a külön `🇭🇺・hungarian-chat` csatornával.
+- A nyelv-, tagellenőrző- és ticketpanelek alapértelmezett nyelve angol.
+- A migráció eltávolítja a bot korábbi magyar kezelt paneljeit, így nem maradnak dupla tájékoztatók.
+
+## 11.0.5 – Megbízható nyelv- és önkiszolgáló rangok
+
+- A nyelv- és rangválasztó csak valóban kiosztott rang után küld sikerüzenetet.
+- A művelet után visszaellenőrzi a tag tényleges Discord-rangjait.
+- Hiányzó jogosultság vagy hibás rangsorrend esetén pontos javítási üzenetet ad.
+- A Support javítóparancs automatikusan a NEXA Bot rangja alá rendezi a kezelt rangokat.
+- Az elavult vagy törölt rangokat tartalmazó panelek biztonságosan felismerhetők.
+
+## 11.0.4 – Support tagellenőrzés önjavítása
+
+- Új, kizárólag az elsődleges bottulajdonos által használható `/support-szerver javitas` parancs.
+- Egy lépésben visszakapcsolja a tagellenőrzést, beállítja az ellenőrzőcsatornát és az ellenőrzött rangot.
+- Megszünteti a véletlenül bekapcsolt globális tagellenőrzési vésztiltást.
+- Az ellenőrzőparancs most már a szerverstruktúra mellett a modul tényleges állapotát is kijelzi.
+- A Discord-gomb pontosan megmondja, hogy helyi beállítás, csomag vagy globális tiltás miatt nem működik-e.
+
 ## 11.0.3 – Discord parancsregisztráció javítása
 
 - A `/nick` parancs kötelező `indok` mezője most az opcionális `becenev` mező előtt szerepel.

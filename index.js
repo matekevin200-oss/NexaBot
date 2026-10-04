@@ -1,4 +1,4 @@
-// NEXA Bot 11.0.3 single-file release — generated automatically.
+// NEXA Bot 11.0.6 single-file release — generated automatically.
 const __nativeRequire = require;
 const __path = __nativeRequire('node:path').posix;
 const __modules = {
@@ -2169,7 +2169,14 @@ function assertStaff(interaction) {
 
 function rolePanel(guild, roleIds, type = 'select') {
   const roles = roleIds.map((id) => guild.roles.cache.get(id)).filter(Boolean).slice(0, 10);
-  const embed = baseEmbed('🏷️ Választható rangok', 'Válaszd ki a rangjaidat. A korábbi választásodat bármikor módosíthatod.', COLORS.primary);
+  const english = getGuildConfig(guild.id).language === 'en';
+  const embed = baseEmbed(
+    english ? '🏷️ Language and notification roles' : '🏷️ Választható rangok',
+    english
+      ? 'Select your language and notification roles. You can update your choices at any time. Hungarian remains available as an optional language.'
+      : 'Válaszd ki a rangjaidat. A korábbi választásodat bármikor módosíthatod.',
+    COLORS.primary
+  );
   if (type === 'button') {
     const rows = [];
     for (let index = 0; index < roles.length; index += 5) {
@@ -2187,10 +2194,14 @@ function rolePanel(guild, roleIds, type = 'select') {
   }
   const menu = new StringSelectMenuBuilder()
     .setCustomId('community_self_roles')
-    .setPlaceholder('Válaszd ki a rangjaidat…')
+    .setPlaceholder(english ? 'Select your roles…' : 'Válaszd ki a rangjaidat…')
     .setMinValues(0)
     .setMaxValues(Math.max(1, roles.length))
-    .addOptions(roles.map((role) => ({ label: role.name.slice(0, 100), value: role.id, description: 'Kattints a rang ki- vagy bekapcsolásához.' })));
+    .addOptions(roles.map((role) => ({
+      label: role.name.slice(0, 100),
+      value: role.id,
+      description: english ? 'Select to enable or disable this role.' : 'Kattints a rang ki- vagy bekapcsolásához.'
+    })));
   return {
     embeds: [embed],
     components: [new ActionRowBuilder().addComponents(menu)]
@@ -2344,17 +2355,71 @@ async function handleCommunityCommand(interaction) {
 }
 
 async function handleSelfRoleSelect(interaction) {
-  const allowed = getGuildConfig(interaction.guildId).community.selfRoles;
-  const selected = interaction.values.filter((id) => allowed.includes(id));
-  const current = allowed.filter((id) => interaction.member.roles.cache.has(id));
+  const config = getGuildConfig(interaction.guildId);
+  const english = config.language === 'en';
+  const allowed = config.community.selfRoles;
+  if (!allowed.length) {
+    return interaction.reply({ content: english ? '❌ No self-assignable roles are configured on this server.' : '❌ Nincsenek beállítva választható rangok ezen a szerveren.', flags: EPHEMERAL });
+  }
+  const selected = [...new Set(interaction.values.filter((id) => allowed.includes(id)))];
+  if (selected.length !== interaction.values.length) {
+    return interaction.reply({ content: english ? '❌ This role panel is outdated. Ask the owner to run `/support-szerver javitas`.' : '❌ Ez a rangpanel elavult. Kérd meg a tulajdonost, hogy futtassa a `/support-szerver javitas` parancsot.', flags: EPHEMERAL });
+  }
+  const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => interaction.member);
+  const roles = new Map(allowed.map((id) => [id, interaction.guild.roles.cache.get(id)]));
+  const missing = allowed.filter((id) => !roles.get(id));
+  if (missing.length) {
+    return interaction.reply({ content: english ? '❌ One of the panel roles no longer exists. Run `/support-szerver javitas`.' : '❌ A panel egyik rangja már nem létezik. Futtasd a `/support-szerver javitas` parancsot.', flags: EPHEMERAL });
+  }
+  const languageRoleIds = allowed.filter((id) => /🇭🇺|🇬🇧/.test(roles.get(id)?.name || ''));
+  if (selected.filter((id) => languageRoleIds.includes(id)).length > 1) {
+    return interaction.reply({
+      content: english ? '❌ Select only one language: English or Hungarian.' : '❌ Csak egy nyelvet válassz: angolt vagy magyart.',
+      flags: EPHEMERAL
+    });
+  }
+  const current = allowed.filter((id) => member.roles.cache.has(id));
   const add = selected.filter((id) => !current.includes(id));
   const remove = current.filter((id) => !selected.includes(id));
-  const editable = (id) => interaction.guild.roles.cache.get(id)?.editable;
-  await Promise.all([
-    ...add.filter(editable).map((id) => interaction.member.roles.add(id, 'NexaBot önkiszolgáló rang')),
-    ...remove.filter(editable).map((id) => interaction.member.roles.remove(id, 'NexaBot önkiszolgáló rang'))
+  const blocked = [...add, ...remove].filter((id) => !roles.get(id)?.editable);
+  if (blocked.length) {
+    const names = blocked.map((id) => `**${roles.get(id)?.name || id}**`).join(', ');
+    return interaction.reply({
+      content: english
+        ? `❌ The bot cannot manage this role: ${names}. Move the **NEXA Bot** role above it, then run \`/support-szerver javitas\`.`
+        : `❌ A bot nem tudja kezelni ezt a rangot: ${names}. A Discord ranglistában helyezd a **NEXA Bot** rangját ezek fölé, majd futtasd a \`/support-szerver javitas\` parancsot.`,
+      flags: EPHEMERAL
+    });
+  }
+  if (!add.length && !remove.length) {
+    return interaction.reply({ content: english ? '✅ You already have these selected roles.' : '✅ Már ezekkel a választható rangokkal rendelkezel.', flags: EPHEMERAL });
+  }
+
+  await interaction.deferReply({ flags: EPHEMERAL });
+  const failures = [];
+  for (const id of add) {
+    await member.roles.add(id, 'NexaBot önkiszolgáló rang').catch((error) => failures.push({ id, error }));
+  }
+  for (const id of remove) {
+    await member.roles.remove(id, 'NexaBot önkiszolgáló rang').catch((error) => failures.push({ id, error }));
+  }
+  const refreshed = await interaction.guild.members.fetch(interaction.user.id).catch(() => member);
+  const failedIds = new Set([
+    ...failures.map((item) => item.id),
+    ...add.filter((id) => !refreshed.roles.cache.has(id)),
+    ...remove.filter((id) => refreshed.roles.cache.has(id))
   ]);
-  return interaction.reply({ content: '✅ A választható rangjaid frissültek.', flags: EPHEMERAL });
+  if (failedIds.size) {
+    const names = [...failedIds].map((id) => `**${roles.get(id)?.name || id}**`).join(', ');
+    return interaction.editReply(english
+      ? `❌ Discord rejected the role update: ${names}. Check the NEXA Bot **Manage Roles** permission and role order.`
+      : `❌ A Discord nem engedte a rang módosítását: ${names}. Ellenőrizd a NEXA Bot **Rangok kezelése** jogosultságát és a rangsorrendet.`);
+  }
+
+  const changes = [];
+  if (add.length) changes.push(`${english ? 'Added' : 'Hozzáadva'}: ${add.map((id) => `**${roles.get(id).name}**`).join(', ')}`);
+  if (remove.length) changes.push(`${english ? 'Removed' : 'Eltávolítva'}: ${remove.map((id) => `**${roles.get(id).name}**`).join(', ')}`);
+  return interaction.editReply(`${english ? '✅ Your roles were updated successfully.' : '✅ A rangjaid sikeresen frissültek.'}\n${changes.join('\n')}`);
 }
 
 async function handleRoleButton(interaction) {
@@ -3601,11 +3666,29 @@ function configuredRole(guild, key, fallbackName = null) {
   return fallbackName ? guild.roles.cache.find((role) => role.name === fallbackName) : null;
 }
 
+function getModuleState(guildId, key) {
+  if (key === 'bvi') {
+    const enabled = isBviGuild(guildId);
+    return {
+      enabled,
+      configured: enabled,
+      planAllowed: enabled,
+      remotelyDisabled: false
+    };
+  }
+  const configured = Boolean(getGuildConfig(guildId).modules[key]);
+  const planAllowed = planAllowsModule(guildId, key);
+  const remotelyDisabled = ownerSettings.remoteDisabledModules.includes(key);
+  return {
+    enabled: configured && planAllowed && !remotelyDisabled,
+    configured,
+    planAllowed,
+    remotelyDisabled
+  };
+}
+
 function moduleEnabled(guildId, key) {
-  if (key === 'bvi') return isBviGuild(guildId);
-  return Boolean(getGuildConfig(guildId).modules[key]) &&
-    planAllowsModule(guildId, key) &&
-    !ownerSettings.remoteDisabledModules.includes(key);
+  return getModuleState(guildId, key).enabled;
 }
 
 function logEnabled(guildId, key) {
@@ -3669,6 +3752,7 @@ module.exports = {
   pruneExpiredPremium,
   configuredChannel,
   configuredRole,
+  getModuleState,
   moduleEnabled,
   logEnabled,
   isBviGuild,
@@ -5488,7 +5572,7 @@ function defaultHealthSnapshot(client) {
   const startup = process.uptime() < 180;
   return {
     name: 'NexaBot',
-    version: '11.0.3',
+    version: '11.0.6',
     healthy: ready || startup,
     status: ready ? 'online' : startup ? 'starting' : 'offline',
     guilds: client.guilds?.cache?.size || 0,
@@ -7070,6 +7154,7 @@ const {
   configuredRole,
   dbQuery,
   getGuildConfig,
+  getModuleState,
   moduleEnabled
 } = require('./config');
 const { COLORS } = require('./constants');
@@ -7187,7 +7272,14 @@ async function upsertVerificationPanel(guild, channel, botId) {
 
 async function handleVerificationButton(interaction) {
   if (!moduleEnabled(interaction.guildId, 'verification')) {
-    return ephemeralError(interaction, pick(interaction.guildId, 'A tagellenőrzés ki van kapcsolva.', 'Member verification is disabled.'));
+    const state = getModuleState(interaction.guildId, 'verification');
+    if (state.remotelyDisabled) {
+      return ephemeralError(interaction, 'A tagellenőrzést az Owner Center globális vészkapcsolója tiltja. Futtasd a `/support-szerver javitas` parancsot.');
+    }
+    if (!state.planAllowed) {
+      return ephemeralError(interaction, 'A tagellenőrzéshez szükséges csomag nincs engedélyezve ezen a szerveren.');
+    }
+    return ephemeralError(interaction, pick(interaction.guildId, 'A tagellenőrzés ki van kapcsolva. Futtasd a `/support-szerver javitas` parancsot.', 'Member verification is disabled. Run `/support-szerver javitas`.'));
   }
   const role = configuredRole(interaction.guild, 'verified');
   if (!role) return ephemeralError(interaction, 'Nincs beállítva ellenőrzött tag rang a webes dashboardon.');
@@ -8175,7 +8267,7 @@ client.once(Events.ClientReady, async (readyClient) => {
     await registerCommands(readyClient);
     console.log(`NexaBot elindult: ${readyClient.user.tag}`);
     await restoreGiveaways(readyClient);
-    console.log('A NEXA Bot 11.0.3 AEGIS operations platform használatra kész.');
+    console.log('A NEXA Bot 11.0.6 AEGIS operations platform használatra kész.');
   } catch (error) {
     console.error('A parancs regisztrálása nem sikerült:', error);
     await recordError(error, { command: 'registerCommands' });
@@ -8349,6 +8441,7 @@ const {
   configuredChannel,
   configuredRole,
   getGuildConfig,
+  getModuleState,
   moduleEnabled,
   isBviGuild,
   isAiAllowedUser,
@@ -8402,9 +8495,8 @@ const { handleApplicationButton, handleApplicationModal } = require('./applicati
 const { handleChronoGuardCommand } = require('./chronoguard');
 const { handleAegisCommand } = require('./aegis');
 const {
-  SUPPORT_ROLES,
   auditSupportServer,
-  publishSupportPanels,
+  repairSupportServer,
   setupSupportServer
 } = require('./support-server');
 
@@ -8513,8 +8605,20 @@ async function handleCommand(interaction) {
     const action = interaction.options.getSubcommand();
     if (action === 'ellenorzes') {
       const audit = auditSupportServer(interaction.guild);
+      const verification = getModuleState(interaction.guildId, 'verification');
+      if (audit.complete && verification.enabled) {
+        return interaction.reply({ content: '✅ A teljes NEXA Support szerverstruktúra megtalálható, és a tagellenőrzés aktív.', flags: EPHEMERAL });
+      }
       if (audit.complete) {
-        return interaction.reply({ content: '✅ A teljes NEXA Support szerverstruktúra megtalálható.', flags: EPHEMERAL });
+        const reason = verification.remotelyDisabled
+          ? 'az Owner Center globális vészkapcsolója tiltja'
+          : verification.planAllowed
+            ? 'a szerver beállításaiban ki van kapcsolva'
+            : 'a szerver csomagja nem engedélyezi';
+        return interaction.reply({
+          content: `⚠️ A szerverstruktúra teljes, de a tagellenőrzés nem aktív, mert ${reason}.\nFuttasd: \`/support-szerver javitas\``,
+          flags: EPHEMERAL
+        });
       }
       const lines = [];
       if (audit.missingRoles.length) lines.push(`**Hiányzó rangok:** ${audit.missingRoles.join(', ')}`);
@@ -8524,31 +8628,46 @@ async function handleCommand(interaction) {
     }
     await interaction.deferReply({ flags: EPHEMERAL });
     try {
+      if (action === 'javitas') {
+        const repaired = await repairSupportServer(interaction.guild, interaction.client.user, interaction.user.id);
+        await recordAudit('support_server_repair', {
+          actorId: interaction.user.id,
+          guildId: interaction.guildId,
+          metadata: {
+            panels: repaired.published,
+            globalVerificationBlockRemoved: repaired.hadGlobalVerificationBlock
+          }
+        });
+        if (!repaired.verification.enabled) {
+          return interaction.editReply('❌ A javítás lefutott, de a tagellenőrzés még nem aktív. Nézd meg a Render naplót.');
+        }
+        return interaction.editReply(
+          `✅ **A NEXA Support rendszer kijavítva.**\n` +
+          `• Tagellenőrzés: aktív\n` +
+          `• Ellenőrzött rang és csatorna: beállítva\n` +
+          `• Panelek frissítve: ${repaired.published}\n` +
+          `${repaired.hadGlobalVerificationBlock ? '• Globális tagellenőrzési tiltás: eltávolítva\n' : ''}` +
+          `Most nyomd meg újra az **Ellenőrzés** gombot.`
+        );
+      }
       if (action === 'panelek') {
-        const roles = Object.fromEntries(SUPPORT_ROLES.map((spec) => [
-          spec.key,
-          interaction.guild.roles.cache.find((role) => role.name === spec.name && !role.managed)
-        ]));
-        const missingRole = Object.entries(roles).find(([, role]) => !role);
-        if (missingRole) return interaction.editReply('❌ Előbb futtasd a `/support-szerver telepites` parancsot, mert hiányzik egy kezelt rang.');
-        const channelKeys = {
-          welcome: '👋・üdvözlés', rules: '📜・szabályzat', verification: '✅・ellenőrzés', language: '🌐・nyelvválasztás',
-          announcements: '📢・bejelentések', updates: '📰・frissítések', status: '📊・rendszerállapot', about: '🤖・a-nexa-bot',
-          features: '✨・funkciók', guide: '📖・útmutató', commands: '⌨️・parancsok', dashboard: '🧭・webes-kezelőfelület',
-          links: '🔗・hasznos-linkek', faq: '❓・gyakori-kérdések', ticketPanel: '🎫・ticket-nyitás', help: '🧩・segítségkérés',
-          bugs: '🐞・hibajelentés', suggestions: '💡・ötletek', feedback: '⭐・visszajelzések', general: '💬・általános',
-          english: '🌍・english-chat', showcase: '🖼️・szerver-bemutatók', botCommands: '🤖・bot-parancsok', giveaway: '🎉・nyereményjáték',
-          staffChat: '🔒・staff-chat', staffTasks: '📋・staff-feladatok', reports: '📨・jelentések',
-          staffAnnouncements: '📢・közlemény-készítés', ownerCenter: '👑・owner-központ', developerTest: '🧪・fejlesztői-teszt'
-        };
-        const channels = Object.fromEntries(Object.entries(channelKeys).map(([key, name]) => [
-          key,
-          interaction.guild.channels.cache.find((channel) => channel.name === name)
-        ]));
-        const missingChannel = Object.entries(channels).find(([, channel]) => !channel);
-        if (missingChannel) return interaction.editReply('❌ Előbb futtasd a `/support-szerver telepites` parancsot, mert hiányzik egy kezelt csatorna.');
-        const published = await publishSupportPanels(interaction.guild, channels, roles, interaction.client.user);
-        return interaction.editReply(`✅ **${published} NEXA panel és tájékoztató** frissítve.`);
+        const repaired = await repairSupportServer(interaction.guild, interaction.client.user, interaction.user.id);
+        return interaction.editReply(`✅ **${repaired.published} English NEXA panels and information messages** have been refreshed.`);
+      }
+      if (action === 'angolositas') {
+        const result = await setupSupportServer(interaction.guild, interaction.client.user, interaction.member);
+        await recordAudit('support_server_english_migration', {
+          actorId: interaction.user.id,
+          guildId: interaction.guildId,
+          metadata: { roles: result.roleCount, categories: result.categoryCount, channels: result.channelCount, panels: result.published }
+        });
+        return interaction.editReply(
+          `✅ **The NEXA Support server now uses English by default.**\n` +
+          `• Existing managed roles, categories and channels were renamed without deleting their history.\n` +
+          `• ${result.published} English panels and information messages were published.\n` +
+          `• Hungarian remains available through the **🇭🇺 Magyar** role and **🇭🇺・hungarian-chat**.\n` +
+          `• New member, verification, ticket and role-selection messages now use English.`
+        );
       }
       const result = await setupSupportServer(interaction.guild, interaction.client.user, interaction.member);
       await recordAudit('support_server_setup', {
@@ -10126,7 +10245,7 @@ module.exports = {
 const { Events, Status } = require('discord.js');
 const { databaseHealth } = require('./config');
 
-const APP_VERSION = '11.0.3';
+const APP_VERSION = '11.0.6';
 
 function positiveInteger(value, fallback, minimum = 1_000, maximum = 60 * 60 * 1000) {
   const parsed = Number.parseInt(value, 10);
@@ -12048,6 +12167,9 @@ const { COLORS } = require('./constants');
 const {
   getGuildConfig,
   setGuildConfig,
+  getOwnerSettings,
+  setOwnerSettings,
+  getModuleState,
   grantGuildPlan,
   dashboardUrl,
   inviteUrl
@@ -12056,14 +12178,19 @@ const { ticketPanel } = require('./panels');
 const { verificationPanel } = require('./engagement');
 const { rolePanel } = require('./community');
 
-const SETUP_REASON = 'NEXA Bot hivatalos Support szerver telepítő';
-const MANAGED_FOOTER = 'NEXA Support Setup • automatikusan kezelt üzenet';
+const SETUP_REASON = 'NEXA Bot official Support Server installer';
+const MANAGED_FOOTER = 'NEXA Support Setup • automatically managed message';
+const LEGACY_MANAGED_FOOTERS = new Set([
+  MANAGED_FOOTER,
+  'NEXA Support Setup • automatikusan kezelt üzenet'
+]);
 
 const SUPPORT_ROLES = Object.freeze([
-  { key: 'owner', name: '👑 NEXA Tulajdonos', color: 0xf4b942, hoist: true, permissions: [PermissionFlagsBits.Administrator] },
+  { key: 'owner', name: '👑 NEXA Owner', legacyNames: ['👑 NEXA Tulajdonos'], color: 0xf4b942, hoist: true, permissions: [PermissionFlagsBits.Administrator] },
   {
     key: 'management',
-    name: '🛡️ Vezetőség',
+    name: '🛡️ Management',
+    legacyNames: ['🛡️ Vezetőség'],
     color: 0xef5b6c,
     hoist: true,
     permissions: [
@@ -12084,7 +12211,8 @@ const SUPPORT_ROLES = Object.freeze([
   },
   {
     key: 'developer',
-    name: '💻 Fejlesztő',
+    name: '💻 Developer',
+    legacyNames: ['💻 Fejlesztő'],
     color: 0x4e8cff,
     hoist: true,
     permissions: [
@@ -12102,7 +12230,8 @@ const SUPPORT_ROLES = Object.freeze([
   },
   {
     key: 'support',
-    name: '🎧 Ügyfélszolgálat',
+    name: '🎧 Support Team',
+    legacyNames: ['🎧 Ügyfélszolgálat'],
     color: 0x52e0a4,
     hoist: true,
     permissions: [
@@ -12113,30 +12242,31 @@ const SUPPORT_ROLES = Object.freeze([
       PermissionFlagsBits.MoveMembers
     ]
   },
-  { key: 'tester', name: '🧪 Tesztelő', color: 0xa978ff, hoist: true, permissions: [] },
+  { key: 'tester', name: '🧪 Tester', legacyNames: ['🧪 Tesztelő'], color: 0xa978ff, hoist: true, permissions: [] },
   { key: 'partner', name: '🤝 Partner', color: 0xf0a85b, hoist: true, permissions: [] },
-  { key: 'supporter', name: '💎 Támogató', color: 0x46d6cf, hoist: true, permissions: [] },
-  { key: 'announcements', name: '📢 Értesítések', color: 0xf4b942, mentionable: true, permissions: [] },
-  { key: 'beta', name: '🧪 Béta értesítések', color: 0xa978ff, mentionable: true, permissions: [] },
+  { key: 'supporter', name: '💎 Supporter', legacyNames: ['💎 Támogató'], color: 0x46d6cf, hoist: true, permissions: [] },
+  { key: 'announcements', name: '📢 Announcements', legacyNames: ['📢 Értesítések'], color: 0xf4b942, mentionable: true, permissions: [] },
+  { key: 'beta', name: '🧪 Beta Updates', legacyNames: ['🧪 Béta értesítések'], color: 0xa978ff, mentionable: true, permissions: [] },
   { key: 'hungarian', name: '🇭🇺 Magyar', color: 0x52e0a4, permissions: [] },
   { key: 'english', name: '🇬🇧 English', color: 0x4e8cff, permissions: [] },
-  { key: 'verified', name: '✅ Ellenőrzött tag', color: 0x57f287, permissions: [] },
-  { key: 'muted', name: '🔇 Némított', color: 0x747f8d, permissions: [] }
+  { key: 'verified', name: '✅ Verified Member', legacyNames: ['✅ Ellenőrzött tag'], color: 0x57f287, permissions: [] },
+  { key: 'muted', name: '🔇 Muted', legacyNames: ['🔇 Némított'], color: 0x747f8d, permissions: [] }
 ]);
 
 const SUPPORT_CATEGORIES = Object.freeze([
   {
     key: 'start',
-    name: '━━━ KEZDÉS ━━━',
+    name: '━━━ START HERE ━━━',
+    legacyNames: ['━━━ KEZDÉS ━━━'],
     access: 'public-readonly',
     channels: [
-      ['welcome', '👋・üdvözlés', 'readonly'],
-      ['rules', '📜・szabályzat', 'readonly'],
-      ['verification', '✅・ellenőrzés', 'readonly'],
-      ['language', '🌐・nyelvválasztás', 'readonly'],
-      ['announcements', '📢・bejelentések', 'readonly'],
-      ['updates', '📰・frissítések', 'readonly'],
-      ['status', '📊・rendszerállapot', 'readonly']
+      ['welcome', '👋・welcome', 'readonly', ['👋・üdvözlés']],
+      ['rules', '📜・rules', 'readonly', ['📜・szabályzat']],
+      ['verification', '✅・verification', 'readonly', ['✅・ellenőrzés']],
+      ['language', '🌐・language-selection', 'readonly', ['🌐・nyelvválasztás']],
+      ['announcements', '📢・announcements', 'readonly', ['📢・bejelentések']],
+      ['updates', '📰・updates', 'readonly', ['📰・frissítések']],
+      ['status', '📊・system-status', 'readonly', ['📊・rendszerállapot']]
     ]
   },
   {
@@ -12144,46 +12274,49 @@ const SUPPORT_CATEGORIES = Object.freeze([
     name: '━━━ NEXA BOT ━━━',
     access: 'public-readonly',
     channels: [
-      ['about', '🤖・a-nexa-bot', 'readonly'],
-      ['features', '✨・funkciók', 'readonly'],
-      ['guide', '📖・útmutató', 'readonly'],
-      ['commands', '⌨️・parancsok', 'readonly'],
-      ['dashboard', '🧭・webes-kezelőfelület', 'readonly'],
-      ['links', '🔗・hasznos-linkek', 'readonly'],
-      ['faq', '❓・gyakori-kérdések', 'readonly']
+      ['about', '🤖・about-nexa', 'readonly', ['🤖・a-nexa-bot']],
+      ['features', '✨・features', 'readonly', ['✨・funkciók']],
+      ['guide', '📖・getting-started', 'readonly', ['📖・útmutató']],
+      ['commands', '⌨️・commands', 'readonly', ['⌨️・parancsok']],
+      ['dashboard', '🧭・web-dashboard', 'readonly', ['🧭・webes-kezelőfelület']],
+      ['links', '🔗・official-links', 'readonly', ['🔗・hasznos-linkek']],
+      ['faq', '❓・faq', 'readonly', ['❓・gyakori-kérdések']]
     ]
   },
   {
     key: 'support',
-    name: '━━━ TÁMOGATÁS ━━━',
+    name: '━━━ SUPPORT ━━━',
+    legacyNames: ['━━━ TÁMOGATÁS ━━━'],
     access: 'verified',
     channels: [
-      ['ticketPanel', '🎫・ticket-nyitás', 'readonly'],
-      ['help', '🧩・segítségkérés', 'chat'],
-      ['bugs', '🐞・hibajelentés', 'chat'],
-      ['suggestions', '💡・ötletek', 'chat'],
-      ['feedback', '⭐・visszajelzések', 'chat']
+      ['ticketPanel', '🎫・open-ticket', 'readonly', ['🎫・ticket-nyitás']],
+      ['help', '🧩・help', 'chat', ['🧩・segítségkérés']],
+      ['bugs', '🐞・bug-reports', 'chat', ['🐞・hibajelentés']],
+      ['suggestions', '💡・suggestions', 'chat', ['💡・ötletek']],
+      ['feedback', '⭐・feedback', 'chat', ['⭐・visszajelzések']]
     ]
   },
   {
     key: 'tickets',
-    name: '━━━ TICKETEK ━━━',
+    name: '━━━ TICKETS ━━━',
+    legacyNames: ['━━━ TICKETEK ━━━'],
     access: 'tickets',
     channels: []
   },
   {
     key: 'community',
-    name: '━━━ KÖZÖSSÉG ━━━',
+    name: '━━━ COMMUNITY ━━━',
+    legacyNames: ['━━━ KÖZÖSSÉG ━━━'],
     access: 'verified',
     channels: [
-      ['general', '💬・általános', 'chat'],
-      ['english', '🌍・english-chat', 'chat'],
-      ['showcase', '🖼️・szerver-bemutatók', 'chat'],
-      ['botCommands', '🤖・bot-parancsok', 'chat'],
-      ['giveaway', '🎉・nyereményjáték', 'readonly'],
-      ['lounge', '🔊・Társalgó', 'voice'],
-      ['supportVoice1', '🎧・Segítség 1', 'voice'],
-      ['supportVoice2', '🎧・Segítség 2', 'voice']
+      ['general', '💬・general', 'chat', ['💬・általános']],
+      ['hungarianChat', '🇭🇺・hungarian-chat', 'chat', ['🌍・english-chat']],
+      ['showcase', '🖼️・server-showcase', 'chat', ['🖼️・szerver-bemutatók']],
+      ['botCommands', '🤖・bot-commands', 'chat', ['🤖・bot-parancsok']],
+      ['giveaway', '🎉・giveaways', 'readonly', ['🎉・nyereményjáték']],
+      ['lounge', '🔊・Lounge', 'voice', ['🔊・Társalgó']],
+      ['supportVoice1', '🎧・Support 1', 'voice', ['🎧・Segítség 1']],
+      ['supportVoice2', '🎧・Support 2', 'voice', ['🎧・Segítség 2']]
     ]
   },
   {
@@ -12192,16 +12325,16 @@ const SUPPORT_CATEGORIES = Object.freeze([
     access: 'staff',
     channels: [
       ['staffChat', '🔒・staff-chat', 'chat'],
-      ['staffTasks', '📋・staff-feladatok', 'chat'],
+      ['staffTasks', '📋・staff-tasks', 'chat', ['📋・staff-feladatok']],
       ['ticketLogs', '🎫・ticket-log', 'readonly'],
-      ['moderationLogs', '🧾・moderációs-log', 'readonly'],
-      ['securityLogs', '🛡️・biztonsági-log', 'readonly'],
-      ['errorLogs', '💥・hibalog', 'readonly'],
-      ['memberLogs', '👥・tag-változások', 'readonly'],
-      ['reports', '📨・jelentések', 'chat'],
-      ['staffAnnouncements', '📢・közlemény-készítés', 'chat'],
-      ['discordUpdates', '📨・discord-frissítések', 'readonly'],
-      ['staffVoice', '🔊・Staff szoba', 'voice']
+      ['moderationLogs', '🧾・moderation-log', 'readonly', ['🧾・moderációs-log']],
+      ['securityLogs', '🛡️・security-log', 'readonly', ['🛡️・biztonsági-log']],
+      ['errorLogs', '💥・error-log', 'readonly', ['💥・hibalog']],
+      ['memberLogs', '👥・member-log', 'readonly', ['👥・tag-változások']],
+      ['reports', '📨・reports', 'chat', ['📨・jelentések']],
+      ['staffAnnouncements', '📢・announcement-drafts', 'chat', ['📢・közlemény-készítés']],
+      ['discordUpdates', '📨・discord-updates', 'readonly', ['📨・discord-frissítések']],
+      ['staffVoice', '🔊・Staff Room', 'voice', ['🔊・Staff szoba']]
     ]
   },
   {
@@ -12209,10 +12342,10 @@ const SUPPORT_CATEGORIES = Object.freeze([
     name: '━━━ OWNER ━━━',
     access: 'owner',
     channels: [
-      ['ownerCenter', '👑・owner-központ', 'chat'],
+      ['ownerCenter', '👑・owner-center', 'chat', ['👑・owner-központ']],
       ['ownerLogs', '🔐・owner-log', 'readonly'],
-      ['criticalAlerts', '🚨・kritikus-riasztások', 'readonly'],
-      ['developerTest', '🧪・fejlesztői-teszt', 'chat']
+      ['criticalAlerts', '🚨・critical-alerts', 'readonly', ['🚨・kritikus-riasztások']],
+      ['developerTest', '🧪・developer-test', 'chat', ['🧪・fejlesztői-teszt']]
     ]
   }
 ]);
@@ -12229,6 +12362,12 @@ function buildSupportSetupCommand() {
     .addSubcommand((subcommand) => subcommand
       .setName('panelek')
       .setDescription('Újraküldi a NEXA által kezelt tájékoztató- és kezelőpaneleket.'))
+    .addSubcommand((subcommand) => subcommand
+      .setName('javitas')
+      .setDescription('Kijavítja a support modulokat, rangokat, csatornákat és globális tiltásokat.'))
+    .addSubcommand((subcommand) => subcommand
+      .setName('angolositas')
+      .setDescription('A meglévő Support szervert biztonságosan angol alapnyelvre állítja.'))
     .addSubcommand((subcommand) => subcommand
       .setName('ellenorzes')
       .setDescription('Ellenőrzi a szükséges rangokat, kategóriákat és csatornákat.'));
@@ -12262,12 +12401,13 @@ async function registerSupportCommandInOwnerGuilds({ rest, guilds, applicationId
   return { registered, failed };
 }
 
-function roleByName(guild, name) {
-  return guild.roles.cache.find((role) => role.name === name && !role.managed);
+function roleBySpec(guild, spec) {
+  const names = new Set([spec.name, ...(spec.legacyNames || [])]);
+  return guild.roles.cache.find((role) => names.has(role.name) && !role.managed);
 }
 
 async function ensureRole(guild, spec) {
-  const existing = roleByName(guild, spec.name);
+  const existing = roleBySpec(guild, spec);
   const data = {
     name: spec.name,
     color: spec.color,
@@ -12373,7 +12513,8 @@ function categoryPermissions(guild, roles, access) {
 }
 
 async function ensureCategory(guild, spec, roles) {
-  const existing = guild.channels.cache.find((channel) => channel.type === ChannelType.GuildCategory && channel.name === spec.name);
+  const names = new Set([spec.name, ...(spec.legacyNames || [])]);
+  const existing = guild.channels.cache.find((channel) => channel.type === ChannelType.GuildCategory && names.has(channel.name));
   const overwrites = categoryPermissions(guild, roles, spec.access);
   if (!existing) {
     return guild.channels.create({
@@ -12383,21 +12524,26 @@ async function ensureCategory(guild, spec, roles) {
       reason: SETUP_REASON
     });
   }
+  if (existing.name !== spec.name) await existing.setName(spec.name, SETUP_REASON);
   await existing.permissionOverwrites.set(overwrites, SETUP_REASON);
   return existing;
 }
 
 async function ensureChannel(guild, category, channelSpec, roles) {
-  const [key, name, mode] = channelSpec;
+  const [key, name, mode, legacyNames = []] = channelSpec;
   const type = mode === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText;
-  let channel = guild.channels.cache.find((item) => item.type === type && item.name === name);
+  const names = new Set([name, ...legacyNames]);
+  let channel = guild.channels.cache.find((item) => item.type === type && names.has(item.name));
   if (!channel) {
     channel = await guild.channels.create({ name, type, parent: category.id, reason: SETUP_REASON });
-  } else if (channel.parentId !== category.id) {
-    await channel.setParent(category.id, { lockPermissions: true, reason: SETUP_REASON });
+  } else {
+    if (channel.name !== name) await channel.setName(name, SETUP_REASON);
+    if (channel.parentId !== category.id) {
+      await channel.setParent(category.id, { lockPermissions: true, reason: SETUP_REASON });
+    }
   }
   await channel.lockPermissions().catch(() => null);
-  if (mode === 'readonly' && category.name === '━━━ TÁMOGATÁS ━━━') {
+  if (mode === 'readonly' && category.name === '━━━ SUPPORT ━━━') {
     await channel.permissionOverwrites.edit(roles.verified.id, {
       ViewChannel: true,
       ReadMessageHistory: true,
@@ -12406,6 +12552,20 @@ async function ensureChannel(guild, category, channelSpec, roles) {
       CreatePublicThreads: false,
       CreatePrivateThreads: false,
       AddReactions: false
+    }, { reason: SETUP_REASON });
+  }
+  if (key === 'hungarianChat') {
+    await channel.permissionOverwrites.edit(roles.verified.id, {
+      ViewChannel: false
+    }, { reason: SETUP_REASON });
+    await channel.permissionOverwrites.edit(roles.hungarian.id, {
+      ViewChannel: true,
+      SendMessages: true,
+      SendMessagesInThreads: true,
+      ReadMessageHistory: true,
+      EmbedLinks: true,
+      AttachFiles: true,
+      AddReactions: true
     }, { reason: SETUP_REASON });
   }
   return [key, channel];
@@ -12425,7 +12585,7 @@ function publicRoot() {
   return dashboardUrl().replace(/\/dashboard\/?$/, '');
 }
 
-function staticPanels() {
+function legacyStaticPanels() {
   const root = publicRoot();
   return {
     welcome: [infoEmbed(
@@ -12476,12 +12636,62 @@ function staticPanels() {
   };
 }
 
+function staticPanels() {
+  const root = publicRoot();
+  return {
+    welcome: [infoEmbed(
+      '👋 Welcome to the official NEXA Bot server!',
+      'Get support, report bugs, submit ideas and follow NEXA Bot development here.\n\n**Start here:**\n1. Read `📜・rules`.\n2. Verify yourself in `✅・verification`.\n3. Choose your language and notification roles in `🌐・language-selection`.\n4. Open a private ticket in `🎫・open-ticket` when you need help.\n\n🇭🇺 Hungarian remains available from the language selector and in `🇭🇺・hungarian-chat`.'
+    )],
+    rules: [infoEmbed(
+      '📜 NEXA Bot | Support — Rules',
+      '**1.** Treat every member and staff member with respect. Harassment, hate speech and personal attacks are prohibited.\n\n' +
+      '**2.** Spam, flooding, unnecessary mentions and intentionally disrupting conversations are prohibited.\n\n' +
+      '**3.** Advertising, invites and external links require staff permission.\n\n' +
+      '**4.** Malicious, fraudulent, NSFW or illegal content is strictly prohibited.\n\n' +
+      '**5.** Never share tokens, API keys, passwords or other secrets. NEXA staff will never ask for them.\n\n' +
+      '**6.** Bug reports must include accurate details without exposing personal or confidential information.\n\n' +
+      '**7.** Use tickets responsibly. Duplicate or abusive tickets may result in moderation.\n\n' +
+      '**8.** Do not attempt to bypass bot protections, permissions or restrictions.\n\n' +
+      '**9.** Follow the Discord Terms of Service and Community Guidelines.\n\n' +
+      '**10.** Staff actions may be appealed respectfully through a private ticket.\n\n' +
+      '**By remaining on this server, you agree to these rules.**',
+      COLORS.warning
+    )],
+    announcements: [infoEmbed('📢 Official announcements', 'Important NEXA Bot news, maintenance notices and service announcements appear here. Select the `📢 Announcements` role in the language and roles panel to receive notifications.')],
+    updates: [infoEmbed('📰 NEXA updates', 'Release notes, security fixes and newly released features are published here. Select `🧪 Beta Updates` if you want beta notifications.')],
+    status: [infoEmbed('📊 NEXA system status', `🟢 **Discord bot:** online\n🟢 **Web dashboard:** available\n🟢 **Owner Center:** protected\n\nLive website and dashboard: ${root}`, COLORS.success)],
+    about: [infoEmbed('🤖 About NEXA Bot', 'NEXA Bot is a multilingual Discord management platform for community, gaming, support, creator and large public servers. It combines moderation, security, tickets, logging, community tools and a modern web dashboard. English is the default language; Hungarian remains available.')],
+    features: [infoEmbed('✨ NEXA Bot features', '🛡️ Moderation with persistent Case IDs\n🚨 Automod, anti-raid and anti-nuke protection\n🎫 Category-based tickets and HTML transcripts\n👋 Welcome, goodbye and automatic roles\n🎭 Button and select-menu role panels\n⭐ XP, levels and leaderboards\n🎉 Giveaways\n🧩 Custom commands\n📊 Detailed event and security logs\n✨ Permission-controlled NEXA AI\n🌐 Per-server web dashboard\n👑 Isolated Owner Center')],
+    guide: [infoEmbed('📖 Getting started', '**1.** Invite NEXA Bot using the official link.\n**2.** Move the NEXA Bot role above every role it must manage.\n**3.** Run `/beallitas` to open the dashboard.\n**4.** Select your server.\n**5.** Enable the required modules and select their channels and roles.\n**6.** Test the configuration using a normal member account.')],
+    commands: [infoEmbed('⌨️ Important commands', '`/help` — interactive help\n`/beallitas` — web dashboard\n`/ban`, `/kick`, `/timeout`, `/warn` — moderation\n`/hitelesites panel` — verification panel\n`/rangpanel` — self-role panel\n`/nyeremenyjatek` — giveaway\n`/nexa kerdes` — NEXA AI when enabled\n`/vedelem statusz` — security status\n\nUse `/help` for the complete command browser.')],
+    dashboard: [infoEmbed('🧭 Web dashboard', `Manage each server through the NEXA dashboard:\n\n${root}/dashboard\n\nSign in with Discord, then select a server that you own or have permission to manage.`)],
+    links: [infoEmbed('🔗 Official NEXA links', `🌐 **Website:** ${root}\n🧭 **Dashboard:** ${root}/dashboard\n🤖 **Invite NEXA Bot:** ${inviteUrl()}\n📜 **Privacy Policy:** ${root}/privacy\n⚖️ **Terms of Service:** ${root}/terms\n\nOnly links published here should be treated as official.`)],
+    faq: [infoEmbed('❓ Frequently asked questions', '**Where can I configure the bot?**\nOpen the web dashboard with `/beallitas`.\n\n**Why is my server missing?**\nYou only see servers where NEXA Bot is present and you have management permission.\n\n**Why did a moderation action fail?**\nThe NEXA Bot role must be above the affected member and role.\n\n**Will staff ever request my token?**\nNo. Never give anyone a token, API key or password.')],
+    help: [infoEmbed('🧩 Asking for help', 'Use this channel for short, general questions. Open a private ticket for complex, security-sensitive or account-specific issues.\n\nInclude what you tried, what happened, what you expected, the affected feature and any safe error ID.')],
+    bugs: [infoEmbed('🐞 Bug report template', '**Short title:**\n**Affected feature:**\n**What happened:**\n**Expected result:**\n**Steps to reproduce:**\n**Server ID:**\n**Date and time:**\n**Screenshot or error ID:**\n\n⚠️ Never include tokens, API keys, passwords or personal information.')],
+    suggestions: [infoEmbed('💡 Suggestion template', '**Suggestion name:**\n**Problem it solves:**\n**How it should work:**\n**Who would use it:**\n**Optional screenshot or example:**\n\nMembers may discuss and improve suggestions respectfully.')],
+    feedback: [infoEmbed('⭐ Feedback', 'Tell us which NEXA feature you used, what worked well, what could improve and your rating from 1 to 5. Do not post personal data or confidential logs publicly.')],
+    general: [infoEmbed('💬 NEXA community', 'The main community language is English. Discuss NEXA Bot, Discord servers and community management respectfully. Use the support channels for help requests.')],
+    hungarianChat: [infoEmbed('🇭🇺 Magyar közösségi chat', 'Ebben a csatornában magyarul beszélgethetsz és kérhetsz általános segítséget. A privát vagy biztonsági ügyekhez nyiss ticketet. A `🇭🇺 Magyar` rang továbbra is kiválasztható a nyelvválasztó panelen.')],
+    showcase: [infoEmbed('🖼️ Server showcase rules', 'You may showcase your own Discord server with a short description and no more than one invite, at most once per day. Prohibited or deceptive servers are removed immediately.')],
+    botCommands: [infoEmbed('🤖 Bot commands', 'Test public NEXA commands here. Do not spam and never run moderation, raid or anti-nuke tests without explicit authorization.')],
+    giveaway: [infoEmbed('🎉 Giveaways', 'Official NEXA giveaways appear here. The bot and staff will never request a password, token or advance payment to deliver a prize.')],
+    staffChat: [infoEmbed('🔒 Staff operating policy', '1. Treat every member impartially and respectfully.\n2. Never share confidential tickets or logs with unauthorized people.\n3. Every action requires a clear reason and evidence when appropriate.\n4. Use permissions only for assigned duties.\n5. Report security incidents to Management immediately.\n6. Never paste tokens, API keys or personal data into staff channels.\n7. Ask Management before acting when a case is unclear.', COLORS.danger)],
+    staffTasks: [infoEmbed('📋 Staff task template', '**Task:**\n**Owner:**\n**Priority:** low / medium / high / critical\n**Deadline:**\n**Status:** planned / in progress / review / completed\n**Notes:**')],
+    reports: [infoEmbed('📨 Internal reports', 'Use this channel for staff escalations involving abuse, moderation and security. Include the affected user ID, exact time, a concise factual summary and verifiable evidence.')],
+    staffAnnouncements: [infoEmbed('📢 Announcement drafts', 'A manager must review announcements before publication. Include a clear title, concise summary, exact time and the notification role when needed. Publish approved posts in `📢・announcements`.')],
+    ownerCenter: [infoEmbed('👑 NEXA Owner Center', `The global Owner Center is restricted to the primary bot owner and explicitly authorized operators.\n\nOpen: ${root}/owner\n\nOwner access must never be replaced with a normal Discord role.`, COLORS.warning)],
+    developerTest: [infoEmbed('🧪 Developer test channel', 'Test new panels and commands here. Run live moderation, raid or anti-nuke tests only on a separate authorized test server.')]
+  };
+}
+
 async function clearManagedMessages(channel, botId) {
   if (!channel?.isTextBased()) return;
   const messages = await channel.messages.fetch({ limit: 50 }).catch(() => null);
   if (!messages) return;
   const managed = messages.filter((message) =>
-    message.author.id === botId && message.embeds.some((embed) => embed.footer?.text === MANAGED_FOOTER)
+    message.author.id === botId && message.embeds.some((embed) => LEGACY_MANAGED_FOOTERS.has(embed.footer?.text))
   );
   for (const message of managed.values()) await message.delete().catch(() => null);
 }
@@ -12512,7 +12722,7 @@ async function publishSupportPanels(guild, channels, roles, botUser) {
     channels.verification,
     botUser.id,
     (message) => message.components.some((row) => row.components.some((component) => component.customId === 'engagement_verify')),
-    verificationPanel('hu')
+    verificationPanel('en')
   );
   published += await replaceInteractivePanel(
     channels.language,
@@ -12524,7 +12734,7 @@ async function publishSupportPanels(guild, channels, roles, botUser) {
     channels.ticketPanel,
     botUser.id,
     (message) => message.components.some((row) => row.components.some((component) => ['ticket_category_select', 'ticket_support'].includes(component.customId))),
-    ticketPanel('Válaszd ki, milyen ügyben szeretnél segítséget kérni. A bot egy privát csatornát nyit, amelyet csak te és az ügyfélszolgálat láthat. Egy ügyhöz csak egy ticketet nyiss. Soha ne küldj tokent, API-kulcsot vagy jelszót.', 'hu')
+    ticketPanel('Select what you need help with. NEXA Bot will create a private channel visible only to you and the Support Team. Open only one ticket per issue. Never send tokens, API keys or passwords.', 'en')
   );
   return published;
 }
@@ -12558,10 +12768,11 @@ async function setupSupportServer(guild, botUser, ownerMember) {
   await grantGuildPlan(guild.id, 'ultimate', {
     days: null,
     grantedBy: ownerMember?.id || 'owner',
-    note: 'Hivatalos NEXA Support szerver'
+    note: 'Official NEXA Support Server'
   });
 
   const config = JSON.parse(JSON.stringify(getGuildConfig(guild.id)));
+  config.language = 'en';
   Object.assign(config.modules, {
     protection: true,
     moderation: true,
@@ -12601,9 +12812,9 @@ async function setupSupportServer(guild, botUser, ownerMember) {
     verified: roles.verified.id
   });
   config.community.selfRoles = [roles.hungarian.id, roles.english.id, roles.announcements.id, roles.beta.id];
-  config.messages.welcome = '👋 Üdvözlünk a NEXA Bot hivatalos szerverén, {tag}! Olvasd el a szabályzatot, majd ellenőrizd magad.';
-  config.messages.goodbye = '👋 {username} távozott a NEXA Bot közösségéből.';
-  config.messages.ticket = 'Válassz kategóriát, és a NEXA Bot létrehoz egy privát segítségkérő csatornát.';
+  config.messages.welcome = '👋 Welcome to the official NEXA Bot server, {tag}! Read the rules, then complete verification.';
+  config.messages.goodbye = '👋 {username} has left the NEXA Bot community.';
+  config.messages.ticket = 'Select a category and NEXA Bot will create a private support channel.';
   config.protection.sensitivity = 'strict';
   config.protection.whitelistRoles = [roles.owner.id, roles.management.id, roles.developer.id, roles.support.id];
   config.protection.whitelistChannels = [channels.staffChat.id, channels.developerTest.id];
@@ -12621,11 +12832,101 @@ async function setupSupportServer(guild, botUser, ownerMember) {
   };
 }
 
+function resolveSupportResources(guild) {
+  const roles = Object.fromEntries(SUPPORT_ROLES.map((spec) => [spec.key, roleBySpec(guild, spec)]));
+  const missingRole = Object.entries(roles).find(([, role]) => !role);
+  if (missingRole) {
+    throw new Error(`Hiányzó kezelt rang: ${missingRole[0]}. Futtasd előbb a /support-szerver telepites parancsot.`);
+  }
+
+  const channels = {};
+  for (const category of SUPPORT_CATEGORIES) {
+    for (const [key, name, mode, legacyNames = []] of category.channels) {
+      const names = new Set([name, ...legacyNames]);
+      channels[key] = guild.channels.cache.find((channel) =>
+        names.has(channel.name) && channel.type === (mode === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText)
+      );
+      if (!channels[key]) {
+        throw new Error(`Hiányzó kezelt csatorna: ${name}. Futtasd előbb a /support-szerver telepites parancsot.`);
+      }
+    }
+  }
+  const ticketCategory = guild.channels.cache.find((channel) =>
+    channel.type === ChannelType.GuildCategory && ['━━━ TICKETS ━━━', '━━━ TICKETEK ━━━'].includes(channel.name)
+  );
+  if (!ticketCategory) {
+    throw new Error('Hiányzik a TICKETEK kategória. Futtasd előbb a /support-szerver telepites parancsot.');
+  }
+  return { roles, channels, ticketCategory };
+}
+
+async function repairSupportServer(guild, botUser, actorId) {
+  const { roles, channels, ticketCategory } = resolveSupportResources(guild);
+  await applyRolePositions(guild, roles);
+  await grantGuildPlan(guild.id, 'ultimate', {
+    days: null,
+    grantedBy: actorId || 'owner',
+    note: 'Hivatalos NEXA Support szerver – javítás'
+  });
+
+  const config = JSON.parse(JSON.stringify(getGuildConfig(guild.id)));
+  config.language = 'en';
+  Object.assign(config.modules, {
+    tickets: true,
+    welcome: true,
+    reactionRoles: true,
+    logging: true,
+    verification: true,
+    reminders: true
+  });
+  Object.assign(config.channels, {
+    logs: channels.moderationLogs.id,
+    ticketPanel: channels.ticketPanel.id,
+    ticketCategory: ticketCategory.id,
+    welcome: channels.welcome.id,
+    goodbye: channels.memberLogs.id,
+    announcements: channels.announcements.id,
+    verification: channels.verification.id
+  });
+  Object.assign(config.roles, {
+    staff: roles.support.id,
+    auto: roles.verified.id,
+    human: roles.verified.id,
+    dashboard: roles.management.id,
+    verified: roles.verified.id
+  });
+  config.community.selfRoles = [roles.hungarian.id, roles.english.id, roles.announcements.id, roles.beta.id];
+  config.messages.welcome = '👋 Welcome to the official NEXA Bot server, {tag}! Read the rules, then complete verification.';
+  config.messages.goodbye = '👋 {username} has left the NEXA Bot community.';
+  config.messages.ticket = 'Select a category and NEXA Bot will create a private support channel.';
+  await setGuildConfig(guild.id, config);
+
+  const ownerSettings = getOwnerSettings();
+  const hadGlobalVerificationBlock = ownerSettings.remoteDisabledModules.includes('verification');
+  if (hadGlobalVerificationBlock) {
+    ownerSettings.remoteDisabledModules = ownerSettings.remoteDisabledModules.filter((key) => key !== 'verification');
+    await setOwnerSettings(ownerSettings);
+  }
+
+  const published = await publishSupportPanels(guild, channels, roles, botUser);
+  return {
+    published,
+    verification: getModuleState(guild.id, 'verification'),
+    hadGlobalVerificationBlock
+  };
+}
+
 function auditSupportServer(guild) {
-  const missingRoles = SUPPORT_ROLES.filter((spec) => !roleByName(guild, spec.name)).map((spec) => spec.name);
-  const missingCategories = SUPPORT_CATEGORIES.filter((spec) => !guild.channels.cache.some((channel) => channel.type === ChannelType.GuildCategory && channel.name === spec.name)).map((spec) => spec.name);
+  const missingRoles = SUPPORT_ROLES.filter((spec) => !roleBySpec(guild, spec)).map((spec) => spec.name);
+  const missingCategories = SUPPORT_CATEGORIES.filter((spec) => {
+    const names = new Set([spec.name, ...(spec.legacyNames || [])]);
+    return !guild.channels.cache.some((channel) => channel.type === ChannelType.GuildCategory && names.has(channel.name));
+  }).map((spec) => spec.name);
   const missingChannels = SUPPORT_CATEGORIES.flatMap((category) => category.channels)
-    .filter(([, name, mode]) => !guild.channels.cache.some((channel) => channel.name === name && channel.type === (mode === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText)))
+    .filter(([, name, mode, legacyNames = []]) => {
+      const names = new Set([name, ...legacyNames]);
+      return !guild.channels.cache.some((channel) => names.has(channel.name) && channel.type === (mode === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText));
+    })
     .map(([, name]) => name);
   return {
     missingRoles,
@@ -12642,6 +12943,7 @@ module.exports = {
   auditSupportServer,
   buildSupportSetupCommand,
   publishSupportPanels,
+  repairSupportServer,
   registerSupportCommandInOwnerGuilds,
   setupSupportServer,
   staticPanels

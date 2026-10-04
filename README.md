@@ -1,4 +1,4 @@
-# NEXA Bot 11.0.3 AEGIS Operations Platform
+# NEXA Bot 11.0.6 AEGIS Operations Platform
 
 Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Az opcionális RP- és dokumentumrendszert kizárólag a bot tulajdonosa vagy az általa kijelölt Owner-kezelő kapcsolhatja be egy kiválasztott szerveren.
 
@@ -56,11 +56,15 @@ A parancsot kizárólag a `BOT_OWNER_ID` értékében szereplő elsődleges bot-
 ```text
 /support-szerver telepites
 /support-szerver panelek
+/support-szerver javitas
+/support-szerver angolositas
 /support-szerver ellenorzes
 ```
 
 - `telepites`: létrehozza vagy frissíti a teljes rang-, kategória-, csatorna- és jogosultsági rendszert, beállítja a NEXA modulokat, kihelyezi a kész paneleket és korlátlan Ultimate csomagot ad a hivatalos support szervernek;
 - `panelek`: újraküldi a bot által kezelt tájékoztatókat és interaktív paneleket;
+- `javitas`: helyreállítja a support modulokat, a tagellenőrzést, a rangsorrendet és a paneleket;
+- `angolositas`: a meglévő kezelt szervert veszteség nélkül angol alapnyelvre állítja; a magyar nyelv a `🇭🇺 Magyar` ranggal és a `🇭🇺・hungarian-chat` csatornában marad elérhető;
 - `ellenorzes`: felsorolja a hiányzó rangokat, kategóriákat és csatornákat.
 
 A telepítéshez a botnak ideiglenesen `Rendszergazda` jogosultság kell. A Discord Közösség funkció feltételeit a szervertulajdonosnak egyszer kézzel kell elfogadnia.
