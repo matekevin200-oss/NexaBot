@@ -1,5 +1,15 @@
 # NEXA Bot változásnapló
 
+## 11.0.1 – Support Server Factory
+
+- új Owner-only `/support-szerver telepites|panelek|ellenorzes` parancs;
+- 13 rang, 7 kategória és teljes támogatási csatornaszerkezet automatikus, ismételhető létrehozása;
+- pontos kategória- és rangjogosultságok, elkülönített Staff-, Ticket- és Owner-területek;
+- automatikus ellenőrző-, nyelvválasztó- és ticketpanel;
+- kész magyar–angol szabályzat, bemutatkozás, útmutató, hibajelentés, ötlet- és staffműködési sablon;
+- automatikus NEXA-konfiguráció, szigorú védelem és korlátlan Ultimate support-szerver csomag;
+- három új célzott teszt; a teljes készlet 96 sikeres tesztet tartalmaz.
+
 ## 11.0.0 – AEGIS Permission DNA
 
 - új Owner-only AEGIS jogosultsági intelligencia és külön Owner Center oldal;

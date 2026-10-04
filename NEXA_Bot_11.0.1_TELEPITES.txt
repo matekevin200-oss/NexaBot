@@ -1,0 +1,39 @@
+NEXA BOT 11.0.1 – GYORS TELEPÍTÉS
+===================================
+
+1. Csomagold ki ezt a ZIP-fájlt.
+2. A kicsomagolt fájlokat egyszerre töltsd fel a GitHub NexaBot repository főkönyvtárába.
+3. GitHubon véglegesítsd a feltöltést a Commit changes gombbal.
+4. Renderen nyisd meg a nexabot szolgáltatást.
+5. Válaszd: Manual Deploy → Deploy latest commit.
+6. Várd meg a Live állapotot.
+7. Discordon add ideiglenesen a NEXA Bot rangnak a Rendszergazda jogosultságot.
+8. Húzd a NEXA Bot rangját a többi kezelendő rang fölé.
+9. A saját új support szervereden futtasd:
+
+   /support-szerver telepites
+
+10. A telepítés után engedélyezd kézzel a Discord Közösség funkciót:
+    Szerverbeállítások → Közösség engedélyezése
+
+TOVÁBBI PARANCSOK
+-----------------
+
+/support-szerver panelek
+Frissíti a bot által kezelt szabályzatokat, tájékoztatókat és paneleket.
+
+/support-szerver ellenorzes
+Megmutatja, ha hiányzik szükséges rang, kategória vagy csatorna.
+
+BIZTONSÁG
+---------
+
+- A parancsot csak a BOT_OWNER_ID-ben megadott elsődleges tulajdonos használhatja.
+- Csak a tulajdonos saját Discord-szerverén futtatható.
+- Bot tokent, Client Secretet, adatbázis-jelszót vagy API-kulcsot ne tölts fel GitHubra.
+- A .env.example csak változóneveket tartalmaz; valódi titkos értéket ne írj bele.
+
+WEBOLDAL
+--------
+
+https://nexabot-25vo.onrender.com

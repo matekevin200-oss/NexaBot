@@ -47,6 +47,23 @@
 - PostgreSQL kapcsolat-időkorlát, automatikus állapotellenőrzés és háttérben történő visszacsatlakozás;
 - központi error handler, audit-, command-, dashboard- és AI használati napló.
 - kétlépcsős Discord interakciós rate limit felhasználó és szerver szerint, automatikus telemetria- és AI-előzménytisztítással;
+- Owner-only NEXA Support Server Factory: egyetlen parancsból idempotensen létrehozza vagy frissíti a hivatalos támogatási szerver 13 rangját, 7 kategóriáját, teljes csatornaszerkezetét, pontos jogosultságait, ellenőrző-, nyelv- és ticketpaneljeit, valamint kész magyar–angol tájékoztatóit;
+
+## Hivatalos Support szerver automatikus telepítése
+
+A parancsot kizárólag a `BOT_OWNER_ID` értékében szereplő elsődleges bot-tulajdonos használhatja, és csak a saját tulajdonú Discord-szerverén.
+
+```text
+/support-szerver telepites
+/support-szerver panelek
+/support-szerver ellenorzes
+```
+
+- `telepites`: létrehozza vagy frissíti a teljes rang-, kategória-, csatorna- és jogosultsági rendszert, beállítja a NEXA modulokat, kihelyezi a kész paneleket és korlátlan Ultimate csomagot ad a hivatalos support szervernek;
+- `panelek`: újraküldi a bot által kezelt tájékoztatókat és interaktív paneleket;
+- `ellenorzes`: felsorolja a hiányzó rangokat, kategóriákat és csatornákat.
+
+A telepítéshez a botnak ideiglenesen `Rendszergazda` jogosultság kell. A Discord Közösség funkció feltételeit a szervertulajdonosnak egyszer kézzel kell elfogadnia.
 
 ## Owner által kezelt csomagok
 
@@ -82,6 +99,7 @@ src/
   custom-commands.js   adatbázisos szerverparancsok
   ai.js                 Nexa AI és adatvédelmi memória
   help.js               interaktív súgó
+  support-server.js     Owner-only hivatalos Support szerverépítő és kész panelek
   i18n.js               magyar/angol szervernyelv
 ```
 
