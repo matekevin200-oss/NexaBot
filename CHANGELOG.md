@@ -1,5 +1,13 @@
 # NEXA Bot változásnapló
 
+## 11.0.8 – Kétnyelvű Slash Command rendszer
+
+- Minden slash parancs, alparancs és beviteli mező magyar és angol lokalizációt kapott.
+- A Discord saját felhasználói nyelve alapján automatikusan jeleníti meg például a `/beallitas` vagy `/settings`, illetve `/vedelem` vagy `/security` alakot.
+- A parancsleírások és a választólisták megnevezései is kétnyelvűek.
+- A magyar és angol parancsnevek külön ellenőrzést kaptak, így egyik nyelven sincs névütközés.
+- A szerver dashboardján kiválasztott nyelv továbbra is a bot válaszait és paneljeit szabályozza.
+
 ## 11.0.7 – External App/Webhook Shield
 
 - Bezárult az a kiskapu, amely miatt a bot- vagy webhook-szerzőként megjelenő felhasználói alkalmazásüzenetek kimaradtak az Automodból.
