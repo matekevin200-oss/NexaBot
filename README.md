@@ -1,4 +1,4 @@
-# NEXA Bot 11.0.8 AEGIS Operations Platform
+# NEXA Bot 12.0 Billing Operations Platform
 
 Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Az opcionális RP- és dokumentumrendszert kizárólag a bot tulajdonosa vagy az általa kijelölt Owner-kezelő kapcsolhatja be egy kiválasztott szerveren.
 
@@ -14,7 +14,8 @@
 - AEGIS Permission DNA: veszélyes jogosultságok, identitásonkénti robbanási sugár, ranghierarchia és elszigetelhetőség elemzése; kriptográfiai bázis és jogosultság-drift az Owner Centerben;
 - kereshető, lapozott Owner szerverlista és szerverenkénti részletes állapotlap modul-, csatorna-, rang-, jogosultság-, NEXA Shield-, audit- és hibanézettel;
 - owner-kezelők, AI-engedélylista, user/guild blacklist, maintenance és globális modul-vészkapcsoló;
-- Owner által ingyen kiosztható Free, Pro és Ultimate jogosultsági csomagok, megadható lejárattal vagy korlátlan időre;
+- biztonságos Stripe Checkout és Customer Portal havi/éves Pro, Ultimate és Enterprise előfizetéssel, automatikus aktiválással, lemondással és lejáratkezeléssel;
+- Owner által ingyen kiosztható Pro, Ultimate és Enterprise jogosultsági csomagok, megadható lejárattal vagy korlátlan időre;
 - Owner-only RP modul: szerverenkénti engedélyezés, TGF, részletes dokumentumpanelek és vezetői jóváhagyás;
 - Owner Document Control: az Owner Centerben szerverenként kiválasztható alapértelmezett használati rang, dokumentumtípusonkénti rangfelülírás, kapcsolható ügyszám és Discord-listás személymegjelölés; a felhívások és egyszerű közlemények alapból nem kapnak ügyszámot;
 - Workflow Studio: az Owner Centerben saját dokumentum- és ügyiratsablon készíthető legfeljebb öt egyedi kérdéssel, célcsatornával, használati ranggal, pinggel, automatikus ügyszámmal és opcionális vezetői jóváhagyással;
@@ -71,17 +72,17 @@ A parancsot kizárólag a `BOT_OWNER_ID` értékében szereplő elsődleges bot-
 
 A telepítéshez a botnak ideiglenesen `Rendszergazda` jogosultság kell. A Discord Közösség funkció feltételeit a szervertulajdonosnak egyszer kézzel kell elfogadnia.
 
-## Owner által kezelt csomagok
+## Csomagok és Stripe-előfizetés
 
-Nincs bankkártyás fizetés és nincs automatikus előfizetés. A szerverek csomagját kizárólag a bot tulajdonosa vagy az általa engedélyezett Owner-kezelő módosíthatja az Owner Centerben.
+A szerver tulajdonosa, adminja vagy kijelölt webes kezelője a **Csomag és számlázás** oldalon indíthat előfizetést. A kártyaadatokat kizárólag a Stripe Checkout kezeli; a NEXA nem látja és nem tárolja őket. A Stripe webhook automatikusan aktiválja, frissíti vagy lejáratja a jogosultságot. Az Owner Centerben ettől függetlenül továbbra is adhatsz ingyenes csomagot.
 
-| Csomag | Elérhető rendszerek |
-|---|---|
-| Free | Moderáció, welcome/autorole, ticket, naplózás, gombos tagellenőrzés és tartós emlékeztetők |
-| Pro | Minden Free funkció, Automod, XP, rangpanelek, Starboard, giveaway, custom commands, közösségi és shift modulok |
-| Ultimate | Minden Pro funkció, Nexa AI, teljes Anti-Nuke, raid detection és automatikus szerverlezárás |
+| Csomag | Havi díj | Éves díj | Elérhető rendszerek |
+|---|---:|---:|---|
+| Free | 0,00 € | 0,00 € | Moderáció, welcome/autorole, ticket, naplózás, Shift alapfunkció, tagellenőrzés és emlékeztetők |
+| Pro | 4,99 € | 49,90 € | Minden Free funkció, Automod, XP, rangpanelek, Starboard, giveaway, custom commands és ideiglenes hangszobák |
+| Ultimate | 9,99 € | 99,90 € | Minden Pro funkció, Nexa AI, teljes Anti-Nuke, raid detection, ChronoGuard és automatikus szerverlezárás |
 
-Az Owner által RP-re engedélyezett szerver automatikusan Ultimate hozzáférést kap. A régi `premium` adatbázis-bejegyzéseket az induló migráció Ultimate csomagra alakítja.
+Az Owner által RP-re engedélyezett szerver automatikusan legalább Ultimate hozzáférést kap. A Stripe- és az Owner-ajándékjogosultság egymás mellett megmarad; mindig a magasabb aktív csomag érvényesül.
 
 ## Könyvtárstruktúra
 
@@ -92,6 +93,7 @@ src/
   config.js            PostgreSQL, migrációk, szerver- és owner-beállítás
   dashboard.js         OAuth2 Command Deck, Owner Center, publikus oldalak
   dashboard-theme.js   NEXA Operations felület és reszponzív megjelenés
+  payments.js          Stripe Checkout, Customer Portal, aláírt webhook és előfizetés-szinkron
   applications.js      TGF Forge, vak bírálat, időkapszula és Integrity Pulse
   chronoguard.js        digitális szerveriker, Shadow Scan, incidenskapszula és helyreállítás
   aegis.js              Permission DNA, kockázati térkép és jogosultság-drift
@@ -115,7 +117,8 @@ src/
 - Discord alkalmazás és bot;
 - PostgreSQL adatbázis;
 - HTTPS publikus URL az OAuth dashboardhoz;
-- opcionálisan OpenAI API-kulcs és aktív API-egyenleg.
+- opcionálisan OpenAI API-kulcs és aktív API-egyenleg;
+- fizetéshez Stripe-fiók, két termék havi és éves EUR Price azonosítóval;
 - az ER:LC integrációhoz megvásárolt ER:LC API pack és Server Key.
 
 ## Környezeti változók
@@ -132,6 +135,13 @@ src/
 | `CHRONOGUARD_SIGNING_KEY` | ajánlott | Külön, legalább 32 karakteres HMAC-kulcs a pillanatképlánc aláírásához; hiányában a `SESSION_SECRET` használatos |
 | `OPENAI_API_KEY` | csak AI-hoz | Kizárólag szerveroldali environment variable |
 | `OPENAI_MODEL` | nem | Alapérték: `gpt-5-mini` |
+| `STRIPE_SECRET_KEY` | fizetéshez | Stripe szerveroldali `sk_live_...` vagy teszthez `sk_test_...` kulcs |
+| `STRIPE_WEBHOOK_SECRET` | fizetéshez | A `/webhooks/stripe` végponthoz tartozó `whsec_...` aláírási titok |
+| `STRIPE_PRICE_PRO_MONTHLY` | fizetéshez | Pro havi Stripe Price ID |
+| `STRIPE_PRICE_PRO_YEARLY` | fizetéshez | Pro éves Stripe Price ID |
+| `STRIPE_PRICE_ULTIMATE_MONTHLY` | fizetéshez | Ultimate havi Stripe Price ID |
+| `STRIPE_PRICE_ULTIMATE_YEARLY` | fizetéshez | Ultimate éves Stripe Price ID |
+| `STRIPE_AUTOMATIC_TAX` | nem | `true` esetén Stripe Tax, kötelező számlázási cím és adóazonosító-gyűjtés; csak kész Stripe Tax beállítás után kapcsold be |
 | `ERLC_ENCRYPTION_KEY` | ER:LC webes mentéshez | Legalább 32 karakter; a szerverenkénti ER:LC kulcsok titkosításához |
 | `ERLC_API_KEY` | nem | Opcionális egyetlen környezeti Server Key; csak az `ERLC_GUILD_ID` szerveren használható |
 | `ERLC_GUILD_ID` | `ERLC_API_KEY` mellé | A globális Server Key-hez tartozó Discord szerver ID-je |
@@ -153,6 +163,22 @@ src/
 | `PORT` | nem | Render automatikusan beállítja |
 
 Titkos értéket soha ne tölts fel GitHubra, és ne írj `.js`, `.json`, `.yaml` vagy kliensoldali fájlba.
+
+## Stripe beállítása
+
+1. A Stripe Dashboardban hozz létre két terméket: **NEXA Pro** és **NEXA Ultimate**.
+2. Mindkettőhöz hozz létre havi és éves, ismétlődő EUR árat a fenti táblázat szerint.
+3. A négy `price_...` azonosítót másold a megfelelő Render Environment változóba.
+4. A Stripe Developers → Webhooks résznél add hozzá ezt a végpontot:
+
+```text
+https://nexabot-25vo.onrender.com/webhooks/stripe
+```
+
+5. Események: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`.
+6. A webhook `whsec_...` titkát add meg `STRIPE_WEBHOOK_SECRET` néven, a szerveroldali kulcsot pedig `STRIPE_SECRET_KEY` néven.
+7. A Stripe Customer Portalban engedélyezd a csomagváltást, fizetési mód módosítását és lemondást.
+8. Először tesztkulcsokkal és Stripe tesztkártyával ellenőrizd a teljes folyamatot; élesítéskor minden kulcsot és Price ID-t együtt válts Live módra.
 
 ## Discord Developer Portal
 
@@ -203,7 +229,7 @@ Az állapotvégpontok:
 A sikeres logban ez jelenik meg:
 
 ```text
-A NEXA Bot 11.0 AEGIS operations platform használatra kész.
+A NEXA Bot 12.0 Billing Operations Platform használatra kész.
 ```
 
 ## Használat
@@ -220,7 +246,8 @@ A NEXA Bot 11.0 AEGIS operations platform használatra kész.
 - a bot mentéskor frissíti a Discord-paneleket;
 - Custom Commands: nyisd meg a szerver **Custom Command kezelő** oldalát;
 - Owner Center: a `BOT_OWNER_ID` fiókkal belépve automatikusan megnyílik.
-- Csomag kiosztása: az Owner Center **Ingyenes csomag kiosztása** részében válaszd ki a Pro vagy Ultimate csomagot és a lejáratot; a szerverkártyán egy mozdulattal visszaállítható Free-re.
+- Előfizetés: a szerver dashboardján nyisd meg a **Csomag és számlázás** oldalt, válassz csomagot és havi/éves ciklust, majd fejezd be a Stripe Checkoutot. Lemondás vagy kártyamódosítás a **Számlázás és lemondás kezelése** gombbal történik.
+- Ingyenes csomag kiosztása: az Owner Centerben válaszd ki a Pro, Ultimate vagy Enterprise csomagot és a lejáratot; az eltávolítás csak az Owner-ajándékot veszi el, a külön Stripe-előfizetést nem.
 - RP-rendszer: az Owner Center szerverlistáján nyomd meg az **RP bekapcsolása** gombot. Ezután Discordon a `/telepites` a teljes alap RP-rendszert, a `/dokumentum-panelek` pedig a már meglévő dokumentumcsatornák paneljeit telepíti.
 - Dokumentumjogosultság: az Owner Center szerverkártyáján nyisd meg az **Iratvezérlés** oldalt, válaszd ki az **Alapértelmezett használati rangot**, majd ments. Ettől kezdve nem a fix „Operatív állomány”, hanem a kiválasztott rang használhatja a paneleket. Egyes dokumentumtípusokhoz külön rang is megadható.
 - Egyedi ügyirat: **Owner Center → szerver → Workflow Studio**. Add meg a kérdéseket, célcsatornát és szabályokat, mentsd, majd nyomd meg a **Panel kihelyezése** gombot.

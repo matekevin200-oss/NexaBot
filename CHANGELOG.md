@@ -1,5 +1,17 @@
 # NEXA Bot változásnapló
 
+## 12.0.0 – Stripe Billing Operations
+
+- A normál szerverek külön, semleges Ügyintézési központ panelt kaptak; a hivatalos NEXA Support szerver saját Support Gateway megjelenést és kategóriákat használ.
+- Új nyilvános, magyar–angol Árak oldal Free, Pro és Ultimate csomaggal, eurós díjakkal.
+- Stripe Checkout havi és éves előfizetéshez; a kártyaadatokat a bot nem látja és nem tárolja.
+- Stripe Customer Portal a fizetési mód, csomagváltás és lemondás biztonságos kezeléséhez.
+- HMAC-aláírt, ötperces időablakkal ellenőrzött webhook és idempotens eseményfeldolgozás.
+- PostgreSQL-alapú előfizetés-, állapot-, ciklus- és lejáratkezelés automatikus csomagaktiválással.
+- Az Owner-ajándékcsomag és a fizetett csomag külön tárolódik; mindig a magasabb aktív jogosultság érvényesül.
+- Az Owner Center külön mutatja az ajándékcsomagokat és a Stripe-előfizetéseket; Pro vagy Ultimate csomagot ingyen is kioszthatsz.
+- A Shift alapfunkciója Free csomagban is elérhető.
+
 ## 11.0.8 – Kétnyelvű Slash Command rendszer
 
 - Minden slash parancs, alparancs és beviteli mező magyar és angol lokalizációt kapott.

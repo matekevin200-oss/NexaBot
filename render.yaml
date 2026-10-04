@@ -25,6 +25,20 @@ services:
         sync: false
       - key: OPENAI_MODEL
         value: "gpt-5-mini"
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_PRO_MONTHLY
+        sync: false
+      - key: STRIPE_PRICE_PRO_YEARLY
+        sync: false
+      - key: STRIPE_PRICE_ULTIMATE_MONTHLY
+        sync: false
+      - key: STRIPE_PRICE_ULTIMATE_YEARLY
+        sync: false
+      - key: STRIPE_AUTOMATIC_TAX
+        value: "false"
       - key: ERLC_ENCRYPTION_KEY
         generateValue: true
       - key: ERLC_API_KEY
