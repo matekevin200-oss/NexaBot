@@ -1,5 +1,15 @@
 # NEXA Bot változásnapló
 
+## 11.0.7 – External App/Webhook Shield
+
+- Bezárult az a kiskapu, amely miatt a bot- vagy webhook-szerzőként megjelenő felhasználói alkalmazásüzenetek kimaradtak az Automodból.
+- A védelem most már az embedek, mezők, képlinkek, mellékletek, select opciók és linkgombok szövegét is átvizsgálja.
+- Az egyetlen üzenetbe sűrített ismételt soros, Markdown- és Unicode-karakteráradat az első példánynál felismerhető.
+- A nyers `@everyone` és `@here` próbálkozás akkor is blokkolható, ha a Discord mention-feldolgozása elrejti vagy módosítja.
+- A rendszer megpróbálja azonosítani és büntetni a felhasználói alkalmazást elindító valódi tagot.
+- Jogosulatlan szerver-webhook esetén az üzenet mellett maga a webhook is automatikusan eltávolítható.
+- A hivatalos NEXA Support javítása visszakapcsolja az összes fontos üzenet-, webhook-, raid- és Anti-Nuke őrt.
+
 ## 11.0.6 – English Support Server Migration
 
 - A hivatalos NEXA Support szerver teljes kezelt rang-, kategória- és csatornaszerkezete angol alapnyelvet kapott.

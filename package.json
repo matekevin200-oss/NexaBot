@@ -1,6 +1,6 @@
 {
   "name": "nexabot",
-  "version": "11.0.6",
+  "version": "11.0.7",
   "private": true,
   "description": "NEXA Bot 11.0 több szerveres Discord operations platform AEGIS Permission DNA-val, ChronoGuarddal és Owner Centerrel",
   "main": "index.js",

@@ -1,4 +1,4 @@
-// NEXA Bot 11.0.6 single-file release — generated automatically.
+// NEXA Bot 11.0.7 single-file release — generated automatically.
 const __nativeRequire = require;
 const __path = __nativeRequire('node:path').posix;
 const __modules = {
@@ -5572,7 +5572,7 @@ function defaultHealthSnapshot(client) {
   const startup = process.uptime() < 180;
   return {
     name: 'NexaBot',
-    version: '11.0.6',
+    version: '11.0.7',
     healthy: ready || startup,
     status: ready ? 'online' : startup ? 'starting' : 'offline',
     guilds: client.guilds?.cache?.size || 0,
@@ -8267,7 +8267,7 @@ client.once(Events.ClientReady, async (readyClient) => {
     await registerCommands(readyClient);
     console.log(`NexaBot elindult: ${readyClient.user.tag}`);
     await restoreGiveaways(readyClient);
-    console.log('A NEXA Bot 11.0.6 AEGIS operations platform használatra kész.');
+    console.log('A NEXA Bot 11.0.7 AEGIS operations platform használatra kész.');
   } catch (error) {
     console.error('A parancs regisztrálása nem sikerült:', error);
     await recordError(error, { command: 'registerCommands' });
@@ -10245,7 +10245,7 @@ module.exports = {
 const { Events, Status } = require('discord.js');
 const { databaseHealth } = require('./config');
 
-const APP_VERSION = '11.0.6';
+const APP_VERSION = '11.0.7';
 
 function positiveInteger(value, fallback, minimum = 1_000, maximum = 60 * 60 * 1000) {
   const parsed = Number.parseInt(value, 10);
@@ -10506,6 +10506,104 @@ function isSecurityTrusted(member) {
 
 function containsBlockedLink(content) {
   return /(?:https?:\/\/|www\.|discord(?:app)?\.com\/invite\/|discord\.gg\/)/i.test(content || '');
+}
+
+function messageSecurityText(message) {
+  const parts = [message?.content];
+  for (const embed of message?.embeds || []) {
+    parts.push(
+      embed.title,
+      embed.description,
+      embed.url,
+      embed.author?.name,
+      embed.author?.url,
+      embed.footer?.text,
+      embed.image?.url,
+      embed.thumbnail?.url
+    );
+    for (const field of embed.fields || []) parts.push(field.name, field.value);
+  }
+  for (const attachment of message?.attachments?.values?.() || []) {
+    parts.push(attachment.name, attachment.description, attachment.url, attachment.proxyURL);
+  }
+  const visitComponent = (component) => {
+    parts.push(component?.label, component?.placeholder, component?.url, component?.description);
+    for (const option of component?.options || []) parts.push(option.label, option.description, option.value);
+    for (const child of component?.components || []) visitComponent(child);
+  };
+  for (const component of message?.components || []) visitComponent(component);
+  return parts.filter(Boolean).join('\n').slice(0, 50_000);
+}
+
+function detectMessageBomb(content, profileName = 'medium') {
+  const text = String(content || '');
+  const limits = profileName === 'strict'
+    ? { repeatedLines: 4, repeatedGlyphs: 24, headings: 8 }
+    : profileName === 'relaxed'
+      ? { repeatedLines: 8, repeatedGlyphs: 70, headings: 18 }
+      : { repeatedLines: 6, repeatedGlyphs: 40, headings: 12 };
+  const lines = text.split(/\r?\n/)
+    .map((line) => line.replace(/^[\s#>*_`~|-]+|[\s#>*_`~|-]+$/g, '').trim().toLowerCase())
+    .filter((line) => line.length >= 2);
+  const lineCounts = new Map();
+  for (const line of lines) lineCounts.set(line, (lineCounts.get(line) || 0) + 1);
+  if ([...lineCounts.values()].some((count) => count >= limits.repeatedLines)) return 'Ismételt soros szövegáradat';
+  if ((text.match(/^\s*#/gm) || []).length >= limits.headings) return 'Markdown szövegáradat';
+
+  const glyphs = Array.from(text.replace(/[\s\p{L}\p{N}\p{P}\p{Emoji_Presentation}]/gu, ''));
+  const glyphCounts = new Map();
+  for (const glyph of glyphs) glyphCounts.set(glyph, (glyphCounts.get(glyph) || 0) + 1);
+  if ([...glyphCounts.values()].some((count) => count >= limits.repeatedGlyphs)) return 'Ismételt Unicode-karakteráradat';
+  return null;
+}
+
+function interactionActorUser(message) {
+  return message?.interactionMetadata?.user ||
+    message?.interactionMetadata?.triggeringInteractionMetadata?.user ||
+    message?.interaction?.user ||
+    null;
+}
+
+async function resolveMessageActor(message) {
+  if (!message?.author?.bot && message?.member) return message.member;
+  const actor = interactionActorUser(message);
+  if (!actor?.id) return null;
+  return message.guild.members.fetch(actor.id).catch(() => null);
+}
+
+function trustedAutomatedMessage(message, protection) {
+  if (!message?.author?.bot && !message?.webhookId) return false;
+  if (message.author?.id === message.client?.user?.id) return true;
+  if (protection?.trustedBots?.includes(message.author?.id)) return true;
+  return Boolean(message.member?.user?.bot && isSecurityTrusted(message.member));
+}
+
+async function removeUnauthorizedWebhook(message, protection) {
+  if (!message?.webhookId || !protection?.webhookGuard) return null;
+  const webhooks = await message.guild.fetchWebhooks().catch(() => null);
+  const webhook = webhooks?.get(message.webhookId);
+  if (!webhook?.delete) return 'A külső alkalmazás nem szerver-webhookként működik; az üzenet törölve lett.';
+  if (webhook.owner?.id === message.client?.user?.id || protection.trustedBots?.includes(webhook.owner?.id)) {
+    return 'A webhook megbízható tulajdonoshoz tartozik; csak az üzenet lett törölve.';
+  }
+  const deleted = await webhook.delete('NEXA Shield: jogosulatlan alkalmazás- vagy meghívóüzenet').then(() => true).catch(() => false);
+  return deleted
+    ? 'A jogosulatlan webhookot is automatikusan eltávolítottam.'
+    : 'A webhook eltávolítása nem sikerült; ellenőrizd a Webhookok kezelése jogosultságot.';
+}
+
+async function logAutomatedMessageViolation(message, label, actor, webhookResult) {
+  const source = message.webhookId ? `Webhook / felhasználói alkalmazás (${message.webhookId})` : `Nem engedélyezett alkalmazás (${message.author?.id || 'ismeretlen'})`;
+  const actorText = actor ? `${actor.user.tag} (${actor.id})` : 'A Discord nem adta át a kezdeményező felhasználót';
+  await sendSecurityLog(
+    message.guild,
+    baseEmbed('🧱 External App/Webhook Shield', `${label}`, COLORS.danger).addFields(
+      { name: 'Forrás', value: source },
+      { name: 'Kezdeményező', value: actorText },
+      { name: 'Művelet', value: `Az üzenet törölve.${webhookResult ? ` ${webhookResult}` : ''}` },
+      { name: 'Csatorna', value: `${message.channel}` }
+    )
+  );
 }
 
 function findSecurityChannel(guild) {
@@ -10818,8 +10916,7 @@ function strikeKey(guildId, userId) {
   return `${guildId}:${userId}`;
 }
 
-async function applyViolation(message, label) {
-  const member = message.member;
+async function applyViolation(message, label, member = message.member) {
   if (!member || isProtectedMember(member)) return;
   const key = strikeKey(message.guild.id, member.id);
   const now = Date.now();
@@ -10869,12 +10966,16 @@ async function applyViolation(message, label) {
 }
 
 async function handleProtectedMessage(message) {
-  if (!message.guild || message.author.bot || !message.member) return;
+  if (!message.guild) return;
   if (!moduleEnabled(message.guild.id, 'protection')) return;
   const config = getGuildConfig(message.guild.id);
   const profile = protectionProfile(message.guild.id);
-  if (isProtectedMember(message.member) || config.protection.whitelistChannels.includes(message.channelId)) return;
-  const text = String(message.content || '');
+  if (config.protection.whitelistChannels.includes(message.channelId)) return;
+  if (trustedAutomatedMessage(message, config.protection)) return;
+  const actorMember = await resolveMessageActor(message);
+  if (actorMember && isProtectedMember(actorMember)) return;
+  if (!actorMember && !message.author.bot && !message.webhookId) return;
+  const text = messageSecurityText(message);
   const invite = /discord(?:app)?\.com\/invite\/|discord\.gg\//i.test(text);
   const link = /(?:https?:\/\/|www\.)/i.test(text);
   const scam = config.protection.scamLinks && /(?:free\s*nitro|steamcommunity[^\s]*\.ru|discorcl|dlscord|airdrop|claim\s*(?:gift|nitro)|gift\s*inventory)/i.test(text);
@@ -10887,21 +10988,31 @@ async function handleProtectedMessage(message) {
   const emojiSpam = config.protection.emojiSpam && emojiCount >= (profile === PROFILES.strict ? 8 : 12);
   const lowered = text.toLowerCase();
   const badWord = config.protection.badWords && config.protection.blockedWords.some((word) => lowered.includes(word));
+  const messageBomb = (config.protection.spam || config.protection.flood || config.protection.repeatedMessage)
+    ? detectMessageBomb(text, config.protection.sensitivity)
+    : null;
+  const rawEveryone = config.protection.massMention && /@(?:everyone|here)\b/i.test(text);
   let violation = null;
   if (scam) violation = 'Gyanús vagy adathalász hivatkozás';
   else if (invite && config.protection.invites) violation = 'Tiltott Discord-meghívó';
   else if (link && config.protection.links) violation = 'Tiltott hivatkozás';
-  else if (massMention) violation = 'Tömeges megjelölés';
+  else if (massMention || rawEveryone) violation = 'Tömeges vagy jogosulatlan megjelölés';
+  else if (messageBomb) violation = messageBomb;
   else if (capsSpam) violation = 'Nagybetűs spam';
   else if (emojiSpam) violation = 'Emoji spam';
   else if (badWord) violation = 'Tiltott szó használata';
   if (violation) {
     if (config.protection.deleteMessages) await message.delete().catch(() => null);
-    await applyViolation(message, violation);
+    const automated = Boolean(message.author.bot || message.webhookId);
+    const webhookResult = automated ? await removeUnauthorizedWebhook(message, config.protection) : null;
+    if (automated) await logAutomatedMessageViolation(message, violation, actorMember, webhookResult);
+    if (actorMember) await applyViolation(message, violation, actorMember);
     return;
   }
 
-  const key = strikeKey(message.guild.id, message.author.id);
+  if (!actorMember) return;
+
+  const key = strikeKey(message.guild.id, actorMember.id);
   const now = Date.now();
   const entries = (spamWindows.get(key) || []).filter((entry) => now - entry.createdAt <= profile.spamWindowMs);
   entries.push({ createdAt: now, message, normalized: lowered.replace(/\s+/g, ' ').trim() });
@@ -10915,7 +11026,7 @@ async function handleProtectedMessage(message) {
   if (config.protection.deleteMessages) {
     await Promise.allSettled(entries.map((entry) => entry.message.delete().catch(() => null)));
   }
-  await applyViolation(message, repeated ? 'Ismételt üzenet spam' : `Spam vagy üzenetáradat (${profile.spamLimit} üzenet / ${profile.spamWindowMs / 1000} mp)`);
+  await applyViolation(message, repeated ? 'Ismételt üzenet spam' : `Spam vagy üzenetáradat (${profile.spamLimit} üzenet / ${profile.spamWindowMs / 1000} mp)`, actorMember);
 }
 
 async function fetchBotAdder(member) {
@@ -11435,6 +11546,8 @@ module.exports = {
   SPAM_MESSAGE_LIMIT,
   normalizeName,
   containsBlockedLink,
+  messageSecurityText,
+  detectMessageBomb,
   assessRaid,
   auditGuardEnabled,
   isLeadership,
@@ -12815,7 +12928,31 @@ async function setupSupportServer(guild, botUser, ownerMember) {
   config.messages.welcome = '👋 Welcome to the official NEXA Bot server, {tag}! Read the rules, then complete verification.';
   config.messages.goodbye = '👋 {username} has left the NEXA Bot community.';
   config.messages.ticket = 'Select a category and NEXA Bot will create a private support channel.';
-  config.protection.sensitivity = 'strict';
+  Object.assign(config.protection, {
+    sensitivity: 'strict',
+    spam: true,
+    flood: true,
+    massMention: true,
+    invites: true,
+    links: true,
+    scamLinks: true,
+    capsSpam: true,
+    emojiSpam: true,
+    repeatedMessage: true,
+    raidDetection: true,
+    freshAccounts: true,
+    antiNuke: true,
+    channelGuard: true,
+    roleGuard: true,
+    moderationGuard: true,
+    webhookGuard: true,
+    deleteMessages: true,
+    warn: true,
+    timeout: true,
+    kick: true,
+    ban: true,
+    lockdown: true
+  });
   config.protection.whitelistRoles = [roles.owner.id, roles.management.id, roles.developer.id, roles.support.id];
   config.protection.whitelistChannels = [channels.staffChat.id, channels.developerTest.id];
   await setGuildConfig(guild.id, config);
@@ -12899,6 +13036,31 @@ async function repairSupportServer(guild, botUser, actorId) {
   config.messages.welcome = '👋 Welcome to the official NEXA Bot server, {tag}! Read the rules, then complete verification.';
   config.messages.goodbye = '👋 {username} has left the NEXA Bot community.';
   config.messages.ticket = 'Select a category and NEXA Bot will create a private support channel.';
+  Object.assign(config.protection, {
+    sensitivity: 'strict',
+    spam: true,
+    flood: true,
+    massMention: true,
+    invites: true,
+    links: true,
+    scamLinks: true,
+    capsSpam: true,
+    emojiSpam: true,
+    repeatedMessage: true,
+    raidDetection: true,
+    freshAccounts: true,
+    antiNuke: true,
+    channelGuard: true,
+    roleGuard: true,
+    moderationGuard: true,
+    webhookGuard: true,
+    deleteMessages: true,
+    warn: true,
+    timeout: true,
+    kick: true,
+    ban: true,
+    lockdown: true
+  });
   await setGuildConfig(guild.id, config);
 
   const ownerSettings = getOwnerSettings();
