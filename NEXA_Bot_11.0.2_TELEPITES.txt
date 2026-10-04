@@ -1,0 +1,51 @@
+NEXA BOT 11.0.2 – AZONNALI SUPPORT PARANCS
+===========================================
+
+1. Csomagold ki ezt a ZIP-fájlt.
+2. A kicsomagolt fájlokat egyszerre töltsd fel a GitHub NexaBot repository főkönyvtárába.
+3. GitHubon véglegesítsd a feltöltést a Commit changes gombbal.
+4. Renderen nyisd meg a nexabot szolgáltatást.
+5. Válaszd: Manual Deploy → Deploy latest commit.
+6. Várd meg a Live állapotot.
+7. A Render naplójában ezt keresd:
+
+   A /support-szerver parancs azonnal regisztrálva
+
+8. Discordon nyomj Ctrl + R frissítést.
+9. Add ideiglenesen a NEXA Bot rangnak a Rendszergazda jogosultságot.
+10. Húzd a NEXA Bot rangját a többi kezelendő rang fölé.
+11. A saját új support szervereden futtasd:
+
+   /support-szerver telepites
+
+12. A telepítés után engedélyezd kézzel a Discord Közösség funkciót:
+    Szerverbeállítások → Közösség engedélyezése
+
+FONTOS
+------
+
+- A 11.0.2-es verzió a parancsot globálisan és a BOT_OWNER_ID-ben megadott
+  tulajdonos saját szerverein azonnali szerverparancsként is regisztrálja.
+- A BOT_OWNER_ID értéke a saját Discord felhasználói azonosítód legyen.
+- A parancsot csak Rendszergazda jogosultságú tulajdonos láthatja.
+- Ha a napló szerint nem található tulajdonolt szerver, ellenőrizd a BOT_OWNER_ID-t.
+
+TOVÁBBI PARANCSOK
+-----------------
+
+/support-szerver panelek
+Frissíti a bot által kezelt szabályzatokat, tájékoztatókat és paneleket.
+
+/support-szerver ellenorzes
+Megmutatja, ha hiányzik szükséges rang, kategória vagy csatorna.
+
+BIZTONSÁG
+---------
+
+- Bot tokent, Client Secretet, adatbázis-jelszót vagy API-kulcsot ne tölts fel GitHubra.
+- A .env.example csak változóneveket tartalmaz; valódi titkos értéket ne írj bele.
+
+WEBOLDAL
+--------
+
+https://nexabot-25vo.onrender.com

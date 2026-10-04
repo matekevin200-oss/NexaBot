@@ -1,5 +1,11 @@
 # NEXA Bot változásnapló
 
+## 11.0.2 – Azonnali Support parancs
+
+- A `/support-szerver` parancs globálisan és a bot tulajdonosa által birtokolt szervereken azonnali szerverparancsként is regisztrálódik.
+- A Render naplója külön kiírja, melyik szerveren sikerült az azonnali regisztráció.
+- A hibás vagy hiányzó `BOT_OWNER_ID` most egyértelmű figyelmeztetést ad a naplóban.
+
 ## 11.0.1 – Support Server Factory
 
 - új Owner-only `/support-szerver telepites|panelek|ellenorzes` parancs;

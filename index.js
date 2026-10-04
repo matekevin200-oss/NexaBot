@@ -1,4 +1,4 @@
-// NEXA Bot 11.0.1 single-file release — generated automatically.
+// NEXA Bot 11.0.2 single-file release — generated automatically.
 const __nativeRequire = require;
 const __path = __nativeRequire('node:path').posix;
 const __modules = {
@@ -5488,7 +5488,7 @@ function defaultHealthSnapshot(client) {
   const startup = process.uptime() < 180;
   return {
     name: 'NexaBot',
-    version: '11.0.1',
+    version: '11.0.2',
     healthy: ready || startup,
     status: ready ? 'online' : startup ? 'starting' : 'offline',
     guilds: client.guilds?.cache?.size || 0,
@@ -8075,7 +8075,10 @@ const { recordError, pruneTelemetry } = require('./telemetry');
 const { createRuntimeSupervisor, positiveInteger } = require('./runtime');
 const { buildChronoGuardCommand, startChronoGuardJobs } = require('./chronoguard');
 const { buildAegisCommand } = require('./aegis');
-const { buildSupportSetupCommand } = require('./support-server');
+const {
+  buildSupportSetupCommand,
+  registerSupportCommandInOwnerGuilds
+} = require('./support-server');
 
 const requiredVariables = ['DISCORD_TOKEN', 'CLIENT_ID'];
 const missingVariables = requiredVariables.filter((name) => !process.env[name]);
@@ -8113,7 +8116,7 @@ const client = new Client({
   }
 });
 
-async function registerCommands() {
+async function registerCommands(readyClient) {
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   await rest.put(
     Routes.applicationCommands(process.env.CLIENT_ID),
@@ -8134,6 +8137,25 @@ async function registerCommands() {
       ].map((item) => item.toJSON())
     }
   );
+
+  const ownerGuildRegistration = await registerSupportCommandInOwnerGuilds({
+    rest,
+    guilds: readyClient?.guilds?.cache,
+    applicationId: process.env.CLIENT_ID,
+    ownerId: process.env.BOT_OWNER_ID || process.env.OWNER_ID
+  });
+  for (const failure of ownerGuildRegistration.failed) {
+    console.error(`A /support-szerver azonnali regisztrációja sikertelen (${failure.guildId}):`, failure.error);
+    await recordError(failure.error, {
+      command: 'support_server_guild_registration',
+      guildId: failure.guildId
+    });
+  }
+  if (ownerGuildRegistration.registered.length) {
+    console.log(`A /support-szerver parancs azonnal regisztrálva: ${ownerGuildRegistration.registered.join(', ')}`);
+  } else {
+    console.warn('A /support-szerver azonnali regisztrációjához nem található BOT_OWNER_ID által tulajdonolt szerver.');
+  }
 }
 
 client.once(Events.ClientReady, async (readyClient) => {
@@ -8150,10 +8172,10 @@ client.once(Events.ClientReady, async (readyClient) => {
   updatePresence();
   setInterval(updatePresence, 30_000).unref();
   try {
-    await registerCommands();
+    await registerCommands(readyClient);
     console.log(`NexaBot elindult: ${readyClient.user.tag}`);
     await restoreGiveaways(readyClient);
-    console.log('A NEXA Bot 11.0 AEGIS operations platform használatra kész.');
+    console.log('A NEXA Bot 11.0.2 AEGIS operations platform használatra kész.');
   } catch (error) {
     console.error('A parancs regisztrálása nem sikerült:', error);
     await recordError(error, { command: 'registerCommands' });
@@ -10104,7 +10126,7 @@ module.exports = {
 const { Events, Status } = require('discord.js');
 const { databaseHealth } = require('./config');
 
-const APP_VERSION = '11.0.1';
+const APP_VERSION = '11.0.2';
 
 function positiveInteger(value, fallback, minimum = 1_000, maximum = 60 * 60 * 1000) {
   const parsed = Number.parseInt(value, 10);
@@ -12019,6 +12041,7 @@ const {
   ChannelType,
   EmbedBuilder,
   PermissionFlagsBits,
+  Routes,
   SlashCommandBuilder
 } = require('discord.js');
 const { COLORS } = require('./constants');
@@ -12209,6 +12232,34 @@ function buildSupportSetupCommand() {
     .addSubcommand((subcommand) => subcommand
       .setName('ellenorzes')
       .setDescription('Ellenőrzi a szükséges rangokat, kategóriákat és csatornákat.'));
+}
+
+async function registerSupportCommandInOwnerGuilds({ rest, guilds, applicationId, ownerId }) {
+  const normalizedOwnerId = String(ownerId || '').trim();
+  const normalizedApplicationId = String(applicationId || '').trim();
+  if (!rest || !normalizedOwnerId || !normalizedApplicationId) {
+    return { registered: [], failed: [] };
+  }
+
+  const candidates = Array.from(guilds?.values?.() || guilds || [])
+    .filter((guild) => guild?.id && guild.ownerId === normalizedOwnerId);
+  const command = buildSupportSetupCommand().toJSON();
+  const registered = [];
+  const failed = [];
+
+  for (const guild of candidates) {
+    try {
+      await rest.post(
+        Routes.applicationGuildCommands(normalizedApplicationId, guild.id),
+        { body: command }
+      );
+      registered.push(guild.id);
+    } catch (error) {
+      failed.push({ guildId: guild.id, error });
+    }
+  }
+
+  return { registered, failed };
 }
 
 function roleByName(guild, name) {
@@ -12591,6 +12642,7 @@ module.exports = {
   auditSupportServer,
   buildSupportSetupCommand,
   publishSupportPanels,
+  registerSupportCommandInOwnerGuilds,
   setupSupportServer,
   staticPanels
 };
