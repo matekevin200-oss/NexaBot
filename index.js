@@ -1,4 +1,4 @@
-// NEXA Bot 11.0.2 single-file release — generated automatically.
+// NEXA Bot 11.0.3 single-file release — generated automatically.
 const __nativeRequire = require;
 const __path = __nativeRequire('node:path').posix;
 const __modules = {
@@ -5488,7 +5488,7 @@ function defaultHealthSnapshot(client) {
   const startup = process.uptime() < 180;
   return {
     name: 'NexaBot',
-    version: '11.0.2',
+    version: '11.0.3',
     healthy: ready || startup,
     status: ready ? 'online' : startup ? 'starting' : 'offline',
     guilds: client.guilds?.cache?.size || 0,
@@ -8175,7 +8175,7 @@ client.once(Events.ClientReady, async (readyClient) => {
     await registerCommands(readyClient);
     console.log(`NexaBot elindult: ${readyClient.user.tag}`);
     await restoreGiveaways(readyClient);
-    console.log('A NEXA Bot 11.0.2 AEGIS operations platform használatra kész.');
+    console.log('A NEXA Bot 11.0.3 AEGIS operations platform használatra kész.');
   } catch (error) {
     console.error('A parancs regisztrálása nem sikerült:', error);
     await recordError(error, { command: 'registerCommands' });
@@ -9471,8 +9471,8 @@ function moderationCommands() {
       .addStringOption((o) => o.setName('indok').setDescription('A feloldás indoka.').setMaxLength(500)),
     modCommand('nick', 'Módosítja egy tag becenevét.', PermissionFlagsBits.ManageNicknames)
       .addUserOption((o) => o.setName('tag').setDescription('Kinek módosítod?').setRequired(true))
-      .addStringOption((o) => o.setName('becenev').setDescription('Az új becenév; üresen törlés.').setMaxLength(32))
-      .addStringOption((o) => o.setName('indok').setDescription('A módosítás indoka.').setRequired(true).setMaxLength(500)),
+      .addStringOption((o) => o.setName('indok').setDescription('A módosítás indoka.').setRequired(true).setMaxLength(500))
+      .addStringOption((o) => o.setName('becenev').setDescription('Az új becenév; üresen törlés.').setMaxLength(32)),
     modCommand('userinfo', 'Részletes adatokat mutat egy tagról.', null)
       .setDefaultMemberPermissions(null)
       .addUserOption((o) => o.setName('tag').setDescription('A megtekintett tag.')),
@@ -10126,7 +10126,7 @@ module.exports = {
 const { Events, Status } = require('discord.js');
 const { databaseHealth } = require('./config');
 
-const APP_VERSION = '11.0.2';
+const APP_VERSION = '11.0.3';
 
 function positiveInteger(value, fallback, minimum = 1_000, maximum = 60 * 60 * 1000) {
   const parsed = Number.parseInt(value, 10);

@@ -1,5 +1,11 @@
 # NEXA Bot változásnapló
 
+## 11.0.3 – Discord parancsregisztráció javítása
+
+- A `/nick` parancs kötelező `indok` mezője most az opcionális `becenev` mező előtt szerepel.
+- Megszűnt a Discord API `APPLICATION_COMMAND_OPTIONS_REQUIRED_INVALID` hibája.
+- A teljes parancslista kötelező/opcionális mezősorrendje ellenőrizve lett.
+
 ## 11.0.2 – Azonnali Support parancs
 
 - A `/support-szerver` parancs globálisan és a bot tulajdonosa által birtokolt szervereken azonnali szerverparancsként is regisztrálódik.

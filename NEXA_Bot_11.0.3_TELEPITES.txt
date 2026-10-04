@@ -1,0 +1,40 @@
+NEXA BOT 11.0.3 – DISCORD PARANCSJAVÍTÁS
+=========================================
+
+JAVÍTOTT HIBA
+-------------
+
+A Discord API korábban ezt jelezte:
+APPLICATION_COMMAND_OPTIONS_REQUIRED_INVALID
+
+A /nick parancs kötelező indok mezője most már az opcionális becenév mező előtt van.
+A teljes, 38 elemes parancslista ellenőrzése sikeres.
+
+TELEPÍTÉS
+---------
+
+1. Csomagold ki ezt a ZIP-fájlt.
+2. Az összes kicsomagolt fájlt töltsd fel a GitHub NexaBot repository főkönyvtárába.
+3. A GitHubon nyomd meg a Commit changes gombot.
+4. Render: nexabot → Manual Deploy → Deploy latest commit.
+5. Várd meg a Live állapotot.
+6. Ellenőrizd: https://nexabot-25vo.onrender.com/health
+7. A version értéke 11.0.3 legyen.
+8. A Render logban ezeknek kell megjelenniük:
+
+   A /support-szerver parancs azonnal regisztrálva
+   NexaBot elindult
+
+9. Discordon nyomj Ctrl + R frissítést.
+10. Futtasd:
+
+   /support-szerver telepites
+
+FONTOS
+------
+
+- Ne magát a ZIP-et töltsd fel GitHubra, hanem a kicsomagolt fájlokat.
+- A BOT_OWNER_ID a saját Discord felhasználói azonosítód legyen.
+- A bot rangja ideiglenesen kapjon Rendszergazda jogosultságot.
+- A bot rangja legyen a létrehozandó rangok fölött.
+- Valódi tokent, jelszót vagy API-kulcsot ne tölts fel GitHubra.
