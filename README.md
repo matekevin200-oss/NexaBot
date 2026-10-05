@@ -34,6 +34,7 @@
 - admin döntésig lezárt raid-riasztás, nyitva maradó döntési csatorna és újraindítás után is használható visszaállítási állapot;
 - külön Ticket Centerből konfigurálható kategóriás ticketek (segítség, bejelentés, vásárlás, partnerség, egyéb), claim/unclaim, lezárás és automatikus HTML transcript;
 - a hivatalos NEXA Support Gateway kizárólag a `1556219615858655254` azonosítójú Support szerveren működik; más szerverek a saját, általános ticketpaneljüket kapják;
+- kétirányú Web Support Bridge: a weboldalon beadott segítségkérés privát Discord-ticketet nyit a hivatalos Support szerveren, a Staff Discord-válaszai pedig visszaolvashatók és megválaszolhatók a weben;
 - welcome/goodbye placeholder, külön ember- és bot-autorang;
 - XP, szintek, ranglista, önkiszolgáló rangpanel, ötletek, szavazás, bejelentés és giveaway;
 - egykattintásos tagellenőrzőpanel külön ellenőrzött ranggal és auditnaplóval;

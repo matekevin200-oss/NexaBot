@@ -3513,6 +3513,30 @@ async function initializeConfigStore() {
       );
       CREATE INDEX IF NOT EXISTS nexabot_ticket_guild_status
         ON nexabot_tickets (guild_id, status, created_at DESC);
+      CREATE TABLE IF NOT EXISTS nexabot_web_support_tickets (
+        id BIGSERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        username TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        category TEXT NOT NULL DEFAULT 'help',
+        channel_id TEXT UNIQUE,
+        status TEXT NOT NULL DEFAULT 'open',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS nexabot_web_support_owner
+        ON nexabot_web_support_tickets (user_id, updated_at DESC);
+      CREATE TABLE IF NOT EXISTS nexabot_web_support_messages (
+        id BIGSERIAL PRIMARY KEY,
+        ticket_id BIGINT NOT NULL REFERENCES nexabot_web_support_tickets(id) ON DELETE CASCADE,
+        author_id TEXT NOT NULL,
+        author_name TEXT NOT NULL,
+        source TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS nexabot_web_support_message_lookup
+        ON nexabot_web_support_messages (ticket_id, created_at ASC);
       CREATE TABLE IF NOT EXISTS nexabot_ticket_transcripts (
         ticket_id BIGINT PRIMARY KEY REFERENCES nexabot_tickets(id) ON DELETE CASCADE,
         html TEXT NOT NULL,
@@ -4710,6 +4734,7 @@ const {
   processStripeEvent
 } = require('./payments');
 const { ticketPanel, staffPanel } = require('./panels');
+const { listWebTickets, getWebTicket, createWebTicket, addWebReply } = require('./web-support');
 const { controlCenterPanel } = require('./control-center');
 const {
   runtimeStats,
@@ -4932,7 +4957,7 @@ function layout(title, content, session = null, branding = null, language = 'hu'
   ));
   const sidebarNavigation = ownerView
     ? `<div class="side-label">Owner Operations</div><a class="side-link active" href="/owner#overview">◈ Áttekintés</a><a class="side-link" href="/owner#servers">▦ Szerverek</a><a class="side-link" href="/owner#packages">✦ Csomagok</a><a class="side-link" href="/owner#access">◇ Hozzáférések</a><a class="side-link" href="/owner#system">⬡ Rendszer</a><a class="side-link" href="/owner#audit">⌁ Audit és hibák</a><div class="side-label">Gyors elérés</div><a class="side-link" href="/dashboard">← Szerverhálózat</a>`
-    : `<div class="side-label">Command Deck</div><a class="side-link active" href="/dashboard">◈ Áttekintés</a>${isOwnerUser(user?.id) ? '<a class="side-link" href="/owner">⌾ Owner Center</a>' : ''}<a class="side-link" href="/billing">◉ Csomag és számlázás</a><a class="side-link" href="#modules">⬡ Modulok</a><a class="side-link" href="#channels"># Csatornák</a><a class="side-link" href="#roles">◇ Rangok</a><div class="side-label">Rendszerek</div><a class="side-link" href="#community">★ Közösség</a><a class="side-link" href="#shift">◷ Szolgálat</a><a class="side-link" href="#ai">✦ Nexa AI</a><a class="side-link" href="#protection">⬢ Védelem</a>`;
+    : `<div class="side-label">Command Deck</div><a class="side-link active" href="/dashboard">◈ Áttekintés</a>${isOwnerUser(user?.id) ? '<a class="side-link" href="/owner">⌾ Owner Center</a>' : ''}<a class="side-link" href="/support">🎫 Segítségkérés</a><a class="side-link" href="/billing">◉ Csomag és számlázás</a><a class="side-link" href="#modules">⬡ Modulok</a><a class="side-link" href="#channels"># Csatornák</a><a class="side-link" href="#roles">◇ Rangok</a><div class="side-label">Rendszerek</div><a class="side-link" href="#community">★ Közösség</a><a class="side-link" href="#shift">◷ Szolgálat</a><a class="side-link" href="#ai">✦ Nexa AI</a><a class="side-link" href="#protection">⬢ Védelem</a>`;
   const pageDescription = pageLanguage === 'en'
     ? 'NEXA Bot is a secure Discord management platform for moderation, support, community automation, AI and server protection.'
     : 'A NEXA Bot biztonságos Discord management platform moderációhoz, supporthoz, közösségi automatizáláshoz, AI-hoz és szervervédelemhez.';
@@ -5734,7 +5759,11 @@ function settingsPage(guild, config, session, saved = false) {
   const icon = guild.icon
     ? `<img alt="" src="https://cdn.discordapp.com/icons/${escapeHtml(guild.id)}/${escapeHtml(guild.icon)}.png">`
     : `<div class="server-icon">${escapeHtml(guild.name.slice(0, 2).toUpperCase())}</div>`;
-  const ticketSection = `<section id="tickets" class="card section ticket-center"><div class="section-kicker">NEXA CASE MANAGEMENT</div><h2 class="section-title">🎟️ Külön Ticket Center</h2><div class="notice">Itt egy helyen állítható a teljes általános ticket-rendszer. A hivatalos <strong>NEXA Support Gateway</strong> ettől elkülönül, és kizárólag a <code>${SUPPORT_GUILD_ID}</code> azonosítójú Support szerveren működik.</div><div class="ticket-status-grid"><div><strong>Modul</strong><span>${config.modules.tickets ? '🟢 Bekapcsolva' : '⚫ Kikapcsolva'}</span></div><div><strong>Panelcsatorna</strong><span>${config.channels.ticketPanel ? '✅ Kiválasztva' : '⚠️ Nincs beállítva'}</span></div><div><strong>Ticket-kategória</strong><span>${config.channels.ticketCategory ? '✅ Kiválasztva' : '⚠️ Nincs beállítva'}</span></div><div><strong>Ügyintéző rang</strong><span>${config.roles.staff ? '✅ Kiválasztva' : '⚠️ Nincs beállítva'}</span></div></div><h3>1. Rendszer és útvonalak</h3><div class="module-grid">${moduleCheck(guild.id,"tickets","module_tickets","Általános ticket-rendszer",config.modules.tickets,"Privát ügycsatorna, Staff-kezelés és HTML transcript.")}</div><div class="field-grid">${selectField("channel_ticketPanel","Ticketpanel csatornája",textChannels(config.channels.ticketPanel),"Ide kerül a szerver saját Ügyintézési központ panelje.")}${selectField("channel_ticketCategory","Létrehozott ticketek kategóriája",categories(config.channels.ticketCategory),"A privát ticketcsatornákat ebben a Discord-kategóriában hozza létre.")}${selectField("role_staff","Ügyintéző / Staff rang",roles(config.roles.staff),"Ez a rang látja és kezelheti a ticketeket, valamint a moderációt.")}</div><h3>2. Engedélyezett ticket-típusok</h3><p class="muted">Csak a bejelölt típusok jelennek meg a szerver ügyintézési paneljén.</p><div class="module-grid">${check("ticket_type_support","Segítségkérés",config.tickets.enabledTypes.includes("support"),"Általános segítségkérés.")}${check("ticket_type_application","TGF / jelentkezési kérdés",config.tickets.enabledTypes.includes("application"),"Jelentkezéssel vagy felvétellel kapcsolatos kérdés.")}}${check("ticket_type_report","Tag vagy probléma bejelentése",config.tickets.enabledTypes.includes("report"),"Bizalmas bejelentés a Staffnak.")}${check("ticket_type_purchase","Vásárlás vagy számlázás",config.tickets.enabledTypes.includes("purchase"),"Szerverhez kapcsolódó vásárlási ügy.")}${check("ticket_type_partnership","Partnerség és együttműködés",config.tickets.enabledTypes.includes("partnership"),"Partneri megkeresések.")}${check("ticket_type_other","Egyéb ügy",config.tickets.enabledTypes.includes("other"),"Más kategóriába nem tartozó ügy.")}</div><h3>3. Saját elnevezések</h3><p class="muted">A neveket szerverenként átírhatod, például: Segélykérés, TGF kérdés, Panasz vagy Frakciójelentkezés.</p><div class="field-grid">${["support","application","report","purchase","partnership","other"].map((type) => `<div><label for="ticket_label_${type}">${escapeHtml(config.tickets.labels[type])}</label><input id="ticket_label_${type}" name="ticket_label_${type}" maxlength="60" value="${escapeHtml(config.tickets.labels[type])}"></div>`).join("")}</div><h3>4. Panel szövege</h3><div><label for="message_ticket">Ügyintézési panel leírása</label><textarea id="message_ticket" name="message_ticket">${escapeHtml(config.messages.ticket)}</textarea><div class="help">Mentés után a bot frissíti vagy létrehozza a panelt a kiválasztott csatornában.</div></div><div class="ticket-flow"><span>① Típusválasztás</span><b>→</b><span>② Privát csatorna</span><b>→</b><span>③ Staff claim</span><b>→</b><span>④ Lezárás és HTML transcript</span></div></section>`;
+  if (guild.id === SUPPORT_GUILD_ID) {
+    const supportContent = `<div class="page-head server">${icon}<div class="server-body"><div class="section-kicker">OFFICIAL NEXA OPERATIONS</div><h1>NEXA Support Center <span class="badge ultimate">MANAGED</span></h1><div class="muted">A hivatalos Support szerver teljesen elkülönített, automatikusan kezelt rendszer.</div></div><a class="btn secondary" href="/dashboard">← Szerverek</a></div>${saved ? '<div class="notice">✅ A Support Center automatikus ellenőrzése elkészült.</div>' : ''}<div class="stats"><div class="stat"><div class="stat-value">${guild.memberCount}</div><div class="stat-label">Tag</div></div><div class="stat"><div class="stat-value">ULTIMATE</div><div class="stat-label">Fix csomag</div></div><div class="stat"><div class="stat-value">EN</div><div class="stat-label">Fix nyelv</div></div><div class="stat"><div class="stat-value">AUTO</div><div class="stat-label">Önjavítás</div></div></div><section class="card section ticket-center"><div class="section-kicker">NEXA SUPPORT GATEWAY</div><h2 class="section-title">🛰️ Teljesen automatikus Support rendszer</h2><div class="notice">Ezen a szerveren nem kell kézzel csatornát, rangot, ticket-kategóriát vagy parancsnyelvet beállítani. A bot minden induláskor létrehozza a hiányzó elemeket és visszaállítja a hivatalos konfigurációt.</div><div class="ticket-status-grid"><div><strong>Ticketek</strong><span>✅ Technikai segítség</span></div><div><strong>Ügytípusok</strong><span>✅ Hiba, számlázás, partner</span></div><div><strong>Védelem</strong><span>✅ Anti-Raid + Anti-Nuke</span></div><div><strong>Nyelv</strong><span>✅ Angol alap</span></div></div><div class="ticket-flow"><span>① Automatikus ellenőrzés</span><b>→</b><span>② Rangok és csatornák</span><b>→</b><span>③ Support Gateway</span><b>→</b><span>④ Napló és transcript</span></div></section><section class="card section"><h2>Fix Support ticket-típusok</h2><div class="module-grid"><div class="switch">🛠️ Technikai segítség</div><div class="switch">🧪 Hibajelentés</div><div class="switch">💳 Előfizetés és számlázás</div><div class="switch">🤝 Partnerség</div><div class="switch">📨 Egyéb NEXA ügy</div></div><p class="help">Ezek kizárólag a hivatalos Support szerveren jelennek meg. A többi szerver saját ticket-típusait a saját Ticket Centerében állíthatja.</p></section>`;
+    return layout('NEXA Support Center', supportContent, session, config.branding);
+  }
+  const ticketSection = `<section id="tickets" class="card section ticket-center"><div class="section-kicker">NEXA CASE MANAGEMENT</div><h2 class="section-title">🎟️ Külön Ticket Center</h2><div class="notice">Itt egy helyen állítható a teljes általános ticket-rendszer. A hivatalos <strong>NEXA Support Gateway</strong> ettől elkülönül, és kizárólag a <code>${SUPPORT_GUILD_ID}</code> azonosítójú Support szerveren működik.</div><div class="ticket-status-grid"><div><strong>Modul</strong><span>${config.modules.tickets ? '🟢 Bekapcsolva' : '⚫ Kikapcsolva'}</span></div><div><strong>Panelcsatorna</strong><span>${config.channels.ticketPanel ? '✅ Kiválasztva' : '⚠️ Nincs beállítva'}</span></div><div><strong>Ticket-kategória</strong><span>${config.channels.ticketCategory ? '✅ Kiválasztva' : '⚠️ Nincs beállítva'}</span></div><div><strong>Ügyintéző rang</strong><span>${config.roles.staff ? '✅ Kiválasztva' : '⚠️ Nincs beállítva'}</span></div></div><h3>1. Rendszer és útvonalak</h3><div class="module-grid">${moduleCheck(guild.id,"tickets","module_tickets","Általános ticket-rendszer",config.modules.tickets,"Privát ügycsatorna, Staff-kezelés és HTML transcript.")}</div><div class="field-grid">${selectField("channel_ticketPanel","Ticketpanel csatornája",textChannels(config.channels.ticketPanel),"Ide kerül a szerver saját Ügyintézési központ panelje.")}${selectField("channel_ticketCategory","Létrehozott ticketek kategóriája",categories(config.channels.ticketCategory),"A privát ticketcsatornákat ebben a Discord-kategóriában hozza létre.")}${selectField("role_staff","Ügyintéző / Staff rang",roles(config.roles.staff),"Ez a rang látja és kezelheti a ticketeket, valamint a moderációt.")}</div><h3>2. Engedélyezett ticket-típusok</h3><p class="muted">Csak a bejelölt típusok jelennek meg a szerver ügyintézési paneljén.</p><div class="module-grid">${check("ticket_type_support","Segítségkérés",config.tickets.enabledTypes.includes("support"),"Általános segítségkérés.")}${check("ticket_type_application","TGF / jelentkezési kérdés",config.tickets.enabledTypes.includes("application"),"Jelentkezéssel vagy felvétellel kapcsolatos kérdés.")}${check("ticket_type_report","Tag vagy probléma bejelentése",config.tickets.enabledTypes.includes("report"),"Bizalmas bejelentés a Staffnak.")}${check("ticket_type_purchase","Vásárlás vagy számlázás",config.tickets.enabledTypes.includes("purchase"),"Szerverhez kapcsolódó vásárlási ügy.")}${check("ticket_type_partnership","Partnerség és együttműködés",config.tickets.enabledTypes.includes("partnership"),"Partneri megkeresések.")}${check("ticket_type_other","Egyéb ügy",config.tickets.enabledTypes.includes("other"),"Más kategóriába nem tartozó ügy.")}</div><h3>3. Saját elnevezések</h3><p class="muted">A neveket szerverenként átírhatod, például: Segélykérés, TGF kérdés, Panasz vagy Frakciójelentkezés.</p><div class="field-grid">${["support","application","report","purchase","partnership","other"].map((type) => `<div><label for="ticket_label_${type}">${escapeHtml(config.tickets.labels[type])}</label><input id="ticket_label_${type}" name="ticket_label_${type}" maxlength="60" value="${escapeHtml(config.tickets.labels[type])}"></div>`).join("")}</div><h3>4. Panel szövege</h3><div><label for="message_ticket">Ügyintézési panel leírása</label><textarea id="message_ticket" name="message_ticket">${escapeHtml(config.messages.ticket)}</textarea><div class="help">Mentés után a bot frissíti vagy létrehozza a panelt a kiválasztott csatornában.</div></div><div class="ticket-flow"><span>① Típusválasztás</span><b>→</b><span>② Privát csatorna</span><b>→</b><span>③ Staff claim</span><b>→</b><span>④ Lezárás és HTML transcript</span></div></section>`;
   const content = `<div class="page-head server">${icon}<div class="server-body"><div class="section-kicker">NEXA Command Deck</div><h1>${escapeHtml(guild.name)} <span class="badge ${plan}">${planName(plan)}</span></h1><div class="muted">Valós idejű modul-, csatorna- és jogosultságkezelés${entitlement.expiresAt ? ` • lejár: ${escapeHtml(entitlement.expiresAt.toLocaleDateString('hu-HU'))}` : ''}</div></div><div class="actions"><a class="btn secondary" href="/dashboard">← Szerverek</a><a class="btn" href="/billing?guild=${escapeHtml(guild.id)}">Csomag és számlázás</a></div></div>
 <div class="stats"><div class="stat"><div class="stat-value">${guild.memberCount}</div><div class="stat-label">Tag</div></div><div class="stat"><div class="stat-value">${guild.channels.cache.size}</div><div class="stat-label">Csatorna</div></div><div class="stat"><div class="stat-value">${guild.roles.cache.size}</div><div class="stat-label">Rang</div></div><div class="stat"><div class="stat-value">${enabledModules}</div><div class="stat-label">Aktív modul</div></div></div>
 <div class="grid" style="margin:0 0 20px"><article class="card"><div class="feature-icon">✅</div><div class="section-kicker">IDENTITY GATEWAY</div><h3>Gombos tagellenőrzés</h3><p class="muted">Modern beléptetőpanel automatikus rangkiosztással és auditnaplóval.</p><span class="badge ${config.modules.verification ? 'ultimate' : ''}">${config.modules.verification ? 'AKTÍV' : 'KIKAPCSOLVA'}</span></article><article class="card"><div class="feature-icon">⭐</div><div class="section-kicker">COMMUNITY SIGNAL</div><h3>NEXA Starboard</h3><p class="muted">A közösség legjobb üzenetei automatikusan látványos kiemelést kapnak.</p><span class="badge ${config.modules.starboard ? 'ultimate' : ''}">${config.modules.starboard ? 'AKTÍV' : 'KIKAPCSOLVA'}</span></article><article class="card"><div class="feature-icon">⏰</div><div class="section-kicker">PERSISTENT JOBS</div><h3>Okos emlékeztetők</h3><p class="muted">PostgreSQL-alapú értesítések, amelyek újraindítás után is megmaradnak.</p><span class="badge ${config.modules.reminders ? 'ultimate' : ''}">${config.modules.reminders ? 'AKTÍV' : 'KIKAPCSOLVA'}</span></article></div>
@@ -5772,6 +5801,20 @@ async function customCommandsPage(guild, session, saved = false) {
   const commands = await guildCommands(guild.id, true);
   const cards = commands.length ? commands.map((command) => `<article class="card"><h3>!${escapeHtml(command.name)}</h3><p class="muted">${escapeHtml(command.response_type)} • ${escapeHtml(command.response?.title || 'szöveges válasz')}</p><p>${escapeHtml(String(command.response?.content || '').slice(0, 260))}</p><form method="post" action="/dashboard/guild/${guild.id}/commands/delete"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="name" value="${escapeHtml(command.name)}"><button class="btn secondary" type="submit">Törlés</button></form></article>`).join('') : '<div class="notice warn">Még nincs saját parancs.</div>';
   return layout('Custom Commands', `<div class="page-head"><div><div class="section-kicker">${escapeHtml(guild.name)}</div><h1>Custom Commands</h1><p class="muted">Saját !parancsok biztonságos szöveges, embed vagy linkgombos válasszal.</p></div><a class="btn secondary" href="/dashboard/guild/${guild.id}">← Beállítások</a></div>${saved ? '<div class="notice">✅ A parancs mentve.</div>' : ''}<section class="card section"><h2>Parancs létrehozása vagy módosítása</h2><form method="post" action="/dashboard/guild/${guild.id}/commands"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="field-grid"><div><label>Parancs neve</label><input type="text" name="name" placeholder="rules" maxlength="32" required></div><div><label>Válasz típusa</label><select name="type"><option value="text">Szöveg</option><option value="embed">Embed</option><option value="button">Linkgomb</option></select></div><div><label>Embed címe</label><input type="text" name="title" maxlength="200"></div><div><label>Válasz</label><textarea name="content" maxlength="1900" required></textarea></div><div><label>Gomb felirata</label><input type="text" name="button_label" maxlength="80" placeholder="Weboldal megnyitása"></div><div><label>Gomb HTTPS-linkje</label><input type="url" name="button_url" maxlength="500" placeholder="https://example.com"></div></div><button class="btn green" type="submit">Mentés</button></form></section><div class="grid">${cards}</div>`, session, getGuildConfig(guild.id).branding);
+}
+
+async function webSupportPage(session, notice = '') {
+  const tickets = await listWebTickets(session.user.id);
+  const rows = tickets.length ? tickets.map((ticket) => `<a class="record" href="/support/${ticket.id}" style="text-decoration:none"><div><strong>#${ticket.id} • ${escapeHtml(ticket.subject)}</strong><div class="muted">${escapeHtml(ticket.category)} • ${escapeHtml(new Date(ticket.updated_at).toLocaleString('hu-HU'))}</div></div><span class="badge ${ticket.status === 'open' ? 'ultimate' : ''}">${ticket.status === 'open' ? 'NYITOTT' : 'LEZÁRT'}</span></a>`).join('') : '<div class="notice warn">Még nincs webes segítségkérésed.</div>';
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA WEB SUPPORT BRIDGE</div><h1>Segítségkérés</h1><p class="muted">Írj nekünk itt. A kérésedből privát ticket nyílik a hivatalos NEXA Support szerveren, a Staff válaszait pedig ezen az oldalon látod.</p></div><a class="btn secondary" href="/dashboard">← Dashboard</a></div>${notice ? `<div class="notice">${escapeHtml(notice)}</div>` : ''}<div class="grid"><section class="card section"><h2>Új segítségkérés</h2><form method="post" action="/support"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="field-grid"><div><label>Téma</label><input type="text" name="subject" maxlength="100" required placeholder="Miben kérsz segítséget?"></div><div><label>Kategória</label><select name="category"><option value="technical">Technikai segítség</option><option value="bug">Hibajelentés</option><option value="billing">Előfizetés / számlázás</option><option value="partnership">Partnerség</option><option value="other">Egyéb</option></select></div></div><label>Üzenet</label><textarea name="content" maxlength="4000" required placeholder="Írd le pontosan a problémát…"></textarea><button class="btn green" type="submit">Ticket megnyitása</button></form></section><section class="card section"><h2>Korábbi ügyeim</h2><div class="record-list">${rows}</div></section></div>`;
+  return layout('Web Support', content, session, null);
+}
+
+async function webSupportTicketPage(ticketData, session) {
+  const { ticket, messages } = ticketData;
+  const messageHtml = messages.map((message) => `<article class="card" style="padding:15px"><div class="section-kicker">${message.source === 'discord' ? 'NEXA SUPPORT' : 'TE • WEB'}</div><strong>${escapeHtml(message.author_name)}</strong><p>${escapeHtml(message.content).replaceAll('\n', '<br>')}</p><div class="muted">${escapeHtml(new Date(message.created_at).toLocaleString('hu-HU'))}</div></article>`).join('');
+  const content = `<div class="page-head"><div><div class="section-kicker">WEB SUPPORT #${ticket.id}</div><h1>${escapeHtml(ticket.subject)}</h1><p class="muted">A Discord Support Staff válaszai automatikusan megjelennek itt.</p></div><a class="btn secondary" href="/support">← Ügyeim</a></div><div class="record-list">${messageHtml || '<div class="notice">Még nincs üzenet.</div>'}</div>${ticket.status === 'open' ? `<section class="card section" style="margin-top:18px"><h2>Válasz küldése</h2><form method="post" action="/support/${ticket.id}/reply"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><textarea name="content" maxlength="4000" required></textarea><button class="btn green" type="submit">Válasz elküldése a Support Staffnak</button></form></section>` : '<div class="notice warn">Ez az ügy lezárult.</div>'}`;
+  return layout(`Support #${ticket.id}`, content, session, null);
 }
 
 async function readBody(request) {
@@ -6050,8 +6093,11 @@ function forceCommandLocale(node, language) {
   const locale = language === 'en' ? 'en-US' : 'hu';
   if (node.name_localizations?.[locale]) node.name = node.name_localizations[locale];
   if (node.description_localizations?.[locale]) node.description = node.description_localizations[locale];
+  delete node.name_localizations;
+  delete node.description_localizations;
   for (const choice of node.choices || []) {
     if (choice.name_localizations?.[locale]) choice.name = choice.name_localizations[locale];
+    delete choice.name_localizations;
   }
   for (const option of node.options || []) forceCommandLocale(option, language);
   return node;
@@ -6212,7 +6258,41 @@ async function handleRequest(client, request, response, healthProvider = null) {
     if (sid) sessions.delete(sid);
     return redirect(response, '/', sessionCookie('', 0));
   }
-  if ((url.pathname.startsWith('/dashboard') || url.pathname.startsWith('/owner') || url.pathname.startsWith('/billing')) && !session) return redirect(response, '/login');
+  if ((url.pathname.startsWith('/dashboard') || url.pathname.startsWith('/owner') || url.pathname.startsWith('/billing') || url.pathname.startsWith('/support')) && !session) return redirect(response, '/login');
+  if (request.method === 'GET' && url.pathname === '/support') {
+    return sendHtml(response, 200, await webSupportPage(session, url.searchParams.get('created') === '1' ? 'A ticket létrejött a hivatalos Support szerveren.' : ''));
+  }
+  if (request.method === 'POST' && url.pathname === '/support') {
+    try {
+      const form = await readBody(request);
+      if (form.get('csrf') !== session.csrf) return sendHtml(response, 403, errorPage('Lejárt munkamenet', 'Frissítsd az oldalt.', session));
+      const subject = String(form.get('subject') || '').trim().slice(0, 100);
+      const content = String(form.get('content') || '').trim().slice(0, 4000);
+      const allowedCategories = new Set(['technical', 'bug', 'billing', 'partnership', 'other']);
+      const category = allowedCategories.has(form.get('category')) ? form.get('category') : 'other';
+      if (subject.length < 3 || content.length < 5) throw new Error('Adj meg értelmes témát és részletes üzenetet.');
+      const ticket = await createWebTicket(client, session.user, { subject, category, content });
+      await recordAudit('web_support_create', { actorId: session.user.id, targetId: String(ticket.id) });
+      return redirect(response, `/support/${ticket.id}`, null, 303);
+    } catch (error) {
+      await recordError(error, { command: 'web_support_create', userId: session.user.id });
+      return sendHtml(response, 400, errorPage('A segítségkérés nem nyitható meg', error.message, session));
+    }
+  }
+  const supportMatch = url.pathname.match(/^\/support\/(\d+)(?:\/(reply))?$/);
+  if (supportMatch) {
+    const ticketData = await getWebTicket(supportMatch[1], session.user.id, isOwnerUser(session.user.id));
+    if (!ticketData) return sendHtml(response, 404, errorPage('A ticket nem található', 'Ehhez az ügyhöz nincs hozzáférésed.', session));
+    if (request.method === 'GET' && !supportMatch[2]) return sendHtml(response, 200, await webSupportTicketPage(ticketData, session));
+    if (request.method === 'POST' && supportMatch[2] === 'reply') {
+      const form = await readBody(request);
+      if (form.get('csrf') !== session.csrf) return sendHtml(response, 403, errorPage('Lejárt munkamenet', 'Frissítsd az oldalt.', session));
+      const content = String(form.get('content') || '').trim().slice(0, 4000);
+      if (content.length < 1 || ticketData.ticket.status !== 'open') return sendHtml(response, 400, errorPage('A válasz nem küldhető el', 'Az üzenet üres vagy a ticket már lezárult.', session));
+      await addWebReply(client, ticketData.ticket, session.user, content);
+      return redirect(response, `/support/${ticketData.ticket.id}`, null, 303);
+    }
+  }
   if (request.method === 'GET' && url.pathname === '/billing') {
     return sendHtml(response, 200, await billingPage(client, session, url));
   }
@@ -8433,6 +8513,7 @@ const { handleAiMessage } = require('./ai');
 const { handleCustomCommand } = require('./custom-commands');
 const { pick } = require('./i18n');
 const { handleStarboardReaction } = require('./engagement');
+const { captureDiscordSupportReply } = require('./web-support');
 
 function registerEvents(client) {
   client.on(Events.GuildMemberAdd, async (member) => {
@@ -8497,6 +8578,7 @@ function registerEvents(client) {
   client.on(Events.MessageCreate, handleMessageXp);
   client.on(Events.MessageCreate, handleAiMessage);
   client.on(Events.MessageCreate, handleCustomCommand);
+  client.on(Events.MessageCreate, captureDiscordSupportReply);
   client.on(Events.MessageReactionAdd, (reaction, user) => {
     handleReactionRole(reaction, user, true).catch(() => null);
     handleStarboardReaction(reaction, user).catch(() => null);
@@ -8764,7 +8846,9 @@ const { buildChronoGuardCommand, startChronoGuardJobs } = require('./chronoguard
 const { buildAegisCommand } = require('./aegis');
 const {
   buildSupportSetupCommand,
-  registerSupportCommandInOwnerGuilds
+  registerSupportCommandInOwnerGuilds,
+  setupSupportServer,
+  SUPPORT_GUILD_ID
 } = require('./support-server');
 const { localizeCommandJson } = require('./command-localizations');
 
@@ -8861,6 +8945,17 @@ client.once(Events.ClientReady, async (readyClient) => {
   setInterval(updatePresence, 30_000).unref();
   try {
     await registerCommands(readyClient);
+    const supportGuild = readyClient.guilds.cache.get(SUPPORT_GUILD_ID);
+    if (supportGuild) {
+      try {
+        const ownerMember = await supportGuild.members.fetch(supportGuild.ownerId).catch(() => null);
+        await setupSupportServer(supportGuild, readyClient.user, ownerMember);
+        console.log(`A hivatalos NEXA Support Center automatikusan ellenőrizve: ${SUPPORT_GUILD_ID}`);
+      } catch (supportError) {
+        console.error('A NEXA Support Center automatikus beállítása sikertelen:', supportError);
+        await recordError(supportError, { command: 'support_server_auto_setup', guildId: SUPPORT_GUILD_ID });
+      }
+    }
     console.log(`NexaBot elindult: ${readyClient.user.tag}`);
     await restoreGiveaways(readyClient);
     console.log('A NEXA Bot 12.0 Billing Operations Platform használatra kész.');
@@ -13864,6 +13959,7 @@ async function setupSupportServer(guild, botUser, ownerMember) {
 
   const config = JSON.parse(JSON.stringify(getGuildConfig(guild.id)));
   config.language = 'en';
+  config.commandLanguage = 'en';
   Object.assign(config.modules, {
     protection: true,
     moderation: true,
@@ -14417,6 +14513,103 @@ module.exports = {
   sendLog,
   ephemeralError
 };
+
+},
+"src/web-support.js": function(module, exports, require) {
+const { ChannelType, PermissionFlagsBits } = require('discord.js');
+const { SUPPORT_GUILD_ID } = require('./constants');
+const { dbQuery } = require('./config');
+const { safeChannelName, baseEmbed } = require('./utils');
+
+async function listWebTickets(userId) {
+  const result = await dbQuery(
+    'SELECT * FROM nexabot_web_support_tickets WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 50',
+    [userId]
+  );
+  return result?.rows || [];
+}
+
+async function getWebTicket(ticketId, userId, owner = false) {
+  const result = await dbQuery(
+    `SELECT * FROM nexabot_web_support_tickets WHERE id = $1${owner ? '' : ' AND user_id = $2'} LIMIT 1`,
+    owner ? [ticketId] : [ticketId, userId]
+  );
+  const ticket = result?.rows?.[0] || null;
+  if (!ticket) return null;
+  const messages = await dbQuery(
+    'SELECT * FROM nexabot_web_support_messages WHERE ticket_id = $1 ORDER BY created_at ASC LIMIT 500',
+    [ticketId]
+  );
+  return { ticket, messages: messages?.rows || [] };
+}
+
+async function createWebTicket(client, user, { subject, category, content }) {
+  const guild = client.guilds.cache.get(SUPPORT_GUILD_ID);
+  if (!guild) throw new Error('A hivatalos NEXA Support szerver jelenleg nem elérhető.');
+  const parent = guild.channels.cache.find((channel) =>
+    channel.type === ChannelType.GuildCategory && ['━━━ TICKETS ━━━', '━━━ TICKETEK ━━━'].includes(channel.name)
+  );
+  const supportRole = guild.roles.cache.find((role) => ['NEXA Support Team', 'Support Team'].includes(role.name));
+  if (!parent || !supportRole) throw new Error('A Support Center automatikus beállítása még nem fejeződött be.');
+  const inserted = await dbQuery(
+    `INSERT INTO nexabot_web_support_tickets (user_id, username, subject, category)
+     VALUES ($1,$2,$3,$4) RETURNING *`,
+    [user.id, user.username, subject, category]
+  );
+  const ticket = inserted.rows[0];
+  try {
+    const channel = await guild.channels.create({
+      name: `web-${ticket.id}-${safeChannelName(user.username)}`,
+      type: ChannelType.GuildText,
+      parent: parent.id,
+      topic: `nexabot-web-support|${ticket.id}|${user.id}`,
+      permissionOverwrites: [
+        { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
+        { id: supportRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] }
+      ],
+      reason: `NEXA web support #${ticket.id}`
+    });
+    await dbQuery('UPDATE nexabot_web_support_tickets SET channel_id=$1, updated_at=NOW() WHERE id=$2', [channel.id, ticket.id]);
+    await dbQuery(
+      `INSERT INTO nexabot_web_support_messages (ticket_id, author_id, author_name, source, content)
+       VALUES ($1,$2,$3,'web',$4)`,
+      [ticket.id, user.id, user.username, content]
+    );
+    await channel.send({
+      content: `<@&${supportRole.id}>`,
+      embeds: [baseEmbed(`🌐 Web Support #${ticket.id} • ${subject}`, `**Felhasználó:** ${user.username} (${user.id})\n**Kategória:** ${category}\n\n${content}`)]
+    });
+    return { ...ticket, channel_id: channel.id };
+  } catch (error) {
+    await dbQuery('DELETE FROM nexabot_web_support_tickets WHERE id=$1', [ticket.id]).catch(() => null);
+    throw error;
+  }
+}
+
+async function addWebReply(client, ticket, user, content) {
+  await dbQuery(
+    `INSERT INTO nexabot_web_support_messages (ticket_id, author_id, author_name, source, content)
+     VALUES ($1,$2,$3,'web',$4)`,
+    [ticket.id, user.id, user.username, content]
+  );
+  await dbQuery('UPDATE nexabot_web_support_tickets SET updated_at=NOW() WHERE id=$1', [ticket.id]);
+  const channel = client.channels.cache.get(ticket.channel_id);
+  if (channel?.isTextBased()) await channel.send({ embeds: [baseEmbed(`🌐 Webes válasz • #${ticket.id}`, `**${user.username}:**\n${content}`)] });
+}
+
+async function captureDiscordSupportReply(message) {
+  if (!message.guild || message.guild.id !== SUPPORT_GUILD_ID || message.author.bot) return;
+  const match = String(message.channel.topic || '').match(/^nexabot-web-support\|(\d+)\|(\d{16,22})$/);
+  if (!match || !message.content?.trim()) return;
+  await dbQuery(
+    `INSERT INTO nexabot_web_support_messages (ticket_id, author_id, author_name, source, content)
+     VALUES ($1,$2,$3,'discord',$4)`,
+    [match[1], message.author.id, message.author.username, message.content.trim().slice(0, 4000)]
+  );
+  await dbQuery('UPDATE nexabot_web_support_tickets SET updated_at=NOW() WHERE id=$1', [match[1]]);
+}
+
+module.exports = { listWebTickets, getWebTicket, createWebTicket, addWebReply, captureDiscordSupportReply };
 
 }
 };
