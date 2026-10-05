@@ -1,5 +1,14 @@
 # NEXA Bot változásnapló
 
+## 13.0.0 – Premium Support Operations
+
+- Öngyógyító Support Center: felismeri vagy biztonságosan létrehozza a ticket kategóriát és Support rangot.
+- Új Owner Support Operations inbox kereséssel, prioritással, állapottal és felelős ügyintézővel.
+- Belső jegyzetek, amelyeket az ügyfél nem lát.
+- Webes értesítési központ a Discord Staff válaszaihoz.
+- Lezárt ügyek 1–5 csillagos értékelése és visszajelzése.
+- Automatikus PostgreSQL migráció a 13.0 support-adatmodellhez.
+
 ## 12.0.0 – Stripe Billing Operations
 
 - Új, önálló Ticket Center került a szerver dashboardjára: külön állítható panelcsatorna, kategória, ügyintézői rang, panelszöveg és az öt engedélyezett ticket-típus.

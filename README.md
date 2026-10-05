@@ -1,4 +1,4 @@
-# NEXA Bot 12.0 Billing Operations Platform
+# NEXA Bot 13.0 Premium Support Operations Platform
 
 Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Az opcionális RP- és dokumentumrendszert kizárólag a bot tulajdonosa vagy az általa kijelölt Owner-kezelő kapcsolhatja be egy kiválasztott szerveren.
 
@@ -231,7 +231,7 @@ Az állapotvégpontok:
 A sikeres logban ez jelenik meg:
 
 ```text
-A NEXA Bot 12.0 Billing Operations Platform használatra kész.
+A NEXA Bot 13.0 Premium Support Operations Platform használatra kész.
 ```
 
 ## Használat

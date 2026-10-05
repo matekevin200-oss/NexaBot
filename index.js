@@ -1,4 +1,4 @@
-// NEXA Bot 12.0.0 single-file release — generated automatically.
+// NEXA Bot 13.0.0 single-file release — generated automatically.
 const __nativeRequire = require;
 const __path = __nativeRequire('node:path').posix;
 const __modules = {
@@ -3526,6 +3526,12 @@ async function initializeConfigStore() {
       );
       CREATE INDEX IF NOT EXISTS nexabot_web_support_owner
         ON nexabot_web_support_tickets (user_id, updated_at DESC);
+      ALTER TABLE nexabot_web_support_tickets ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'normal';
+      ALTER TABLE nexabot_web_support_tickets ADD COLUMN IF NOT EXISTS assigned_to TEXT;
+      ALTER TABLE nexabot_web_support_tickets ADD COLUMN IF NOT EXISTS assigned_name TEXT;
+      ALTER TABLE nexabot_web_support_tickets ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ;
+      ALTER TABLE nexabot_web_support_tickets ADD COLUMN IF NOT EXISTS rating INTEGER;
+      ALTER TABLE nexabot_web_support_tickets ADD COLUMN IF NOT EXISTS rating_comment TEXT;
       CREATE TABLE IF NOT EXISTS nexabot_web_support_messages (
         id BIGSERIAL PRIMARY KEY,
         ticket_id BIGINT NOT NULL REFERENCES nexabot_web_support_tickets(id) ON DELETE CASCADE,
@@ -3537,6 +3543,19 @@ async function initializeConfigStore() {
       );
       CREATE INDEX IF NOT EXISTS nexabot_web_support_message_lookup
         ON nexabot_web_support_messages (ticket_id, created_at ASC);
+      ALTER TABLE nexabot_web_support_messages ADD COLUMN IF NOT EXISTS internal BOOLEAN NOT NULL DEFAULT FALSE;
+      CREATE TABLE IF NOT EXISTS nexabot_web_notifications (
+        id BIGSERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'support',
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        link TEXT,
+        read_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS nexabot_web_notification_lookup
+        ON nexabot_web_notifications (user_id, read_at, created_at DESC);
       CREATE TABLE IF NOT EXISTS nexabot_ticket_transcripts (
         ticket_id BIGINT PRIMARY KEY REFERENCES nexabot_tickets(id) ON DELETE CASCADE,
         html TEXT NOT NULL,
@@ -4734,7 +4753,7 @@ const {
   processStripeEvent
 } = require('./payments');
 const { ticketPanel, staffPanel } = require('./panels');
-const { listWebTickets, getWebTicket, createWebTicket, addWebReply } = require('./web-support');
+const { listWebTickets, listAllWebTickets, getWebTicket, createWebTicket, addWebReply, manageWebTicket, addInternalNote, rateWebTicket, listNotifications, markNotificationsRead } = require('./web-support');
 const { controlCenterPanel } = require('./control-center');
 const {
   runtimeStats,
@@ -4954,10 +4973,11 @@ function layout(title, content, session = null, branding = null, language = 'hu'
     || title.startsWith('ER:LC')
     || title.startsWith('ChronoGuard')
     || title.startsWith('AEGIS')
+    || title.startsWith('Owner Support')
   ));
   const sidebarNavigation = ownerView
-    ? `<div class="side-label">Owner Operations</div><a class="side-link active" href="/owner#overview">◈ Áttekintés</a><a class="side-link" href="/owner#servers">▦ Szerverek</a><a class="side-link" href="/owner#packages">✦ Csomagok</a><a class="side-link" href="/owner#access">◇ Hozzáférések</a><a class="side-link" href="/owner#system">⬡ Rendszer</a><a class="side-link" href="/owner#audit">⌁ Audit és hibák</a><div class="side-label">Gyors elérés</div><a class="side-link" href="/dashboard">← Szerverhálózat</a>`
-    : `<div class="side-label">Command Deck</div><a class="side-link active" href="/dashboard">◈ Áttekintés</a>${isOwnerUser(user?.id) ? '<a class="side-link" href="/owner">⌾ Owner Center</a>' : ''}<a class="side-link" href="/support">🎫 Segítségkérés</a><a class="side-link" href="/billing">◉ Csomag és számlázás</a><a class="side-link" href="#modules">⬡ Modulok</a><a class="side-link" href="#channels"># Csatornák</a><a class="side-link" href="#roles">◇ Rangok</a><div class="side-label">Rendszerek</div><a class="side-link" href="#community">★ Közösség</a><a class="side-link" href="#shift">◷ Szolgálat</a><a class="side-link" href="#ai">✦ Nexa AI</a><a class="side-link" href="#protection">⬢ Védelem</a>`;
+    ? `<div class="side-label">Owner Operations</div><a class="side-link active" href="/owner#overview">◈ Áttekintés</a><a class="side-link" href="/owner/support">🎫 Support Operations</a><a class="side-link" href="/owner#servers">▦ Szerverek</a><a class="side-link" href="/owner#packages">✦ Csomagok</a><a class="side-link" href="/owner#access">◇ Hozzáférések</a><a class="side-link" href="/owner#system">⬡ Rendszer</a><a class="side-link" href="/owner#audit">⌁ Audit és hibák</a><div class="side-label">Gyors elérés</div><a class="side-link" href="/dashboard">← Szerverhálózat</a>`
+    : `<div class="side-label">Command Deck</div><a class="side-link active" href="/dashboard">◈ Áttekintés</a>${isOwnerUser(user?.id) ? '<a class="side-link" href="/owner">⌾ Owner Center</a>' : ''}<a class="side-link" href="/support">🎫 Segítségkérés</a><a class="side-link" href="/notifications">🔔 Értesítések</a><a class="side-link" href="/billing">◉ Csomag és számlázás</a><a class="side-link" href="#modules">⬡ Modulok</a><a class="side-link" href="#channels"># Csatornák</a><a class="side-link" href="#roles">◇ Rangok</a><div class="side-label">Rendszerek</div><a class="side-link" href="#community">★ Közösség</a><a class="side-link" href="#shift">◷ Szolgálat</a><a class="side-link" href="#ai">✦ Nexa AI</a><a class="side-link" href="#protection">⬢ Védelem</a>`;
   const pageDescription = pageLanguage === 'en'
     ? 'NEXA Bot is a secure Discord management platform for moderation, support, community automation, AI and server protection.'
     : 'A NEXA Bot biztonságos Discord management platform moderációhoz, supporthoz, közösségi automatizáláshoz, AI-hoz és szervervédelemhez.';
@@ -4969,7 +4989,7 @@ function layout(title, content, session = null, branding = null, language = 'hu'
 .badge{display:inline-block;padding:3px 8px;border-radius:999px;background:rgba(82,224,164,.12);color:var(--accent);font-size:10px;font-weight:900;letter-spacing:.7px;vertical-align:middle}.badge.pro{background:rgba(124,92,255,.16);color:#c9c0ff}.badge.ultimate{background:linear-gradient(135deg,rgba(124,92,255,.25),rgba(84,215,255,.14));color:#dcd8ff}.command-deck{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(320px,.88fr);gap:18px;align-items:stretch}.deck-panel{min-height:390px;background:linear-gradient(145deg,rgba(16,23,38,.97),rgba(7,11,20,.98));border:1px solid rgba(255,255,255,.1);border-radius:24px;padding:20px;box-shadow:0 36px 110px rgba(0,0,0,.48);position:relative;overflow:hidden}.deck-panel::after{content:"";position:absolute;inset:auto -80px -110px auto;width:280px;height:280px;border-radius:50%;background:color-mix(in srgb,var(--cyan) 13%,transparent);filter:blur(50px)}.deck-top{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:16px}.deck-row{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;padding:13px;border:1px solid rgba(255,255,255,.07);border-radius:14px;background:rgba(255,255,255,.022);margin:9px 0}.deck-row strong{display:block}.pulse{width:9px;height:9px;background:var(--accent);border-radius:50%;box-shadow:0 0 0 6px rgba(82,224,164,.08),0 0 18px var(--accent)}.metric-orbit{display:grid;place-items:center;min-height:390px}.orbit{width:min(320px,78vw);aspect-ratio:1;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at center,#111a2c 0 37%,transparent 38%),conic-gradient(from 20deg,var(--primary),var(--cyan),var(--accent),var(--primary));padding:2px;box-shadow:0 0 90px color-mix(in srgb,var(--primary) 20%,transparent)}.orbit-core{width:76%;height:76%;border-radius:50%;background:#090e19;display:grid;place-items:center;text-align:center;border:1px solid rgba(255,255,255,.1)}.orbit-core strong{font-size:52px;line-height:1}.eyeline{height:1px;background:linear-gradient(90deg,transparent,var(--primary),var(--cyan),transparent);margin:58px 0 32px}.feature-wide{grid-column:span 8!important}.feature-narrow{grid-column:span 4!important}.navlinks{display:flex;gap:6px;padding:4px;border:1px solid rgba(255,255,255,.07);border-radius:13px;background:rgba(255,255,255,.018)}.navlinks a{position:relative;color:var(--muted);text-decoration:none;font-size:13px;font-weight:800;padding:8px 11px;border-radius:9px}.navlinks a:hover{color:#fff;background:rgba(255,255,255,.05)}.navlinks a.active{color:#fff;background:linear-gradient(135deg,color-mix(in srgb,var(--primary) 34%,transparent),rgba(84,215,255,.09));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--primary) 40%,transparent)}.navlinks a.active::after{content:"";position:absolute;left:28%;right:28%;bottom:-5px;height:2px;border-radius:2px;background:var(--accent);box-shadow:0 0 10px var(--accent)}.btn.danger{background:linear-gradient(135deg,#a92c45,#651d30);box-shadow:0 10px 25px rgba(169,44,69,.18)}.owner-tools{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}.record-list{display:grid;gap:10px}.record{display:grid;grid-template-columns:minmax(170px,.75fr) repeat(3,minmax(150px,1fr)) auto;gap:10px;align-items:end;padding:14px;border:1px solid var(--line);border-radius:15px;background:rgba(255,255,255,.022)}.record .actions{margin:0}.template-card{border-color:color-mix(in srgb,var(--primary) 28%,var(--line))}.secret-state{display:flex;align-items:center;gap:8px;color:var(--accent);font-weight:850}.secret-state::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 14px currentColor}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:9px 6px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.7px}@media(max-width:1100px){.record{grid-template-columns:1fr 1fr}.record>div:first-child{grid-column:1/-1}}@media(max-width:900px){.command-deck{grid-template-columns:1fr}.feature-wide,.feature-narrow{grid-column:span 6!important}.navlinks{display:none}}@media(max-width:600px){.feature-wide,.feature-narrow{grid-column:auto!important}.deck-panel,.metric-orbit{min-height:330px}.record{grid-template-columns:1fr}}
 .desktop-owner-nav{position:sticky;top:84px;z-index:9;display:flex;align-items:center;gap:8px;padding:9px;margin:0 0 24px;border:1px solid rgba(255,255,255,.09);border-radius:16px;background:rgba(8,12,21,.9);backdrop-filter:blur(20px);box-shadow:0 14px 45px rgba(0,0,0,.28);overflow-x:auto}.desktop-owner-nav a{white-space:nowrap;text-decoration:none;color:var(--muted);font-size:12px;font-weight:850;padding:9px 13px;border-radius:10px}.desktop-owner-nav a:hover{color:#fff;background:rgba(124,92,255,.16)}.owner-mode .sidebar{overflow-y:auto}.owner-mode .section{scroll-margin-top:148px}.owner-mode .card{box-shadow:0 18px 60px rgba(0,0,0,.28)}.owner-mode .page-head{justify-content:space-between}.owner-mode .page-head>div{max-width:980px}.owner-mode .field-grid{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}.owner-mode table{font-size:13px}.owner-mode th,.owner-mode td{padding:12px 9px}.owner-mode input[type=password],.owner-mode input[type=datetime-local],.owner-mode input[type=search]{width:100%;border:1px solid var(--line);border-radius:11px;background:#080c15;color:#fff;padding:11px;font:inherit;outline:none}.owner-mode input:focus{border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 14%,transparent)}@media(min-width:901px){.owner-mode .app{grid-template-columns:288px minmax(0,1fr)}.owner-mode main{max-width:1680px;padding:38px 44px 110px}.owner-mode .sidebar{padding:28px 19px}.owner-mode .side-link{padding:12px 14px}.owner-mode .stats{gap:15px}.owner-mode .stat{padding:20px}.owner-mode .card{padding:26px}.owner-mode .owner-server-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.owner-mode .owner-server-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(min-width:1740px){.owner-mode .owner-server-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:900px){.desktop-owner-nav{top:76px}.owner-mode .page-head{align-items:flex-start;flex-direction:column}.owner-mode .page-head>.btn{width:100%}}
 ${dashboardTheme()}
-</style></head><body class="${ownerView ? 'owner-mode' : ''}"><header class="topbar"><div class="topbar-inner"><a class="brand" href="${homeUrl}"><span class="brand-mark">N</span><span class="brand-text">Nexa<span>Bot</span></span></a><div class="live-pill"><i class="live-dot"></i> NEXA CORE ONLINE</div><nav class="navlinks" aria-label="${pageLanguage === 'en' ? 'Main navigation' : 'Fő navigáció'}"><a${navClass('platform')} href="${platformUrl}">${platformLabel}</a><a${navClass('commands')} href="${commandsUrl}">${commandsLabel}</a><a${navClass('pricing')} href="${pricingUrl}">${pricingLabel}</a><a${navClass('guide')} href="${guideUrl}">${guideLabel}</a><a${navClass('privacy')} href="${privacyUrl}">${privacyLabel}</a></nav><div class="spacer"></div><div class="locale-switch" aria-label="Language"><a class="${pageLanguage === 'hu' ? 'active' : ''}" href="${huUrl}">HU</a><a class="${pageLanguage === 'en' ? 'active' : ''}" href="${enUrl}">EN</a></div>${user ? `<div class="user"><span>${escapeHtml(user.username)}</span>${user.avatar ? `<img class="avatar" alt="" src="https://cdn.discordapp.com/avatars/${escapeHtml(user.id)}/${escapeHtml(user.avatar)}.png">` : ''}<a class="btn secondary small" href="/logout">Kilépés</a></div>` : `<a class="btn small" href="/login">${loginLabel}</a>`}</div></header>${user ? `<div class="app"><aside class="sidebar">${sidebarNavigation}<div class="footer-note">${escapeHtml(productName)}<br>NEXA Bot 12.0</div></aside><main>${content}</main></div>` : `<main class="public-main">${content}</main>`}</body></html>`;
+</style></head><body class="${ownerView ? 'owner-mode' : ''}"><header class="topbar"><div class="topbar-inner"><a class="brand" href="${homeUrl}"><span class="brand-mark">N</span><span class="brand-text">Nexa<span>Bot</span></span></a><div class="live-pill"><i class="live-dot"></i> NEXA CORE ONLINE</div><nav class="navlinks" aria-label="${pageLanguage === 'en' ? 'Main navigation' : 'Fő navigáció'}"><a${navClass('platform')} href="${platformUrl}">${platformLabel}</a><a${navClass('commands')} href="${commandsUrl}">${commandsLabel}</a><a${navClass('pricing')} href="${pricingUrl}">${pricingLabel}</a><a${navClass('guide')} href="${guideUrl}">${guideLabel}</a><a${navClass('privacy')} href="${privacyUrl}">${privacyLabel}</a></nav><div class="spacer"></div><div class="locale-switch" aria-label="Language"><a class="${pageLanguage === 'hu' ? 'active' : ''}" href="${huUrl}">HU</a><a class="${pageLanguage === 'en' ? 'active' : ''}" href="${enUrl}">EN</a></div>${user ? `<div class="user"><span>${escapeHtml(user.username)}</span>${user.avatar ? `<img class="avatar" alt="" src="https://cdn.discordapp.com/avatars/${escapeHtml(user.id)}/${escapeHtml(user.avatar)}.png">` : ''}<a class="btn secondary small" href="/logout">Kilépés</a></div>` : `<a class="btn small" href="/login">${loginLabel}</a>`}</div></header>${user ? `<div class="app"><aside class="sidebar">${sidebarNavigation}<div class="footer-note">${escapeHtml(productName)}<br>NEXA Bot 13.0</div></aside><main>${content}</main></div>` : `<main class="public-main">${content}</main>`}</body></html>`;
 }
 
 function publicLanguage(url, request = null) {
@@ -5014,7 +5034,7 @@ function landing(client, session, language = 'hu') {
   const dashboardHref = session ? '/dashboard' : '/login';
   const query = en ? '?lang=en' : '';
   const copy = en ? {
-    eyebrow: 'NEXA BOT 12.0 · BILLING OPERATIONS PLATFORM',
+    eyebrow: 'NEXA BOT 13.0 · BILLING OPERATIONS PLATFORM',
     headlineA: 'Your server.', headlineB: 'Operating at its next level.',
     lead: 'Moderation, support, community automation, AI and serious server protection in one auditable control system built for growth.',
     dashboard: session ? 'Open dashboard' : 'Sign in with Discord', invite: 'Invite NEXA Bot', explore: 'Explore the platform',
@@ -5026,9 +5046,9 @@ function landing(client, session, language = 'hu') {
     accessKicker: 'Flexible access', accessTitle: 'Start free. Upgrade when your server grows.', accessLead: 'Secure monthly and annual Stripe subscriptions work alongside complimentary plans granted by the bot owner.',
     securityKicker: 'Security architecture', securityTitle: 'Protection that can explain every action.', securityLead: 'Sensitive operations are permission-checked, rate-limited and written to an audit trail. Secrets remain server-side.',
     ctaKicker: 'NEXA is ready', ctaTitle: 'Give your Discord server a real operating system.', ctaLead: 'Invite the bot, sign in with Discord and configure each server independently from a responsive command center.',
-    footer: 'Discord management platform · Version 12.0', privacy: 'Privacy', terms: 'Terms', commands: 'Commands'
+    footer: 'Discord management platform · Version 13.0', privacy: 'Privacy', terms: 'Terms', commands: 'Commands'
   } : {
-    eyebrow: 'NEXA BOT 12.0 · BILLING OPERATIONS PLATFORM',
+    eyebrow: 'NEXA BOT 13.0 · BILLING OPERATIONS PLATFORM',
     headlineA: 'A szervered.', headlineB: 'Egy szinttel feljebb.',
     lead: 'Moderáció, ügyféltámogatás, közösségi automatizálás, AI és komoly szervervédelem egyetlen auditálható, növekedésre tervezett rendszerben.',
     dashboard: session ? 'Vezérlőpult megnyitása' : 'Belépés Discorddal', invite: 'NEXA Bot meghívása', explore: 'Platform felfedezése',
@@ -5040,7 +5060,7 @@ function landing(client, session, language = 'hu') {
     accessKicker: 'Rugalmas hozzáférés', accessTitle: 'Kezdd ingyen. Válts, amikor nő a szervered.', accessLead: 'A biztonságos havi és éves Stripe-előfizetés együtt működik a bot Owner által ingyen kiosztott csomagokkal.',
     securityKicker: 'Biztonsági architektúra', securityTitle: 'Védelem, amely minden döntésről elszámol.', securityLead: 'Az érzékeny műveleteket jogosultság-ellenőrzés, rate limit és auditnapló védi. A titkos kulcsok kizárólag szerveroldalon maradnak.',
     ctaKicker: 'A NEXA készen áll', ctaTitle: 'Adj valódi operációs rendszert a Discord-szerverednek.', ctaLead: 'Hívd meg a botot, lépj be Discorddal, majd állíts be minden szervert külön a mobilbarát irányítóközpontból.',
-    footer: 'Discord management platform · 12.0-s verzió', privacy: 'Adatvédelem', terms: 'Feltételek', commands: 'Parancsok'
+    footer: 'Discord management platform · 13.0-s verzió', privacy: 'Adatvédelem', terms: 'Feltételek', commands: 'Parancsok'
   };
   const capabilities = en ? [
     ['MD', 'Moderation with context', 'Every action becomes a searchable Case ID instead of disappearing into chat history.', ['Ban, kick and timeout', 'Warnings and clearing', 'Lock and slowmode', 'Member information']],
@@ -5204,7 +5224,7 @@ function publicInfoPage(kind, session, language = 'hu') {
   };
   const [title, description, sections] = pages[kind] || pages.commands;
   const query = en ? '?lang=en' : '';
-  return layout(title, `<section class="hero"><div class="eyebrow">NEXA Bot 12.0</div><h1>${escapeHtml(title)}</h1><p class="lead">${escapeHtml(description)}</p><div class="actions"><a class="btn secondary" href="/${query}">← ${en ? 'Home' : 'Kezdőlap'}</a><a class="btn" href="${escapeHtml(inviteUrl())}">${en ? 'Invite bot' : 'Bot meghívása'}</a></div></section><div class="grid">${sections.map(([name, body], index) => `<article class="card${kind === 'platform' && index < 2 ? ' feature-wide' : ''}"><div class="feature-icon">${['◈','⌾','⬢','↗','▤','✦'][index] || '◇'}</div><h2>${escapeHtml(name)}</h2><p class="muted">${escapeHtml(body)}</p></article>`).join('')}</div>`, session, null, language, kind);
+  return layout(title, `<section class="hero"><div class="eyebrow">NEXA Bot 13.0</div><h1>${escapeHtml(title)}</h1><p class="lead">${escapeHtml(description)}</p><div class="actions"><a class="btn secondary" href="/${query}">← ${en ? 'Home' : 'Kezdőlap'}</a><a class="btn" href="${escapeHtml(inviteUrl())}">${en ? 'Invite bot' : 'Bot meghívása'}</a></div></section><div class="grid">${sections.map(([name, body], index) => `<article class="card${kind === 'platform' && index < 2 ? ' feature-wide' : ''}"><div class="feature-icon">${['◈','⌾','⬢','↗','▤','✦'][index] || '◇'}</div><h2>${escapeHtml(name)}</h2><p class="muted">${escapeHtml(body)}</p></article>`).join('')}</div>`, session, null, language, kind);
 }
 
 function knowledgeBasePage(session, language = 'hu') {
@@ -5244,7 +5264,7 @@ function knowledgeBasePage(session, language = 'hu') {
     ? { title: 'NEXA Knowledge Base', lead: 'A practical map of every major NEXA system: what it does, who can use it, where to configure it and what it needs.', what: 'What does it do?', who: 'Who can use it?', where: 'Where do I configure it?', need: 'What does it need?', back: 'Back to home', open: 'Open dashboard' }
     : { title: 'NEXA Tudásközpont', lead: 'Gyakorlati térkép minden fontos NEXA-rendszerhez: mit tud, ki használhatja, hol állítható és mi kell a működéséhez.', what: 'Mit csinál?', who: 'Ki használhatja?', where: 'Hol állítod?', need: 'Mi kell hozzá?', back: 'Vissza a kezdőlapra', open: 'Vezérlőpult megnyitása' };
   const cards = entries.map(([number, title, what, who, where, need], index) => `<details class="knowledge-card"${index === 0 ? ' open' : ''}><summary><span>${escapeHtml(number)}</span><strong>${escapeHtml(title)}</strong><i>+</i></summary><div class="knowledge-body"><dl><div><dt>${labels.what}</dt><dd>${escapeHtml(what)}</dd></div><div><dt>${labels.who}</dt><dd>${escapeHtml(who)}</dd></div><div><dt>${labels.where}</dt><dd>${escapeHtml(where)}</dd></div><div><dt>${labels.need}</dt><dd>${escapeHtml(need)}</dd></div></dl></div></details>`).join('');
-  const content = `<section class="knowledge-hero"><div class="eyebrow">NEXA 12.0 • SYSTEM ATLAS</div><h1>${labels.title}</h1><p class="lead">${labels.lead}</p><div class="actions"><a class="btn secondary" href="/${en ? '?lang=en' : ''}">← ${labels.back}</a><a class="btn" href="${session ? '/dashboard' : '/login'}">${labels.open}</a></div></section><nav class="knowledge-index" aria-label="${en ? 'Knowledge categories' : 'Tudástár kategóriák'}">${entries.map(([number, title]) => `<span><b>${escapeHtml(number)}</b>${escapeHtml(title)}</span>`).join('')}</nav><section class="knowledge-grid">${cards}</section>`;
+  const content = `<section class="knowledge-hero"><div class="eyebrow">NEXA 13.0 • SYSTEM ATLAS</div><h1>${labels.title}</h1><p class="lead">${labels.lead}</p><div class="actions"><a class="btn secondary" href="/${en ? '?lang=en' : ''}">← ${labels.back}</a><a class="btn" href="${session ? '/dashboard' : '/login'}">${labels.open}</a></div></section><nav class="knowledge-index" aria-label="${en ? 'Knowledge categories' : 'Tudástár kategóriák'}">${entries.map(([number, title]) => `<span><b>${escapeHtml(number)}</b>${escapeHtml(title)}</span>`).join('')}</nav><section class="knowledge-grid">${cards}</section>`;
   return layout(labels.title, content, session, null, language, 'guide');
 }
 
@@ -5362,7 +5382,7 @@ async function ownerDashboard(client, session, saved = false, options = {}) {
     ? `<nav class="pagination" aria-label="Szerverlista oldalak">${page > 1 ? `<a class="btn secondary small" href="${queryFor(page - 1)}">← Előző</a>` : ''}<span>${page}. oldal / ${totalPages}</span>${page < totalPages ? `<a class="btn secondary small" href="${queryFor(page + 1)}">Következő →</a>` : ''}</nav>`
     : '';
   const financialSection = `<section class="card section"><div class="section-kicker">Stripe pénzügyi áttekintés</div><h2 class="section-title">◉ Bevétel és számlaesemények</h2><div class="stats"><div class="stat"><div class="stat-value">${formatMinorCurrency(Number(paymentSummary.total_paid || 0), 'eur')}</div><div class="stat-label">Összes sikeres fizetés</div></div><div class="stat"><div class="stat-value">${formatMinorCurrency(Number(paymentSummary.paid_30d || 0), 'eur')}</div><div class="stat-label">Utolsó 30 nap</div></div><div class="stat"><div class="stat-value">${Number(paymentSummary.successful || 0)}</div><div class="stat-label">Sikeres számla</div></div><div class="stat"><div class="stat-value">${Number(paymentSummary.failed || 0)}</div><div class="stat-label">Sikertelen / nyitott</div></div></div><p class="muted">A kimutatás a Stripe webhook által rögzített bruttó EUR-számlaösszegeket mutatja. Kártyaadatot nem tárol.</p><div style="overflow:auto"><table><thead><tr><th>Stripe számla</th><th>Szerver ID</th><th>Összeg</th><th>Pénznem</th><th>Állapot</th><th>Időpont</th></tr></thead><tbody>${paymentRows}</tbody></table></div></section>`;
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 12.0 • Owner Command Center</div><h1>Hálózati irányítóközpont</h1><p class="muted">A teljes botinfrastruktúra, jogosultsági csomagok, védelem és AI-hozzáférés egy helyen.</p></div><a class="btn secondary" href="${escapeHtml(inviteUrl())}">Bot meghívása</a></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 13.0 • Owner Command Center</div><h1>Hálózati irányítóközpont</h1><p class="muted">A teljes botinfrastruktúra, jogosultsági csomagok, védelem és AI-hozzáférés egy helyen.</p></div><a class="btn secondary" href="${escapeHtml(inviteUrl())}">Bot meghívása</a></div>
 ${saved ? '<div class="notice">✅ A tulajdonosi beállítás mentve.</div>' : ''}
 <nav class="desktop-owner-nav" aria-label="Owner Center szakaszok"><a href="#overview">Áttekintés</a><a href="#system">Rendszer</a><a href="#packages">Csomagok</a><a href="#access">Hozzáférések</a><a href="#audit">Audit</a><a href="#servers">Szerverek</a></nav>
 ${financialSection}
@@ -5411,7 +5431,7 @@ async function ownerGuildPage(guild, session) {
   const errorRows = errors.length ? errors.map((item) => `<tr><td>${escapeHtml(item.created_at || item.createdAt || '')}</td><td>${escapeHtml(item.error_type || item.errorType)}</td><td>${escapeHtml(item.message)}</td></tr>`).join('') : '<tr><td colspan="3" class="status-ok">Nincs rögzített hiba ennél a szervernél.</td></tr>';
   const securityReady = !readiness.missingPermissions.length && !readiness.higherBots.length;
   const joinedAt = botMember?.joinedAt ? botMember.joinedAt.toLocaleString('hu-HU') : 'Ismeretlen';
-  const content = `<div class="page-head"><div>${guildIcon(guild)}<div class="section-kicker">NEXA Bot 12.0 • Owner Server Inspector</div><h1>${escapeHtml(guild.name)}</h1><p class="muted">${escapeHtml(guild.id)} • részletes, csak tulajdonosi rendszerállapot</p></div><div class="actions"><a class="btn secondary" href="/owner">← Owner Center</a><a class="btn" href="/dashboard/guild/${escapeHtml(guild.id)}">Beállítások</a><a class="btn green" href="/owner/chronoguard/${escapeHtml(guild.id)}">ChronoGuard</a><a class="btn" href="/owner/aegis/${escapeHtml(guild.id)}">AEGIS Permission DNA</a><a class="btn" href="/owner/shifts/${escapeHtml(guild.id)}">Szolgálatkezelés</a>${rpActive ? `<a class="btn green" href="/owner/documents/${escapeHtml(guild.id)}">Iratvezérlés</a><a class="btn green" href="/owner/document-studio/${escapeHtml(guild.id)}">Workflow Studio</a><a class="btn green" href="/owner/tgf-forge/${escapeHtml(guild.id)}">TGF Forge</a><a class="btn" href="/owner/erlc/${escapeHtml(guild.id)}">ER:LC Bridge</a>` : ''}</div></div>
+  const content = `<div class="page-head"><div>${guildIcon(guild)}<div class="section-kicker">NEXA Bot 13.0 • Owner Server Inspector</div><h1>${escapeHtml(guild.name)}</h1><p class="muted">${escapeHtml(guild.id)} • részletes, csak tulajdonosi rendszerállapot</p></div><div class="actions"><a class="btn secondary" href="/owner">← Owner Center</a><a class="btn" href="/dashboard/guild/${escapeHtml(guild.id)}">Beállítások</a><a class="btn green" href="/owner/chronoguard/${escapeHtml(guild.id)}">ChronoGuard</a><a class="btn" href="/owner/aegis/${escapeHtml(guild.id)}">AEGIS Permission DNA</a><a class="btn" href="/owner/shifts/${escapeHtml(guild.id)}">Szolgálatkezelés</a>${rpActive ? `<a class="btn green" href="/owner/documents/${escapeHtml(guild.id)}">Iratvezérlés</a><a class="btn green" href="/owner/document-studio/${escapeHtml(guild.id)}">Workflow Studio</a><a class="btn green" href="/owner/tgf-forge/${escapeHtml(guild.id)}">TGF Forge</a><a class="btn" href="/owner/erlc/${escapeHtml(guild.id)}">ER:LC Bridge</a>` : ''}</div></div>
   ${blacklisted ? '<div class="notice error">🚫 Ez a szerver jelenleg blacklisten van, ezért a normál botfunkciók le vannak tiltva.</div>' : ''}
   <div class="stats"><div class="stat"><div class="stat-value">${Number(guild.memberCount || 0)}</div><div class="stat-label">Tag</div></div><div class="stat"><div class="stat-value">${guild.channels.cache.size}</div><div class="stat-label">Csatorna</div></div><div class="stat"><div class="stat-value">${guild.roles.cache.size}</div><div class="stat-label">Rang</div></div><div class="stat"><div class="stat-value">${planName(entitlement.plan)}</div><div class="stat-label">Csomag</div></div></div>
   <div class="grid"><section class="card"><div class="section-kicker">Azonosítás</div><h2>Szerveradatok</h2><div class="status-list"><div class="status-row"><strong>Tulajdonos</strong><span>${escapeHtml(owner?.user?.tag || owner?.displayName || guild.ownerId)}<br><span class="muted">${escapeHtml(guild.ownerId)}</span></span></div><div class="status-row"><strong>Bot csatlakozott</strong><span>${escapeHtml(joinedAt)}</span></div><div class="status-row"><strong>RP-rendszer</strong><span class="${rpActive ? 'status-ok' : 'muted'}">${rpActive ? '● Owner által engedélyezve' : '○ Kikapcsolva'}</span></div><div class="status-row"><strong>Csomag forrása</strong><span>${escapeHtml(entitlement.source || 'default')}</span></div></div></section>
@@ -5448,7 +5468,7 @@ function ownerDocumentsPage(guild, session, saved = false) {
     }).join('');
     return `<section class="section" style="margin-top:28px"><div class="page-head"><div><div class="section-kicker">Dokumentumcsoport</div><h2>${escapeHtml(categoryNames[groupKey] || groupKey)}</h2></div></div><div class="grid">${cards}</div></section>`;
   }).join('');
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 12.0 • Owner Document Control</div><h1>Irat- és jogosultságvezérlés</h1><p class="muted">${escapeHtml(guild.name)} • Itt állíthatod be, melyik Discord-rang használhatja a dokumentumpaneleket.</p></div><a class="btn secondary" href="/owner">← Owner Center</a></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 13.0 • Owner Document Control</div><h1>Irat- és jogosultságvezérlés</h1><p class="muted">${escapeHtml(guild.name)} • Itt állíthatod be, melyik Discord-rang használhatja a dokumentumpaneleket.</p></div><a class="btn secondary" href="/owner">← Owner Center</a></div>
 ${saved ? '<div class="notice">✅ A dokumentumszabályok mentve, a meglévő Discord-panelek frissítve.</div>' : ''}
 <div class="notice warn">Az egyszerű felhívások és tájékoztatások alapból nem kapnak ügyszámot. A hivatalos, jóváhagyásos iratok alapból igen.</div>
 <form method="post" action="/owner/documents/${escapeHtml(guild.id)}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><section class="card section"><div class="section-kicker">Globális jogosultság</div><h2 class="section-title">Ki használhatja a dokumentumrendszert?</h2><div class="field-grid"><div><label for="doc_default_role">Alapértelmezett használati rang</label><select id="doc_default_role" name="doc_default_role" required>${roleOptions(guild, defaultAccessRoleId, 'Válassz egy rangot')}</select><div class="help">Ez váltja le a korábbi, fix „Operatív állomány” korlátozást. A kiválasztott rang használhatja az összes olyan panelt, amelynél lent nem adsz meg külön rangot.</div></div></div></section>${sections}<div class="savebar"><span class="muted">A mentés után a bot frissíti a már kihelyezett dokumentumpaneleket is.</span><button class="btn green" type="submit">Minden szabály mentése</button></div></form>`;
@@ -5475,7 +5495,7 @@ function ownerDocumentStudioPage(guild, session, options = {}) {
     const notificationRole = guild.roles.cache.get(template.notificationRoleId);
     return `<article class="card template-card"><div class="section-kicker">${escapeHtml(template.key)}</div><h3>${escapeHtml(template.emoji)} ${escapeHtml(template.title)}</h3><p class="muted">${template.fields.length} kérdés • ${channel ? `#${escapeHtml(channel.name)}` : 'hiányzó csatorna'} • használat: ${role ? escapeHtml(role.name) : 'alapértelmezett rang'} • értesítés: ${notificationRole ? `@${escapeHtml(notificationRole.name)}` : 'nincs rangping'}</p><div class="actions"><a class="btn secondary small" href="/owner/document-studio/${guild.id}?edit=${encodeURIComponent(template.key)}">Szerkesztés</a><form method="post" action="/owner/document-studio/${guild.id}/install"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="template_key" value="${escapeHtml(template.key)}"><button class="btn green small" type="submit">Panel kihelyezése</button></form><form method="post" action="/owner/document-studio/${guild.id}/delete"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="template_key" value="${escapeHtml(template.key)}"><button class="btn danger small" type="submit">Törlés</button></form></div></article>`;
   }).join('') : '<div class="notice warn">Még nincs egyedi dokumentumsablon. Készítsd el az elsőt az alábbi szerkesztőben.</div>';
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 12.0 • Workflow Studio</div><h1>Egyedi dokumentumstúdió</h1><p class="muted">${escapeHtml(guild.name)} • Saját kérdések, célcsatorna, rang, ping, ügyszám és vezetői jóváhagyás.</p></div><div class="actions"><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a><a class="btn" href="/owner/documents/${guild.id}">Alap iratok</a></div></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 13.0 • Workflow Studio</div><h1>Egyedi dokumentumstúdió</h1><p class="muted">${escapeHtml(guild.name)} • Saját kérdések, célcsatorna, rang, ping, ügyszám és vezetői jóváhagyás.</p></div><div class="actions"><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a><a class="btn" href="/owner/documents/${guild.id}">Alap iratok</a></div></div>
   ${options.saved ? '<div class="notice">✅ A sablon mentve. A panel most már kihelyezhető a kiválasztott Discord-csatornába.</div>' : ''}
   ${options.installed ? '<div class="notice">✅ A dokumentumpanel kihelyezve vagy frissítve.</div>' : ''}
   <section class="section"><div class="page-head"><div><div class="section-kicker">Aktív sablonok</div><h2>Dokumentumfolyamatok</h2></div></div><div class="grid">${cards}</div></section>
@@ -5537,7 +5557,7 @@ async function ownerChronoGuardPage(guild, session, options = {}) {
       : options.scanned ? '<div class="notice">✅ A Shadow Scan lefutott. A kockázati eredmény lent látható.</div>'
         : options.restored ? `<div class="notice">✅ A biztonságos helyreállítás lefutott. ${escapeHtml(options.restored)}</div>`
           : '';
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 12.0 • ChronoGuard Digital Twin</div><h1>Szerver-időgép és incidensközpont</h1><p class="muted">${escapeHtml(guild.name)} • A szerver szerkezetének aláírt digitális ikre, eltérésmagyarázat, bizonyítékkapszula és előnézetes helyreállítás.</p></div><div class="actions"><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a><form method="post" action="/owner/chronoguard/${guild.id}/scan"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><button class="btn" type="submit">Shadow Scan futtatása</button></form></div></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 13.0 • ChronoGuard Digital Twin</div><h1>Szerver-időgép és incidensközpont</h1><p class="muted">${escapeHtml(guild.name)} • A szerver szerkezetének aláírt digitális ikre, eltérésmagyarázat, bizonyítékkapszula és előnézetes helyreállítás.</p></div><div class="actions"><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a><form method="post" action="/owner/chronoguard/${guild.id}/scan"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><button class="btn" type="submit">Shadow Scan futtatása</button></form></div></div>
   ${notice}
   ${!overview.available ? '<div class="notice error">A ChronoGuard használatához élő PostgreSQL DATABASE_URL szükséges.</div>' : ''}
   <div class="stats"><div class="stat"><div class="stat-value">${Number(diff.riskScore || 0)}/100</div><div class="stat-label">Drift kockázat</div></div><div class="stat"><div class="stat-value">${chronoRiskLabel(diff.riskLevel)}</div><div class="stat-label">Veszélyszint</div></div><div class="stat"><div class="stat-value">${snapshots.length}</div><div class="stat-label">Megőrzött állapot</div></div><div class="stat"><div class="stat-value">${baseline ? 'AKTÍV' : 'NINCS'}</div><div class="stat-label">Digitális bázis</div></div></div>
@@ -5570,7 +5590,7 @@ async function ownerAegisPage(guild, session, options = {}) {
     options.baseline ? '<div class="notice">✅ Az új, jóváhagyott jogosultsági bázis rögzítve.</div>' : '',
     options.error ? `<div class="notice error">${escapeHtml(options.error)}</div>` : ''
   ].join('');
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 12.0 • AEGIS PERMISSION DNA</div><h1>Jogosultsági intelligencia</h1><p class="muted">${escapeHtml(guild.name)} • Veszélyes jogok, robbanási sugár, elszigetelhetőség és kriptográfiai jogosultság-eltérés egy helyen.</p></div><div class="actions"><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a><a class="btn secondary" href="/tudaskozpont">Mit tud az AEGIS?</a></div></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 13.0 • AEGIS PERMISSION DNA</div><h1>Jogosultsági intelligencia</h1><p class="muted">${escapeHtml(guild.name)} • Veszélyes jogok, robbanási sugár, elszigetelhetőség és kriptográfiai jogosultság-eltérés egy helyen.</p></div><div class="actions"><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a><a class="btn secondary" href="/tudaskozpont">Mit tud az AEGIS?</a></div></div>
   ${notices}
   <div class="grid" style="grid-template-columns:minmax(260px,.55fr) minmax(0,1.45fr)"><section class="card" style="display:grid;place-items:center"><div class="aegis-score" style="--score:${Number(current.postureScore)}%"><div><strong>${Number(current.postureScore)}</strong><span>biztonsági pont / 100</span></div></div><p class="muted" style="text-align:center">Minél magasabb, annál kisebb a jogosultsági robbanási sugár.</p></section><section class="card"><div class="section-kicker">Élő Permission DNA</div><h2>Jelenlegi jogosultsági lenyomat</h2><code class="dna-code">${escapeHtml(current.permissionDna)}</code><div class="status-list" style="margin-top:14px"><div class="status-row"><strong>Jóváhagyott bázis</strong><span>${baseline ? `#${escapeHtml(baseline.id)} • ${escapeHtml(String(baseline.dna_hash).slice(0, 18))}…` : 'Még nincs'}</span></div><div class="status-row"><strong>Eltérés a bázistól</strong><span class="${diff.changed ? 'status-bad' : 'status-ok'}">${baseline ? (diff.changed ? '● IGEN' : '● NINCS') : '○ Először rögzíts bázist'}</span></div><div class="status-row"><strong>Kockázatváltozás</strong><span>${Number(diff.riskDelta || 0) > 0 ? '+' : ''}${Number(diff.riskDelta || 0)} pont</span></div><div class="status-row"><strong>Érintett identitások</strong><span>${escapeHtml(changedNames || 'Nincs')}</span></div></div><div class="actions"><form method="post" action="/owner/aegis/${guild.id}/scan"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><button class="btn" type="submit">Teljes vizsgálat</button></form><form method="post" action="/owner/aegis/${guild.id}/baseline"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><button class="btn secondary" type="submit">Jóváhagyott bázis rögzítése</button></form></div></section></div>
   <div class="stats"><div class="stat"><div class="stat-value risk-critical">${Number(current.counts.critical)}</div><div class="stat-label">Kritikus identitás</div></div><div class="stat"><div class="stat-value risk-high">${Number(current.counts.high)}</div><div class="stat-label">Magas kockázat</div></div><div class="stat"><div class="stat-value">${Number(current.counts.uncontainable)}</div><div class="stat-label">Nem elszigetelhető</div></div><div class="stat"><div class="stat-value">${Number(current.counts.untrustedBots)}</div><div class="stat-label">Ismeretlen bot</div></div></div>
@@ -5631,7 +5651,7 @@ async function ownerShiftsPage(guild, session, options = {}) {
     const name = member?.displayName || member?.user?.username || row.user_id;
     return `<form class="record" method="post" action="/owner/shifts/${guild.id}/record/${row.id}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div><strong>${escapeHtml(name)}</strong><div class="muted">${escapeHtml(row.user_id)} • #${escapeHtml(row.id)}</div><div class="badge ${row.ended_at ? '' : 'pro'}">${row.ended_at ? formatDuration(row.active_seconds) : 'AKTÍV'}</div></div><div><label>Kezdés • Budapest</label><input type="datetime-local" name="started_at" value="${escapeHtml(budapestInput(row.started_at))}" required></div><div><label>Befejezés • Budapest</label><input type="datetime-local" name="ended_at" value="${escapeHtml(budapestInput(row.ended_at))}"><div class="help">Üresen hagyva aktív szolgálat.</div></div><div><label>Szünet másodpercben</label><input type="number" name="break_seconds" min="0" max="31536000" value="${Number(row.break_seconds || 0)}"></div><div class="actions"><button class="btn green small" name="operation" value="update" type="submit">Mentés</button><button class="btn danger small" name="operation" value="delete" type="submit">Törlés</button></div></form>`;
   }).join('') : '<div class="notice warn">A szűréshez nem található szolgálati rekord.</div>';
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 12.0 • Shift Operations</div><h1>Szolgálati irányítóközpont</h1><p class="muted">${escapeHtml(guild.name)} • Aktív és lezárt szolgálatok szerkesztése, törlése és nullázása.</p></div><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 13.0 • Shift Operations</div><h1>Szolgálati irányítóközpont</h1><p class="muted">${escapeHtml(guild.name)} • Aktív és lezárt szolgálatok szerkesztése, törlése és nullázása.</p></div><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a></div>
   ${options.saved ? '<div class="notice">✅ A szolgálati adat módosítása rögzítve és auditálva.</div>' : ''}
   <div class="stats"><div class="stat"><div class="stat-value">${overview.active}</div><div class="stat-label">Aktív szolgálat</div></div><div class="stat"><div class="stat-value">${overview.completed}</div><div class="stat-label">Lezárt műszak</div></div><div class="stat"><div class="stat-value">${overview.members}</div><div class="stat-label">Érintett tag</div></div><div class="stat"><div class="stat-value">${formatDuration(overview.seconds)}</div><div class="stat-label">Összes aktív idő</div></div></div>
   <section class="card section"><div class="section-kicker">Keresés és veszélyes műveletek</div><h2 class="section-title">Tulajdonosi kezelés</h2><div class="owner-tools"><form method="get" action="/owner/shifts/${guild.id}"><label>Tag Discord ID szerinti szűrése</label><input type="text" name="user" inputmode="numeric" maxlength="22" value="${escapeHtml(options.userId || '')}" placeholder="123456789012345678"><div class="actions"><button class="btn" type="submit">Szűrés</button><a class="btn secondary" href="/owner/shifts/${guild.id}">Összes</a></div></form><form method="post" action="/owner/shifts/${guild.id}/reset-user"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><label>Egy tag teljes nullázása</label><input type="text" name="user_id" inputmode="numeric" maxlength="22" placeholder="Discord felhasználói ID" required><label>Megerősítés</label><input type="text" name="confirmation" placeholder="Írd be: RESET" required><button class="btn danger" type="submit">Tag szolgálatának nullázása</button></form><form method="post" action="/owner/shifts/${guild.id}/reset-all"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><label>Teljes szerver nullázása</label><p class="muted">Minden aktív és korábbi szolgálati rekord végleg törlődik.</p><input type="text" name="confirmation" placeholder="Írd be: TELJES RESET" required><button class="btn danger" type="submit">Minden szolgálat nullázása</button></form></div></section>
@@ -5655,7 +5675,7 @@ async function ownerErlcPage(guild, session, options = {}) {
   }).join('') || '<tr><td colspan="5" class="muted">Nincs online játékos vagy az API nem elérhető.</td></tr>';
   const staff = live?.Staff || {};
   const staffCount = Object.values(staff).reduce((sum, group) => sum + Object.keys(group || {}).length, 0);
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 12.0 • ER:LC Bridge</div><h1>ER:LC integráció</h1><p class="muted">${escapeHtml(guild.name)} • Privát szerver állapot, játékosok, staff és owneres parancsvezérlés.</p></div><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 13.0 • ER:LC Bridge</div><h1>ER:LC integráció</h1><p class="muted">${escapeHtml(guild.name)} • Privát szerver állapot, játékosok, staff és owneres parancsvezérlés.</p></div><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a></div>
   ${options.saved ? '<div class="notice">✅ Az ER:LC kulcs ellenőrizve, titkosítva és elmentve.</div>' : ''}${options.commandSent ? '<div class="notice">✅ Az ER:LC parancsot az API elfogadta.</div>' : ''}${apiError ? `<div class="notice error">⚠️ ER:LC API: ${escapeHtml(apiError)}</div>` : ''}
   <div class="stats"><div class="stat"><div class="stat-value">${live ? Number(live.CurrentPlayers || 0) : '—'}</div><div class="stat-label">Online játékos</div></div><div class="stat"><div class="stat-value">${live ? Number(live.MaxPlayers || 0) : '—'}</div><div class="stat-label">Férőhely</div></div><div class="stat"><div class="stat-value">${live ? (Array.isArray(live.Queue) ? live.Queue.length : 0) : '—'}</div><div class="stat-label">Várólista</div></div><div class="stat"><div class="stat-value">${live ? staffCount : '—'}</div><div class="stat-label">ER:LC staff</div></div></div>
   <div class="grid"><section class="card"><div class="section-kicker">Titkos kapcsolat</div><h2>API-kulcs</h2><div class="status-list"><div class="status-row"><strong>Állapot</strong><span class="${integration.enabled ? 'status-ok' : 'muted'}">${integration.configured ? (integration.enabled ? '● Bekapcsolva' : '○ Kikapcsolva') : '○ Nincs beállítva'}</span></div><div class="status-row"><strong>Forrás</strong><span>${escapeHtml(integration.source || '—')}</span></div><div class="status-row"><strong>Kulcs</strong><span>${escapeHtml(integration.keyMask)}</span></div><div class="status-row"><strong>ER:LC szerver</strong><span>${escapeHtml(live?.Name || integration.serverName || '—')}</span></div><div class="status-row"><strong>Join Key</strong><span>${escapeHtml(live?.JoinKey || integration.joinKey || '—')}</span></div></div></section><section class="card"><div class="section-kicker">Kulcs cseréje</div><h2>Biztonságos beállítás</h2><form method="post" action="/owner/erlc/${guild.id}/save"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><label>ER:LC Server Key</label><input type="password" name="server_key" minlength="10" maxlength="500" autocomplete="new-password" placeholder="A kulcs értéke nem lesz többé megjelenítve" required><p class="help">Mentés előtt a NEXA élő API-hívással ellenőrzi, majd AES-256-GCM titkosítással tárolja. A GitHubba nem kerül.</p><button class="btn green" type="submit">Kapcsolat tesztelése és mentése</button></form>${integration.source === 'database' ? `<div class="actions"><form method="post" action="/owner/erlc/${guild.id}/toggle"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="enabled" value="${integration.enabled ? '0' : '1'}"><button class="btn secondary" type="submit">${integration.enabled ? 'Ideiglenes kikapcsolás' : 'Bekapcsolás'}</button></form><form method="post" action="/owner/erlc/${guild.id}/delete"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="text" name="confirmation" placeholder="Írd be: ERLC TÖRLÉS" required><button class="btn danger" type="submit">Kulcs törlése</button></form></div>` : ''}</section></div>
@@ -5675,7 +5695,7 @@ async function dashboardList(client, session) {
   const persistence = isPersistentStore() ? '' : '<div class="notice warn">⚠️ Nincs DATABASE_URL beállítva. A módosítások újraindításkor elveszhetnek.</div>';
   const members = guilds.reduce((sum, item) => sum + Number(item.botGuild.memberCount || 0), 0);
   const modules = guilds.reduce((sum, item) => sum + Object.values(getGuildConfig(item.botGuild.id).modules).filter(Boolean).length, 0);
-  return layout('Szervereim', `<div class="page-head"><div><div class="section-kicker">NEXA Bot 12.0 • Command Deck</div><h1>Szerverhálózat</h1><p class="muted">Csak azok a szerverek láthatók, amelyekhez tulajdonosi, adminisztrátori vagy kijelölt kezelői jogosultságod van.</p></div></div><div class="stats"><div class="stat"><div class="stat-value">${guilds.length}</div><div class="stat-label">Kezelt szerver</div></div><div class="stat"><div class="stat-value">${members}</div><div class="stat-label">Összes tag</div></div><div class="stat"><div class="stat-value">${modules}</div><div class="stat-label">Konfigurált modul</div></div><div class="stat"><div class="stat-value">ONLINE</div><div class="stat-label">NEXA Core</div></div></div>${persistence}<div class="grid">${cards}</div>`, session);
+  return layout('Szervereim', `<div class="page-head"><div><div class="section-kicker">NEXA Bot 13.0 • Command Deck</div><h1>Szerverhálózat</h1><p class="muted">Csak azok a szerverek láthatók, amelyekhez tulajdonosi, adminisztrátori vagy kijelölt kezelői jogosultságod van.</p></div></div><div class="stats"><div class="stat"><div class="stat-value">${guilds.length}</div><div class="stat-label">Kezelt szerver</div></div><div class="stat"><div class="stat-value">${members}</div><div class="stat-label">Összes tag</div></div><div class="stat"><div class="stat-value">${modules}</div><div class="stat-label">Konfigurált modul</div></div><div class="stat"><div class="stat-value">ONLINE</div><div class="stat-label">NEXA Core</div></div></div>${persistence}<div class="grid">${cards}</div>`, session);
 }
 
 function option(value, label, selected) {
@@ -5806,15 +5826,38 @@ async function customCommandsPage(guild, session, saved = false) {
 async function webSupportPage(session, notice = '') {
   const tickets = await listWebTickets(session.user.id);
   const rows = tickets.length ? tickets.map((ticket) => `<a class="record" href="/support/${ticket.id}" style="text-decoration:none"><div><strong>#${ticket.id} • ${escapeHtml(ticket.subject)}</strong><div class="muted">${escapeHtml(ticket.category)} • ${escapeHtml(new Date(ticket.updated_at).toLocaleString('hu-HU'))}</div></div><span class="badge ${ticket.status === 'open' ? 'ultimate' : ''}">${ticket.status === 'open' ? 'NYITOTT' : 'LEZÁRT'}</span></a>`).join('') : '<div class="notice warn">Még nincs webes segítségkérésed.</div>';
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA WEB SUPPORT BRIDGE</div><h1>Segítségkérés</h1><p class="muted">Írj nekünk itt. A kérésedből privát ticket nyílik a hivatalos NEXA Support szerveren, a Staff válaszait pedig ezen az oldalon látod.</p></div><a class="btn secondary" href="/dashboard">← Dashboard</a></div>${notice ? `<div class="notice">${escapeHtml(notice)}</div>` : ''}<div class="grid"><section class="card section"><h2>Új segítségkérés</h2><form method="post" action="/support"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="field-grid"><div><label>Téma</label><input type="text" name="subject" maxlength="100" required placeholder="Miben kérsz segítséget?"></div><div><label>Kategória</label><select name="category"><option value="technical">Technikai segítség</option><option value="bug">Hibajelentés</option><option value="billing">Előfizetés / számlázás</option><option value="partnership">Partnerség</option><option value="other">Egyéb</option></select></div></div><label>Üzenet</label><textarea name="content" maxlength="4000" required placeholder="Írd le pontosan a problémát…"></textarea><button class="btn green" type="submit">Ticket megnyitása</button></form></section><section class="card section"><h2>Korábbi ügyeim</h2><div class="record-list">${rows}</div></section></div>`;
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 13.0 • SUPPORT OPERATIONS</div><h1>Segítségkérés</h1><p class="muted">A kérésedből privát ticket nyílik a hivatalos NEXA Support szerveren. A válaszokat és állapotváltozásokat itt követheted.</p></div><a class="btn secondary" href="/dashboard">← Dashboard</a></div>${notice ? `<div class="notice">${escapeHtml(notice)}</div>` : ''}<div class="grid"><section class="card section"><h2>Új segítségkérés</h2><form method="post" action="/support"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="field-grid"><div><label>Téma</label><input type="text" name="subject" maxlength="100" required placeholder="Miben kérsz segítséget?"></div><div><label>Kategória</label><select name="category"><option value="technical">Technikai segítség</option><option value="bug">Hibajelentés</option><option value="billing">Előfizetés / számlázás</option><option value="partnership">Partnerség</option><option value="other">Egyéb</option></select></div><div><label>Prioritás</label><select name="priority"><option value="low">Alacsony</option><option value="normal" selected>Normál</option><option value="high">Magas</option><option value="urgent">Sürgős</option></select></div></div><label>Üzenet</label><textarea name="content" maxlength="4000" required placeholder="Írd le pontosan a problémát…"></textarea><button class="btn green" type="submit">Ticket megnyitása</button></form></section><section class="card section"><h2>Korábbi ügyeim</h2><div class="record-list">${rows}</div></section></div>`;
   return layout('Web Support', content, session, null);
 }
 
 async function webSupportTicketPage(ticketData, session) {
   const { ticket, messages } = ticketData;
   const messageHtml = messages.map((message) => `<article class="card" style="padding:15px"><div class="section-kicker">${message.source === 'discord' ? 'NEXA SUPPORT' : 'TE • WEB'}</div><strong>${escapeHtml(message.author_name)}</strong><p>${escapeHtml(message.content).replaceAll('\n', '<br>')}</p><div class="muted">${escapeHtml(new Date(message.created_at).toLocaleString('hu-HU'))}</div></article>`).join('');
-  const content = `<div class="page-head"><div><div class="section-kicker">WEB SUPPORT #${ticket.id}</div><h1>${escapeHtml(ticket.subject)}</h1><p class="muted">A Discord Support Staff válaszai automatikusan megjelennek itt.</p></div><a class="btn secondary" href="/support">← Ügyeim</a></div><div class="record-list">${messageHtml || '<div class="notice">Még nincs üzenet.</div>'}</div>${ticket.status === 'open' ? `<section class="card section" style="margin-top:18px"><h2>Válasz küldése</h2><form method="post" action="/support/${ticket.id}/reply"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><textarea name="content" maxlength="4000" required></textarea><button class="btn green" type="submit">Válasz elküldése a Support Staffnak</button></form></section>` : '<div class="notice warn">Ez az ügy lezárult.</div>'}`;
+  const rating = ticket.status === 'closed' && !ticket.rating ? `<section class="card section" style="margin-top:18px"><h2>Értékeld az ügyintézést</h2><form method="post" action="/support/${ticket.id}/rate"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="field-grid"><div><label>Értékelés</label><select name="rating"><option value="5">5 • Kiváló</option><option value="4">4 • Jó</option><option value="3">3 • Megfelelő</option><option value="2">2 • Gyenge</option><option value="1">1 • Rossz</option></select></div><div><label>Megjegyzés</label><textarea name="comment" maxlength="1000"></textarea></div></div><button class="btn green" type="submit">Értékelés elküldése</button></form></section>` : '';
+  const content = `<div class="page-head"><div><div class="section-kicker">WEB SUPPORT #${ticket.id} • ${escapeHtml(String(ticket.priority || 'normal').toUpperCase())}</div><h1>${escapeHtml(ticket.subject)}</h1><p class="muted">Állapot: ${escapeHtml(ticket.status)} • Ügyintéző: ${escapeHtml(ticket.assigned_name || 'még nincs kijelölve')}</p></div><a class="btn secondary" href="/support">← Ügyeim</a></div><div class="record-list">${messageHtml || '<div class="notice">Még nincs üzenet.</div>'}</div>${ticket.status !== 'closed' ? `<section class="card section" style="margin-top:18px"><h2>Válasz küldése</h2><form method="post" action="/support/${ticket.id}/reply"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><textarea name="content" maxlength="4000" required></textarea><button class="btn green" type="submit">Válasz elküldése a Support Staffnak</button></form></section>` : `<div class="notice warn">Ez az ügy lezárult.${ticket.rating ? ` Értékelésed: ${Number(ticket.rating)}/5.` : ''}</div>`}${rating}`;
   return layout(`Support #${ticket.id}`, content, session, null);
+}
+
+async function ownerSupportPage(session, url) {
+  const tickets = await listAllWebTickets({ status: url.searchParams.get('status') || '', priority: url.searchParams.get('priority') || '', search: url.searchParams.get('q') || '' });
+  const counts = tickets.reduce((acc, ticket) => { acc[ticket.status] = (acc[ticket.status] || 0) + 1; return acc; }, {});
+  const rows = tickets.map((ticket) => `<a class="record" href="/owner/support/${ticket.id}" style="text-decoration:none"><div><strong>#${ticket.id} • ${escapeHtml(ticket.subject)}</strong><div class="muted">${escapeHtml(ticket.username)} • ${escapeHtml(ticket.category)}</div></div><div><span class="badge ${ticket.priority === 'urgent' ? 'pro' : ''}">${escapeHtml(String(ticket.priority).toUpperCase())}</span></div><div>${escapeHtml(ticket.assigned_name || 'Nincs felelős')}</div><div>${escapeHtml(new Date(ticket.updated_at).toLocaleString('hu-HU'))}</div><span class="badge ${ticket.status === 'open' ? 'ultimate' : ''}">${escapeHtml(String(ticket.status).toUpperCase())}</span></a>`).join('') || '<div class="notice warn">Nincs találat.</div>';
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 13.0 • OWNER SUPPORT OPERATIONS</div><h1>Support irányítóközpont</h1><p class="muted">Prioritás, felelős, állapot, belső jegyzet és ügyfélelégedettség egy helyen.</p></div><a class="btn secondary" href="/owner">← Owner Center</a></div><div class="stats"><div class="stat"><div class="stat-value">${tickets.length}</div><div class="stat-label">Találat</div></div><div class="stat"><div class="stat-value">${counts.open || 0}</div><div class="stat-label">Nyitott</div></div><div class="stat"><div class="stat-value">${counts.pending || 0}</div><div class="stat-label">Várakozik</div></div><div class="stat"><div class="stat-value">${counts.closed || 0}</div><div class="stat-label">Lezárt</div></div></div><form class="owner-search" method="get" action="/owner/support"><input type="search" name="q" placeholder="Ticket, felhasználó vagy téma"><select name="status"><option value="">Minden állapot</option><option value="open">Nyitott</option><option value="pending">Várakozik</option><option value="closed">Lezárt</option></select><select name="priority"><option value="">Minden prioritás</option><option value="urgent">Sürgős</option><option value="high">Magas</option><option value="normal">Normál</option><option value="low">Alacsony</option></select><button class="btn" type="submit">Szűrés</button></form><div class="record-list">${rows}</div>`;
+  return layout('Owner Support Operations', content, session, null);
+}
+
+async function ownerSupportTicketPage(ticketData, session) {
+  const { ticket, messages } = ticketData;
+  const messagesHtml = messages.map((message) => `<article class="card" style="padding:15px;border-color:${message.internal ? 'rgba(255,202,100,.35)' : 'var(--line)'}"><div class="section-kicker">${message.internal ? 'BELSŐ JEGYZET' : escapeHtml(message.source.toUpperCase())}</div><strong>${escapeHtml(message.author_name)}</strong><p>${escapeHtml(message.content).replaceAll('\n','<br>')}</p><div class="muted">${escapeHtml(new Date(message.created_at).toLocaleString('hu-HU'))}</div></article>`).join('');
+  const content = `<div class="page-head"><div><div class="section-kicker">SUPPORT OPERATIONS • #${ticket.id}</div><h1>${escapeHtml(ticket.subject)}</h1><p class="muted">${escapeHtml(ticket.username)} (${escapeHtml(ticket.user_id)}) • ${escapeHtml(ticket.category)}</p></div><a class="btn secondary" href="/owner/support">← Support lista</a></div><div class="grid"><section class="card section"><h2>Ügyvezérlés</h2><form method="post" action="/owner/support/${ticket.id}/manage"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="field-grid"><div><label>Prioritás</label><select name="value"><option value="low">Alacsony</option><option value="normal">Normál</option><option value="high">Magas</option><option value="urgent">Sürgős</option></select><button class="btn secondary small" name="action" value="priority">Prioritás mentése</button></div><div><label>Állapot</label><select name="status_value"><option value="open">Nyitott</option><option value="pending">Várakozik</option><option value="closed">Lezárt</option></select><button class="btn secondary small" name="action" value="status">Állapot mentése</button></div></div><div class="actions"><button class="btn green" name="action" value="claim">Magamhoz veszem</button><button class="btn secondary" name="action" value="unclaim">Felelős törlése</button></div></form></section><section class="card section"><h2>Belső jegyzet</h2><form method="post" action="/owner/support/${ticket.id}/note"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><textarea name="content" maxlength="4000" required placeholder="Ezt az ügyfél nem látja."></textarea><button class="btn" type="submit">Belső jegyzet mentése</button></form></section></div><div class="record-list" style="margin-top:18px">${messagesHtml}</div>`;
+  return layout(`Owner Support #${ticket.id}`, content, session, null);
+}
+
+async function notificationsPage(session) {
+  const notifications = await listNotifications(session.user.id);
+  await markNotificationsRead(session.user.id);
+  const rows = notifications.map((item) => `<a class="record" href="${escapeHtml(item.link || '/support')}" style="text-decoration:none"><div><strong>${escapeHtml(item.title)}</strong><div class="muted">${escapeHtml(item.body)}</div></div><span class="badge ${item.read_at ? '' : 'ultimate'}">${item.read_at ? 'OLVASOTT' : 'ÚJ'}</span></a>`).join('') || '<div class="notice">Nincs értesítésed.</div>';
+  return layout('Értesítések', `<div class="page-head"><div><div class="section-kicker">NEXA NOTIFICATION CENTER</div><h1>Értesítések</h1></div><a class="btn secondary" href="/dashboard">← Dashboard</a></div><div class="record-list">${rows}</div>`, session, null);
 }
 
 async function readBody(request) {
@@ -6160,7 +6203,7 @@ function defaultHealthSnapshot(client) {
   const startup = process.uptime() < 180;
   return {
     name: 'NexaBot',
-    version: '12.0.0',
+    version: '13.0.0',
     healthy: ready || startup,
     status: ready ? 'online' : startup ? 'starting' : 'offline',
     guilds: client.guilds?.cache?.size || 0,
@@ -6258,7 +6301,10 @@ async function handleRequest(client, request, response, healthProvider = null) {
     if (sid) sessions.delete(sid);
     return redirect(response, '/', sessionCookie('', 0));
   }
-  if ((url.pathname.startsWith('/dashboard') || url.pathname.startsWith('/owner') || url.pathname.startsWith('/billing') || url.pathname.startsWith('/support')) && !session) return redirect(response, '/login');
+  if ((url.pathname.startsWith('/dashboard') || url.pathname.startsWith('/owner') || url.pathname.startsWith('/billing') || url.pathname.startsWith('/support') || url.pathname.startsWith('/notifications')) && !session) return redirect(response, '/login');
+  if (request.method === 'GET' && url.pathname === '/notifications') {
+    return sendHtml(response, 200, await notificationsPage(session));
+  }
   if (request.method === 'GET' && url.pathname === '/support') {
     return sendHtml(response, 200, await webSupportPage(session, url.searchParams.get('created') === '1' ? 'A ticket létrejött a hivatalos Support szerveren.' : ''));
   }
@@ -6270,8 +6316,9 @@ async function handleRequest(client, request, response, healthProvider = null) {
       const content = String(form.get('content') || '').trim().slice(0, 4000);
       const allowedCategories = new Set(['technical', 'bug', 'billing', 'partnership', 'other']);
       const category = allowedCategories.has(form.get('category')) ? form.get('category') : 'other';
+      const priority = ['low', 'normal', 'high', 'urgent'].includes(form.get('priority')) ? form.get('priority') : 'normal';
       if (subject.length < 3 || content.length < 5) throw new Error('Adj meg értelmes témát és részletes üzenetet.');
-      const ticket = await createWebTicket(client, session.user, { subject, category, content });
+      const ticket = await createWebTicket(client, session.user, { subject, category, content, priority });
       await recordAudit('web_support_create', { actorId: session.user.id, targetId: String(ticket.id) });
       return redirect(response, `/support/${ticket.id}`, null, 303);
     } catch (error) {
@@ -6279,7 +6326,7 @@ async function handleRequest(client, request, response, healthProvider = null) {
       return sendHtml(response, 400, errorPage('A segítségkérés nem nyitható meg', error.message, session));
     }
   }
-  const supportMatch = url.pathname.match(/^\/support\/(\d+)(?:\/(reply))?$/);
+  const supportMatch = url.pathname.match(/^\/support\/(\d+)(?:\/(reply|rate))?$/);
   if (supportMatch) {
     const ticketData = await getWebTicket(supportMatch[1], session.user.id, isOwnerUser(session.user.id));
     if (!ticketData) return sendHtml(response, 404, errorPage('A ticket nem található', 'Ehhez az ügyhöz nincs hozzáférésed.', session));
@@ -6290,6 +6337,12 @@ async function handleRequest(client, request, response, healthProvider = null) {
       const content = String(form.get('content') || '').trim().slice(0, 4000);
       if (content.length < 1 || ticketData.ticket.status !== 'open') return sendHtml(response, 400, errorPage('A válasz nem küldhető el', 'Az üzenet üres vagy a ticket már lezárult.', session));
       await addWebReply(client, ticketData.ticket, session.user, content);
+      return redirect(response, `/support/${ticketData.ticket.id}`, null, 303);
+    }
+    if (request.method === 'POST' && supportMatch[2] === 'rate') {
+      const form = await readBody(request);
+      if (form.get('csrf') !== session.csrf) return sendHtml(response, 403, errorPage('Lejárt munkamenet', 'Frissítsd az oldalt.', session));
+      await rateWebTicket(ticketData.ticket.id, session.user.id, form.get('rating'), form.get('comment'));
       return redirect(response, `/support/${ticketData.ticket.id}`, null, 303);
     }
   }
@@ -6331,6 +6384,30 @@ async function handleRequest(client, request, response, healthProvider = null) {
   if (url.pathname.startsWith('/owner')) {
     if (!isOwnerUser(session.user.id)) {
       return sendHtml(response, 403, errorPage('Tulajdonosi hozzáférés szükséges', 'Ezt az oldalt csak a bot tulajdonosa és az általa kijelölt kezelők nyithatják meg.', session));
+    }
+    if (request.method === 'GET' && url.pathname === '/owner/support') {
+      return sendHtml(response, 200, await ownerSupportPage(session, url));
+    }
+    const ownerSupportMatch = url.pathname.match(/^\/owner\/support\/(\d+)(?:\/(manage|note))?$/);
+    if (ownerSupportMatch) {
+      const ticketData = await getWebTicket(ownerSupportMatch[1], session.user.id, true);
+      if (!ticketData) return sendHtml(response, 404, errorPage('A ticket nem található', 'Az ügy már nem érhető el.', session));
+      if (request.method === 'GET' && !ownerSupportMatch[2]) return sendHtml(response, 200, await ownerSupportTicketPage(ticketData, session));
+      if (request.method === 'POST') {
+        const form = await readBody(request);
+        if (form.get('csrf') !== session.csrf) return sendHtml(response, 403, errorPage('Lejárt munkamenet', 'Frissítsd az oldalt.', session));
+        if (ownerSupportMatch[2] === 'note') {
+          const content = String(form.get('content') || '').trim().slice(0, 4000);
+          if (!content) return sendHtml(response, 400, errorPage('Üres jegyzet', 'A belső jegyzet nem lehet üres.', session));
+          await addInternalNote(ownerSupportMatch[1], session.user, content);
+        } else {
+          const action = String(form.get('action') || '');
+          const value = action === 'status' ? form.get('status_value') : form.get('value');
+          await manageWebTicket(client, ownerSupportMatch[1], session.user, action, value);
+        }
+        await recordAudit('owner_support_manage', { actorId: session.user.id, targetId: ownerSupportMatch[1], metadata: { action: ownerSupportMatch[2] } });
+        return redirect(response, `/owner/support/${ownerSupportMatch[1]}`, null, 303);
+      }
     }
     if (request.method === 'GET' && url.pathname === '/owner') {
       return sendHtml(response, 200, await ownerDashboard(client, session, url.searchParams.get('saved') === '1', {
@@ -8756,7 +8833,7 @@ function helpEmbed(category = null, language = 'hu') {
       .setTitle(language === 'en' ? '✨ NEXA Bot Help Center' : '✨ NEXA Bot Súgóközpont')
       .setDescription(language === 'en' ? 'Choose a category below. I will show only the commands and usage for that system.' : 'Válassz egy kategóriát az alábbi menüből. Csak az adott rendszer parancsait és használatát mutatom meg.')
       .addFields({ name: language === 'en' ? 'Tip' : 'Tipp', value: language === 'en' ? 'Most features are also available through buttons in the Discord Control Center and the web dashboard.' : 'A legtöbb funkció a Discord Control Center gombjaival és a webes dashboardon is használható.' })
-      .setFooter({ text: 'NEXA Bot 12.0 • AEGIS Platform' });
+      .setFooter({ text: 'NEXA Bot 13.0 • AEGIS Platform' });
   }
   const item = CATEGORIES[category];
   const englishTitles = { moderation: 'Moderation', utility: 'Utility', security: 'Security', tickets: 'Tickets', levels: 'Levels', giveaway: 'Giveaway', ai: 'AI', admin: 'Admin' };
@@ -8764,7 +8841,7 @@ function helpEmbed(category = null, language = 'hu') {
     .setColor(COLORS.primary)
     .setTitle(`${item.emoji} ${language === 'en' ? englishTitles[category] : item.title}`)
     .setDescription(language === 'en' ? item.en : item.text)
-    .setFooter({ text: language === 'en' ? 'NEXA Bot 12.0 • Choose another category from the menu' : 'NEXA Bot 12.0 • Válassz másik kategóriát a menüből' });
+    .setFooter({ text: language === 'en' ? 'NEXA Bot 13.0 • Choose another category from the menu' : 'NEXA Bot 13.0 • Válassz másik kategóriát a menüből' });
 }
 
 function buildHelpCommand() {
@@ -8958,7 +9035,7 @@ client.once(Events.ClientReady, async (readyClient) => {
     }
     console.log(`NexaBot elindult: ${readyClient.user.tag}`);
     await restoreGiveaways(readyClient);
-    console.log('A NEXA Bot 12.0 Billing Operations Platform használatra kész.');
+    console.log('A NEXA Bot 13.0 Premium Support Operations Platform használatra kész.');
   } catch (error) {
     console.error('A parancs regisztrálása nem sikerült:', error);
     await recordError(error, { command: 'registerCommands' });
@@ -11314,7 +11391,7 @@ module.exports = {
 const { Events, Status } = require('discord.js');
 const { databaseHealth } = require('./config');
 
-const APP_VERSION = '12.0.0';
+const APP_VERSION = '13.0.0';
 
 function positiveInteger(value, fallback, minimum = 1_000, maximum = 60 * 60 * 1000) {
   const parsed = Number.parseInt(value, 10);
@@ -14521,6 +14598,13 @@ const { SUPPORT_GUILD_ID } = require('./constants');
 const { dbQuery } = require('./config');
 const { safeChannelName, baseEmbed } = require('./utils');
 
+const SUPPORT_PRIORITIES = new Set(['low', 'normal', 'high', 'urgent']);
+const SUPPORT_STATUSES = new Set(['open', 'pending', 'closed']);
+
+function normalizePriority(value) {
+  return SUPPORT_PRIORITIES.has(value) ? value : 'normal';
+}
+
 async function listWebTickets(userId) {
   const result = await dbQuery(
     'SELECT * FROM nexabot_web_support_tickets WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 50',
@@ -14537,24 +14621,41 @@ async function getWebTicket(ticketId, userId, owner = false) {
   const ticket = result?.rows?.[0] || null;
   if (!ticket) return null;
   const messages = await dbQuery(
-    'SELECT * FROM nexabot_web_support_messages WHERE ticket_id = $1 ORDER BY created_at ASC LIMIT 500',
+    `SELECT * FROM nexabot_web_support_messages WHERE ticket_id = $1${owner ? '' : ' AND internal=FALSE'} ORDER BY created_at ASC LIMIT 500`,
     [ticketId]
   );
   return { ticket, messages: messages?.rows || [] };
 }
 
-async function createWebTicket(client, user, { subject, category, content }) {
+async function listAllWebTickets({ status = '', priority = '', search = '' } = {}) {
+  const values = [];
+  const where = [];
+  if (SUPPORT_STATUSES.has(status)) { values.push(status); where.push(`status=$${values.length}`); }
+  if (SUPPORT_PRIORITIES.has(priority)) { values.push(priority); where.push(`priority=$${values.length}`); }
+  if (search) { values.push(`%${String(search).slice(0, 100)}%`); where.push(`(subject ILIKE $${values.length} OR username ILIKE $${values.length} OR CAST(id AS TEXT) ILIKE $${values.length})`); }
+  const result = await dbQuery(`SELECT * FROM nexabot_web_support_tickets${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 ELSE 4 END, updated_at DESC LIMIT 250`, values);
+  return result?.rows || [];
+}
+
+async function ensureSupportDestination(guild) {
+  await guild.channels.fetch().catch(() => null);
+  await guild.roles.fetch().catch(() => null);
+  let parent = guild.channels.cache.find((channel) => channel.type === ChannelType.GuildCategory && /ticket|support|seg[ií]ts[eé]g/i.test(channel.name));
+  let supportRole = guild.roles.cache.find((role) => !role.managed && /support|ügyf[eé]l|staff/i.test(role.name));
+  if (!supportRole) supportRole = await guild.roles.create({ name: 'NEXA Support Team', permissions: [], reason: 'NEXA 13.0 Support Center öngyógyítás' });
+  if (!parent) parent = await guild.channels.create({ name: '━━━ TICKETS ━━━', type: ChannelType.GuildCategory, reason: 'NEXA 13.0 Support Center öngyógyítás' });
+  return { parent, supportRole };
+}
+
+async function createWebTicket(client, user, { subject, category, content, priority = 'normal' }) {
   const guild = client.guilds.cache.get(SUPPORT_GUILD_ID);
   if (!guild) throw new Error('A hivatalos NEXA Support szerver jelenleg nem elérhető.');
-  const parent = guild.channels.cache.find((channel) =>
-    channel.type === ChannelType.GuildCategory && ['━━━ TICKETS ━━━', '━━━ TICKETEK ━━━'].includes(channel.name)
-  );
-  const supportRole = guild.roles.cache.find((role) => ['NEXA Support Team', 'Support Team'].includes(role.name));
-  if (!parent || !supportRole) throw new Error('A Support Center automatikus beállítása még nem fejeződött be.');
+  const { parent, supportRole } = await ensureSupportDestination(guild);
+  priority = normalizePriority(priority);
   const inserted = await dbQuery(
-    `INSERT INTO nexabot_web_support_tickets (user_id, username, subject, category)
-     VALUES ($1,$2,$3,$4) RETURNING *`,
-    [user.id, user.username, subject, category]
+    `INSERT INTO nexabot_web_support_tickets (user_id, username, subject, category, priority)
+     VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+    [user.id, user.username, subject, category, priority]
   );
   const ticket = inserted.rows[0];
   try {
@@ -14577,7 +14678,7 @@ async function createWebTicket(client, user, { subject, category, content }) {
     );
     await channel.send({
       content: `<@&${supportRole.id}>`,
-      embeds: [baseEmbed(`🌐 Web Support #${ticket.id} • ${subject}`, `**Felhasználó:** ${user.username} (${user.id})\n**Kategória:** ${category}\n\n${content}`)]
+      embeds: [baseEmbed(`🌐 Web Support #${ticket.id} • ${subject}`, `**Felhasználó:** ${user.username} (${user.id})\n**Kategória:** ${category}\n**Prioritás:** ${priority.toUpperCase()}\n\n${content}`)]
     });
     return { ...ticket, channel_id: channel.id };
   } catch (error) {
@@ -14597,6 +14698,39 @@ async function addWebReply(client, ticket, user, content) {
   if (channel?.isTextBased()) await channel.send({ embeds: [baseEmbed(`🌐 Webes válasz • #${ticket.id}`, `**${user.username}:**\n${content}`)] });
 }
 
+async function manageWebTicket(client, ticketId, actor, action, value = '') {
+  const data = await getWebTicket(ticketId, actor.id, true);
+  if (!data) throw new Error('A ticket nem található.');
+  const ticket = data.ticket;
+  if (action === 'claim') await dbQuery('UPDATE nexabot_web_support_tickets SET assigned_to=$1, assigned_name=$2, updated_at=NOW() WHERE id=$3', [actor.id, actor.username, ticketId]);
+  else if (action === 'unclaim') await dbQuery('UPDATE nexabot_web_support_tickets SET assigned_to=NULL, assigned_name=NULL, updated_at=NOW() WHERE id=$1', [ticketId]);
+  else if (action === 'priority') await dbQuery('UPDATE nexabot_web_support_tickets SET priority=$1, updated_at=NOW() WHERE id=$2', [normalizePriority(value), ticketId]);
+  else if (action === 'status' && SUPPORT_STATUSES.has(value)) await dbQuery("UPDATE nexabot_web_support_tickets SET status=$1, closed_at=CASE WHEN $1='closed' THEN NOW() ELSE NULL END, updated_at=NOW() WHERE id=$2", [value, ticketId]);
+  else throw new Error('Ismeretlen Support-művelet.');
+  const channel = client.channels.cache.get(ticket.channel_id);
+  if (channel?.isTextBased()) await channel.send({ embeds: [baseEmbed(`Support #${ticketId} frissítve`, `**${actor.username}** • ${action}: ${value || '—'}`)] });
+}
+
+async function addInternalNote(ticketId, actor, content) {
+  await dbQuery(`INSERT INTO nexabot_web_support_messages (ticket_id, author_id, author_name, source, content, internal) VALUES ($1,$2,$3,'owner',$4,TRUE)`, [ticketId, actor.id, actor.username, content]);
+  await dbQuery('UPDATE nexabot_web_support_tickets SET updated_at=NOW() WHERE id=$1', [ticketId]);
+}
+
+async function rateWebTicket(ticketId, userId, rating, comment = '') {
+  const score = Math.max(1, Math.min(5, Number(rating) || 0));
+  const result = await dbQuery("UPDATE nexabot_web_support_tickets SET rating=$1, rating_comment=$2, updated_at=NOW() WHERE id=$3 AND user_id=$4 AND status='closed' RETURNING id", [score, String(comment).slice(0, 1000), ticketId, userId]);
+  if (!result?.rowCount) throw new Error('Csak lezárt saját ticket értékelhető.');
+}
+
+async function listNotifications(userId) {
+  const result = await dbQuery('SELECT * FROM nexabot_web_notifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100', [userId]);
+  return result?.rows || [];
+}
+
+async function markNotificationsRead(userId) {
+  await dbQuery('UPDATE nexabot_web_notifications SET read_at=NOW() WHERE user_id=$1 AND read_at IS NULL', [userId]);
+}
+
 async function captureDiscordSupportReply(message) {
   if (!message.guild || message.guild.id !== SUPPORT_GUILD_ID || message.author.bot) return;
   const match = String(message.channel.topic || '').match(/^nexabot-web-support\|(\d+)\|(\d{16,22})$/);
@@ -14607,9 +14741,10 @@ async function captureDiscordSupportReply(message) {
     [match[1], message.author.id, message.author.username, message.content.trim().slice(0, 4000)]
   );
   await dbQuery('UPDATE nexabot_web_support_tickets SET updated_at=NOW() WHERE id=$1', [match[1]]);
+  await dbQuery(`INSERT INTO nexabot_web_notifications (user_id, type, title, body, link) VALUES ($1,'support',$2,$3,$4)`, [match[2], `Új Support-válasz • #${match[1]}`, message.content.trim().slice(0, 300), `/support/${match[1]}`]);
 }
 
-module.exports = { listWebTickets, getWebTicket, createWebTicket, addWebReply, captureDiscordSupportReply };
+module.exports = { listWebTickets, listAllWebTickets, getWebTicket, createWebTicket, addWebReply, manageWebTicket, addInternalNote, rateWebTicket, listNotifications, markNotificationsRead, captureDiscordSupportReply, normalizePriority };
 
 }
 };
