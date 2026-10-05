@@ -3037,6 +3037,9 @@ function defaultConfig(guildId) {
       levelUp: 'Gratulálok {tag}, elérted a(z) {level}. szintet!',
       ticket: 'Válaszd ki az ügyed kategóriáját. A bot privát ügycsatornát nyit neked és a kijelölt ügyintézőknek.'
     },
+    tickets: {
+      enabledTypes: ['support', 'report', 'purchase', 'partnership', 'other']
+    },
     protection: {
       sensitivity: 'medium',
       spam: true,
@@ -3125,6 +3128,7 @@ function sanitizeConfig(guildId, input = {}) {
     channels: { ...defaults.channels },
     roles: { ...defaults.roles },
     messages: { ...defaults.messages },
+    tickets: { ...defaults.tickets },
     protection: { ...defaults.protection },
     community: { ...defaults.community },
     shift: { ...defaults.shift },
@@ -3149,6 +3153,13 @@ function sanitizeConfig(guildId, input = {}) {
   config.messages.goodbye = goodbye || defaults.messages.goodbye;
   config.messages.levelUp = levelUp || defaults.messages.levelUp;
   config.messages.ticket = ticket || defaults.messages.ticket;
+
+  const allowedTicketTypes = new Set(['support', 'report', 'purchase', 'partnership', 'other']);
+  config.tickets.enabledTypes = input.tickets?.enabledTypes === undefined
+    ? [...defaults.tickets.enabledTypes]
+    : [...new Set((Array.isArray(input.tickets.enabledTypes) ? input.tickets.enabledTypes : [])
+      .map((type) => String(type || '').trim().toLowerCase())
+      .filter((type) => allowedTicketTypes.has(type)))];
 
   const sensitivity = String(input.protection?.sensitivity || 'medium');
   config.protection.sensitivity = ['strict', 'medium', 'relaxed'].includes(sensitivity) ? sensitivity : 'medium';
@@ -4125,7 +4136,9 @@ const COLORS = Object.freeze({
   neutral: 0x2b324a
 });
 
-module.exports = { NAMES, COLORS };
+const SUPPORT_GUILD_ID = '1556219615858655254';
+
+module.exports = { NAMES, COLORS, SUPPORT_GUILD_ID };
 
 },
 "src/control-center.js": function(module, exports, require) {
@@ -4621,10 +4634,16 @@ tbody tr:hover{background:rgba(255,255,255,.018)}
 /* AEGIS */
 .aegis-score{display:grid;place-items:center;width:168px;aspect-ratio:1;border:1px solid #514235;border-radius:50%;background:radial-gradient(circle,#1d1814 0 54%,transparent 55%),conic-gradient(var(--accent) var(--score),#2d2721 0);padding:7px}.aegis-score>div{display:grid;place-items:center;width:100%;height:100%;border-radius:50%;background:#11100e;text-align:center}.aegis-score strong{font-size:38px;line-height:1}.aegis-score span{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:1px}.risk-critical{color:#ff7d88}.risk-high{color:#e5a267}.risk-medium{color:#d5bf78}.risk-low{color:#91aaa2}.dna-code{display:block;max-width:100%;overflow-wrap:anywhere;padding:10px;border:1px solid #332c26;border-radius:7px;background:#0d0c0b;color:#d2b079;font:10px/1.5 ui-monospace,monospace}
 
+/* Dedicated ticket center */
+.ticket-center{border-color:#31506a;background:radial-gradient(700px 300px at 100% 0,rgba(56,139,181,.12),transparent),linear-gradient(145deg,#101820,#0c1118)}
+.ticket-status-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:18px 0 28px}.ticket-status-grid>div{padding:14px;border:1px solid #273b4d;border-radius:10px;background:#0b1219}.ticket-status-grid strong,.ticket-status-grid span{display:block}.ticket-status-grid strong{margin-bottom:7px;color:#758da2;font:850 9px/1.2 ui-monospace,monospace;text-transform:uppercase;letter-spacing:.8px}.ticket-status-grid span{color:#d8e5ef;font-size:12px;font-weight:800}
+.ticket-flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr auto 1fr;gap:9px;align-items:center;margin-top:22px;padding:14px;border:1px solid #294459;border-radius:10px;background:#091118}.ticket-flow span{padding:9px;border-radius:7px;background:#111d27;color:#c6d9e8;text-align:center;font-size:10px;font-weight:850}.ticket-flow b{color:#5eaacb}
+.settings-jump{position:sticky;top:68px;z-index:8;display:flex;gap:7px;overflow-x:auto;margin:0 0 16px;padding:9px;border:1px solid #293645;border-radius:11px;background:rgba(9,13,18,.94);backdrop-filter:blur(14px)}.settings-jump a{flex:0 0 auto;padding:8px 11px;border-radius:7px;color:#8d9bad;text-decoration:none;font-size:10px;font-weight:850}.settings-jump a:hover{background:#182430;color:#e7f2fa}
+
 @media(min-width:1500px){.owner-mode main{max-width:1700px}.owner-server-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:1180px) and (min-width:901px){.access-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:1180px){.marketing .hero{grid-template-columns:1fr;gap:25px}.product-stage{max-width:760px}.live-network{grid-template-columns:repeat(2,1fr)}.network-intro{grid-column:1/-1}.network-stat{border-top:1px solid #202b38}.capability-grid{grid-template-columns:repeat(2,1fr)}.capability.wide{grid-column:auto}.owner-server-actions{grid-template-columns:repeat(2,1fr)}.knowledge-index{grid-template-columns:repeat(2,1fr)}.pricing-grid{grid-template-columns:repeat(2,1fr)}.billing-grid{grid-template-columns:1fr}.billing-plans{grid-template-columns:1fr}}
-@media(max-width:900px){.app{grid-template-columns:1fr}.sidebar{display:none}main{padding:28px 18px 80px}.public-main{padding-top:0}.marketing .hero{min-height:auto;padding-top:60px}.topbar-inner{padding:0 16px}.section-heading,.security-showcase{grid-template-columns:1fr}.live-network{grid-template-columns:1fr 1fr}.owner-server-grid{grid-template-columns:1fr}.workflow{grid-template-columns:1fr}.workflow-step{border-top:1px solid #263342}.access-grid{grid-template-columns:1fr}.knowledge-grid{grid-template-columns:1fr}.site-footer{flex-wrap:wrap}.site-footer>a:not(.brand){margin-left:0}}
+@media(max-width:900px){.app{grid-template-columns:1fr}.sidebar{display:none}main{padding:28px 18px 80px}.public-main{padding-top:0}.marketing .hero{min-height:auto;padding-top:60px}.topbar-inner{padding:0 16px}.section-heading,.security-showcase{grid-template-columns:1fr}.live-network{grid-template-columns:1fr 1fr}.owner-server-grid{grid-template-columns:1fr}.workflow{grid-template-columns:1fr}.workflow-step{border-top:1px solid #263342}.access-grid{grid-template-columns:1fr}.knowledge-grid{grid-template-columns:1fr}.site-footer{flex-wrap:wrap}.site-footer>a:not(.brand){margin-left:0}.ticket-status-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ticket-flow{grid-template-columns:1fr}.ticket-flow b{display:none}}
 @media(max-width:600px){.topbar{height:64px}.marketing .hero h1{font-size:48px;letter-spacing:-3px}.product-stage{display:none}.capability-grid{grid-template-columns:1fr}.live-network{grid-template-columns:1fr}.network-intro,.network-stat{grid-column:auto;border-left:0}.section-block{padding-top:70px}.owner-server-metrics{grid-template-columns:repeat(2,1fr)}.owner-server-actions{grid-template-columns:1fr}.owner-package{grid-template-columns:1fr}.page-head{align-items:flex-start;flex-direction:column}.stats{grid-template-columns:1fr 1fr}.stat{padding:15px}.console-line{grid-template-columns:60px 1fr}.console-line b{display:none}.knowledge-hero h1{font-size:45px;letter-spacing:-2.6px}.knowledge-index{grid-template-columns:1fr}.knowledge-body dl>div{grid-template-columns:1fr;gap:3px}.pricing-grid{grid-template-columns:1fr}.pricing-hero h1{font-size:44px;letter-spacing:-2.5px}.billing-plans{grid-template-columns:1fr}}
 `;
 }
@@ -4635,7 +4654,7 @@ module.exports = { dashboardTheme };
 "src/dashboard.js": function(module, exports, require) {
 const crypto = require('node:crypto');
 const { ChannelType, EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
-const { NAMES } = require('./constants');
+const { NAMES, SUPPORT_GUILD_ID } = require('./constants');
 const { dashboardTheme } = require('./dashboard-theme');
 const {
   getGuildConfig,
@@ -5682,20 +5701,21 @@ function settingsPage(guild, config, session, saved = false) {
   const icon = guild.icon
     ? `<img alt="" src="https://cdn.discordapp.com/icons/${escapeHtml(guild.id)}/${escapeHtml(guild.icon)}.png">`
     : `<div class="server-icon">${escapeHtml(guild.name.slice(0, 2).toUpperCase())}</div>`;
+  const ticketSection = `<section id="tickets" class="card section ticket-center"><div class="section-kicker">NEXA CASE MANAGEMENT</div><h2 class="section-title">🎟️ Külön Ticket Center</h2><div class="notice">Itt egy helyen állítható a teljes általános ticket-rendszer. A hivatalos <strong>NEXA Support Gateway</strong> ettől elkülönül, és kizárólag a <code>${SUPPORT_GUILD_ID}</code> azonosítójú Support szerveren működik.</div><div class="ticket-status-grid"><div><strong>Modul</strong><span>${config.modules.tickets ? '🟢 Bekapcsolva' : '⚫ Kikapcsolva'}</span></div><div><strong>Panelcsatorna</strong><span>${config.channels.ticketPanel ? '✅ Kiválasztva' : '⚠️ Nincs beállítva'}</span></div><div><strong>Ticket-kategória</strong><span>${config.channels.ticketCategory ? '✅ Kiválasztva' : '⚠️ Nincs beállítva'}</span></div><div><strong>Ügyintéző rang</strong><span>${config.roles.staff ? '✅ Kiválasztva' : '⚠️ Nincs beállítva'}</span></div></div><h3>1. Rendszer és útvonalak</h3><div class="module-grid">${moduleCheck(guild.id,"tickets","module_tickets","Általános ticket-rendszer",config.modules.tickets,"Privát ügycsatorna, Staff-kezelés és HTML transcript.")}</div><div class="field-grid">${selectField("channel_ticketPanel","Ticketpanel csatornája",textChannels(config.channels.ticketPanel),"Ide kerül a szerver saját Ügyintézési központ panelje.")}${selectField("channel_ticketCategory","Létrehozott ticketek kategóriája",categories(config.channels.ticketCategory),"A privát ticketcsatornákat ebben a Discord-kategóriában hozza létre.")}${selectField("role_staff","Ügyintéző / Staff rang",roles(config.roles.staff),"Ez a rang látja és kezelheti a ticketeket, valamint a moderációt.")}</div><h3>2. Engedélyezett ticket-típusok</h3><p class="muted">Csak a bejelölt típusok jelennek meg a szerver ügyintézési paneljén.</p><div class="module-grid">${check("ticket_type_support","Kérdés vagy segítség",config.tickets.enabledTypes.includes("support"),"Általános segítségkérés.")}${check("ticket_type_report","Tag vagy probléma bejelentése",config.tickets.enabledTypes.includes("report"),"Bizalmas bejelentés a Staffnak.")}${check("ticket_type_purchase","Vásárlás vagy számlázás",config.tickets.enabledTypes.includes("purchase"),"Szerverhez kapcsolódó vásárlási ügy.")}${check("ticket_type_partnership","Partnerség és együttműködés",config.tickets.enabledTypes.includes("partnership"),"Partneri megkeresések.")}${check("ticket_type_other","Egyéb ügy",config.tickets.enabledTypes.includes("other"),"Más kategóriába nem tartozó ügy.")}</div><h3>3. Panel szövege</h3><div><label for="message_ticket">Ügyintézési panel leírása</label><textarea id="message_ticket" name="message_ticket">${escapeHtml(config.messages.ticket)}</textarea><div class="help">Mentés után a bot frissíti vagy létrehozza a panelt a kiválasztott csatornában.</div></div><div class="ticket-flow"><span>① Típusválasztás</span><b>→</b><span>② Privát csatorna</span><b>→</b><span>③ Staff claim</span><b>→</b><span>④ Lezárás és HTML transcript</span></div></section>`;
   const content = `<div class="page-head server">${icon}<div class="server-body"><div class="section-kicker">NEXA Command Deck</div><h1>${escapeHtml(guild.name)} <span class="badge ${plan}">${planName(plan)}</span></h1><div class="muted">Valós idejű modul-, csatorna- és jogosultságkezelés${entitlement.expiresAt ? ` • lejár: ${escapeHtml(entitlement.expiresAt.toLocaleDateString('hu-HU'))}` : ''}</div></div><div class="actions"><a class="btn secondary" href="/dashboard">← Szerverek</a><a class="btn" href="/billing?guild=${escapeHtml(guild.id)}">Csomag és számlázás</a></div></div>
 <div class="stats"><div class="stat"><div class="stat-value">${guild.memberCount}</div><div class="stat-label">Tag</div></div><div class="stat"><div class="stat-value">${guild.channels.cache.size}</div><div class="stat-label">Csatorna</div></div><div class="stat"><div class="stat-value">${guild.roles.cache.size}</div><div class="stat-label">Rang</div></div><div class="stat"><div class="stat-value">${enabledModules}</div><div class="stat-label">Aktív modul</div></div></div>
 <div class="grid" style="margin:0 0 20px"><article class="card"><div class="feature-icon">✅</div><div class="section-kicker">IDENTITY GATEWAY</div><h3>Gombos tagellenőrzés</h3><p class="muted">Modern beléptetőpanel automatikus rangkiosztással és auditnaplóval.</p><span class="badge ${config.modules.verification ? 'ultimate' : ''}">${config.modules.verification ? 'AKTÍV' : 'KIKAPCSOLVA'}</span></article><article class="card"><div class="feature-icon">⭐</div><div class="section-kicker">COMMUNITY SIGNAL</div><h3>NEXA Starboard</h3><p class="muted">A közösség legjobb üzenetei automatikusan látványos kiemelést kapnak.</p><span class="badge ${config.modules.starboard ? 'ultimate' : ''}">${config.modules.starboard ? 'AKTÍV' : 'KIKAPCSOLVA'}</span></article><article class="card"><div class="feature-icon">⏰</div><div class="section-kicker">PERSISTENT JOBS</div><h3>Okos emlékeztetők</h3><p class="muted">PostgreSQL-alapú értesítések, amelyek újraindítás után is megmaradnak.</p><span class="badge ${config.modules.reminders ? 'ultimate' : ''}">${config.modules.reminders ? 'AKTÍV' : 'KIKAPCSOLVA'}</span></article></div>
 ${saved ? '<div class="notice">✅ A NEXA Bot beállításai és a kiválasztott panelek frissültek.</div>' : ''}${!isPersistentStore() ? '<div class="notice warn">⚠️ Az adatbázis még nincs beállítva, ezért az AI-memória, XP, emlékeztetők és szolgálati statisztika újraindításkor elveszhet.</div>' : ''}${rpEnabled ? '<div class="notice">🎭 <strong>Owner RP aktív ezen a szerveren.</strong> Discordon a /telepites paranccsal a teljes alap RP-rendszer, a /dokumentum-panelek paranccsal pedig kizárólag a meglévő csatornák dokumentumpaneljei telepíthetők.</div>' : ''}
-<form method="post" action="/dashboard/guild/${escapeHtml(guild.id)}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="settings">
-<section id="modules" class="card section"><div class="section-kicker">Alaprendszer • ${planName(plan)}</div><h2 class="section-title">⬡ Modulmátrix</h2><div class="field-grid"><div><label for="language">Bot nyelve ezen a szerveren</label><select id="language" name="language">${option('hu','Magyar (alapértelmezett)',config.language)}${option('en','English',config.language)}</select><div class="help">A panelek és a Discord-válaszok a kiválasztott nyelven jelennek meg.</div></div></div><div class="module-grid">${moduleCheck(guild.id,'protection','module_protection','Automod és védelem',config.modules.protection,'Spam-, link- és tartalomvédelem. Anti-Nuke és raid csak Ultimate csomagban.')}${moduleCheck(guild.id,'moderation','module_moderation','Moderáció',config.modules.moderation,'Case ID és tagválasztós moderációs panel.')}${moduleCheck(guild.id,'logging','module_logging','Részletes naplózás',config.modules.logging)}${moduleCheck(guild.id,'tickets','module_tickets','Ticket és segítségkérés',config.modules.tickets,'Privát ügyintézés és HTML transcript.')}${moduleCheck(guild.id,'welcome','module_welcome','Welcome és Auto Role',config.modules.welcome)}${moduleCheck(guild.id,'levels','module_levels','XP és szintrendszer',config.modules.levels)}${moduleCheck(guild.id,'reactionRoles','module_reactionRoles','Button / Reaction Role',config.modules.reactionRoles)}${moduleCheck(guild.id,'customCommands','module_customCommands','Custom Commands',config.modules.customCommands)}${moduleCheck(guild.id,'giveaways','module_giveaways','Giveaway',config.modules.giveaways)}${moduleCheck(guild.id,'suggestions','module_suggestions','Közösségi extrák',config.modules.suggestions,'Ötletek, szavazás és bejelentés.')}${moduleCheck(guild.id,'shift','module_shift','Shift Management',config.modules.shift,'Szolgálat, szünet, statisztika és napló.')}${moduleCheck(guild.id,'ai','module_ai','Nexa AI és memória',config.modules.ai,'Csak Owner által engedélyezett felhasználók használhatják.')}${moduleCheck(guild.id,'tempVoice','module_tempVoice','Ideiglenes hangcsatornák',config.modules.tempVoice)}${moduleCheck(guild.id,'verification','module_verification','Gombos tagellenőrzés',config.modules.verification,'Egy kattintással adja az ellenőrzött tag rangot.')}${moduleCheck(guild.id,'starboard','module_starboard','Starboard',config.modules.starboard,'A legtöbb csillagot kapott üzenetek automatikus kiemelése.')}${moduleCheck(guild.id,'reminders','module_reminders','Emlékeztetők',config.modules.reminders,'Adatbázisos személyes emlékeztetők.')}</div><div class="actions"><a class="btn secondary" href="/dashboard/guild/${escapeHtml(guild.id)}/commands">Custom Command kezelő →</a></div></section>
+<form method="post" action="/dashboard/guild/${escapeHtml(guild.id)}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><nav class="settings-jump"><a href="#modules">Modulok</a><a href="#tickets">Ticket Center</a><a href="#channels">Csatornák</a><a href="#roles">Rangok</a><a href="#anti-raid">Anti-Raid</a><a href="#protection">Automod</a></nav><div class="settings">
+<section id="modules" class="card section"><div class="section-kicker">Alaprendszer • ${planName(plan)}</div><h2 class="section-title">⬡ Modulmátrix</h2><div class="field-grid"><div><label for="language">Bot nyelve ezen a szerveren</label><select id="language" name="language">${option('hu','Magyar (alapértelmezett)',config.language)}${option('en','English',config.language)}</select><div class="help">A panelek és a Discord-válaszok a kiválasztott nyelven jelennek meg.</div></div></div><div class="module-grid">${moduleCheck(guild.id,'protection','module_protection','Automod és védelem',config.modules.protection,'Spam-, link- és tartalomvédelem. Anti-Nuke és raid csak Ultimate csomagban.')}${moduleCheck(guild.id,'moderation','module_moderation','Moderáció',config.modules.moderation,'Case ID és tagválasztós moderációs panel.')}${moduleCheck(guild.id,'logging','module_logging','Részletes naplózás',config.modules.logging)}${moduleCheck(guild.id,'welcome','module_welcome','Welcome és Auto Role',config.modules.welcome)}${moduleCheck(guild.id,'levels','module_levels','XP és szintrendszer',config.modules.levels)}${moduleCheck(guild.id,'reactionRoles','module_reactionRoles','Button / Reaction Role',config.modules.reactionRoles)}${moduleCheck(guild.id,'customCommands','module_customCommands','Custom Commands',config.modules.customCommands)}${moduleCheck(guild.id,'giveaways','module_giveaways','Giveaway',config.modules.giveaways)}${moduleCheck(guild.id,'suggestions','module_suggestions','Közösségi extrák',config.modules.suggestions,'Ötletek, szavazás és bejelentés.')}${moduleCheck(guild.id,'shift','module_shift','Shift Management',config.modules.shift,'Szolgálat, szünet, statisztika és napló.')}${moduleCheck(guild.id,'ai','module_ai','Nexa AI és memória',config.modules.ai,'Csak Owner által engedélyezett felhasználók használhatják.')}${moduleCheck(guild.id,'tempVoice','module_tempVoice','Ideiglenes hangcsatornák',config.modules.tempVoice)}${moduleCheck(guild.id,'verification','module_verification','Gombos tagellenőrzés',config.modules.verification,'Egy kattintással adja az ellenőrzött tag rangot.')}${moduleCheck(guild.id,'starboard','module_starboard','Starboard',config.modules.starboard,'A legtöbb csillagot kapott üzenetek automatikus kiemelése.')}${moduleCheck(guild.id,'reminders','module_reminders','Emlékeztetők',config.modules.reminders,'Adatbázisos személyes emlékeztetők.')}</div><div class="actions"><a class="btn secondary" href="/dashboard/guild/${escapeHtml(guild.id)}/commands">Custom Command kezelő →</a></div></section>
 
 <section class="card section"><div class="section-kicker">Eseményfigyelés</div><h2 class="section-title">📋 Külön kapcsolható logok</h2><div class="module-grid">${check('log_messageDelete','Üzenettörlés',config.logging.messageDelete)}${check('log_messageEdit','Üzenetszerkesztés',config.logging.messageEdit)}${check('log_memberJoin','Belépés',config.logging.memberJoin)}${check('log_memberLeave','Kilépés',config.logging.memberLeave)}${check('log_ban','Ban / unban',config.logging.ban)}${check('log_timeout','Timeout',config.logging.timeout)}${check('log_roleUpdate','Rangváltozás',config.logging.roleUpdate)}${check('log_channelUpdate','Csatornaváltozás',config.logging.channelUpdate)}${check('log_voiceJoin','Voice belépés',config.logging.voiceJoin)}${check('log_voiceLeave','Voice kilépés',config.logging.voiceLeave)}${check('log_nicknameChange','Becenév',config.logging.nicknameChange)}${check('log_invite','Meghívók',config.logging.invite)}${check('log_moderation','Moderáció',config.logging.moderation)}${check('log_automod','Automod',config.logging.automod)}${check('log_security','Security',config.logging.security)}</div></section>
 
-<section id="channels" class="card section"><div class="section-kicker">Útvonalak</div><h2 class="section-title"># Csatornák és kategóriák</h2><div class="field-grid">${selectField('channel_controlCenter','NexaBot fő vezérlőpanel',textChannels(config.channels.controlCenter),'Ide kerül a teljes gombos Discord-panel.')}${selectField('channel_ai','Nexa AI beszélgetőcsatorna',textChannels(config.channels.ai),'Itt minden nem-bot üzenetre válaszol a Nexa AI.')}${selectField('channel_logs','Moderációs napló',textChannels(config.channels.logs))}${selectField('channel_warnings','Figyelmeztetések',textChannels(config.channels.warnings))}${selectField('channel_moderationPanel','Moderációs panel',textChannels(config.channels.moderationPanel))}${selectField('channel_ticketPanel','Általános ügyintézési panel',textChannels(config.channels.ticketPanel),'Ez eltér a hivatalos NEXA Support szerver saját Support Gateway paneljétől.')}${selectField('channel_ticketCategory','Ticket kategória',categories(config.channels.ticketCategory))}${selectField('channel_welcome','Üdvözlőcsatorna',textChannels(config.channels.welcome))}${selectField('channel_goodbye','Búcsúzócsatorna',textChannels(config.channels.goodbye))}${selectField('channel_levels','Szintlépési értesítések',textChannels(config.channels.levels),'Ha nincs kiválasztva, az aktuális csatornába ír.')}${selectField('channel_suggestions','Ötletek csatornája',textChannels(config.channels.suggestions))}${selectField('channel_shiftLogs','Szolgálati napló',textChannels(config.channels.shiftLogs))}${selectField('channel_announcements','Bejelentések csatornája',textChannels(config.channels.announcements))}${selectField('channel_verification','Tagellenőrző panel',textChannels(config.channels.verification),'Ide kerül az egykattintásos ellenőrzőpanel.')}${selectField('channel_starboard','Starboard csatorna',textChannels(config.channels.starboard),'A legtöbb csillagot kapott üzenetek kiemelt csatornája.')}${selectField('channel_tempVoiceLobby','Ideiglenes hangszoba belépő',voiceChannels(config.channels.tempVoiceLobby))}${selectField('channel_tempVoiceCategory','Ideiglenes hangszobák kategóriája',categories(config.channels.tempVoiceCategory))}</div></section>
+${ticketSection}<section id="channels" class="card section"><div class="section-kicker">Útvonalak</div><h2 class="section-title"># Csatornák és kategóriák</h2><div class="field-grid">${selectField('channel_controlCenter','NexaBot fő vezérlőpanel',textChannels(config.channels.controlCenter),'Ide kerül a teljes gombos Discord-panel.')}${selectField('channel_ai','Nexa AI beszélgetőcsatorna',textChannels(config.channels.ai),'Itt minden nem-bot üzenetre válaszol a Nexa AI.')}${selectField('channel_logs','Moderációs napló',textChannels(config.channels.logs))}${selectField('channel_warnings','Figyelmeztetések',textChannels(config.channels.warnings))}${selectField('channel_moderationPanel','Moderációs panel',textChannels(config.channels.moderationPanel))}${selectField('channel_welcome','Üdvözlőcsatorna',textChannels(config.channels.welcome))}${selectField('channel_goodbye','Búcsúzócsatorna',textChannels(config.channels.goodbye))}${selectField('channel_levels','Szintlépési értesítések',textChannels(config.channels.levels),'Ha nincs kiválasztva, az aktuális csatornába ír.')}${selectField('channel_suggestions','Ötletek csatornája',textChannels(config.channels.suggestions))}${selectField('channel_shiftLogs','Szolgálati napló',textChannels(config.channels.shiftLogs))}${selectField('channel_announcements','Bejelentések csatornája',textChannels(config.channels.announcements))}${selectField('channel_verification','Tagellenőrző panel',textChannels(config.channels.verification),'Ide kerül az egykattintásos ellenőrzőpanel.')}${selectField('channel_starboard','Starboard csatorna',textChannels(config.channels.starboard),'A legtöbb csillagot kapott üzenetek kiemelt csatornája.')}${selectField('channel_tempVoiceLobby','Ideiglenes hangszoba belépő',voiceChannels(config.channels.tempVoiceLobby))}${selectField('channel_tempVoiceCategory','Ideiglenes hangszobák kategóriája',categories(config.channels.tempVoiceCategory))}</div></section>
 
-<section id="roles" class="card section"><div class="section-kicker">Jogosultságok</div><h2 class="section-title">◇ Rangok és hozzáférés</h2><div class="field-grid">${selectField('role_staff','Staff rang',roles(config.roles.staff),'Moderáció, linkküldés és ticketkezelés.')}${selectField('role_human','Automatikus ember rang',roles(config.roles.human || config.roles.auto))}${selectField('role_bot','Automatikus bot rang',roles(config.roles.bot))}${selectField('role_dashboard','Webes kezelői rang',roles(config.roles.dashboard),'A tulajdonos és adminok mellett ez az egy rang léphet be.')}${selectField('role_shift','Szolgálati rang',roles(config.roles.shift),'Ez a rang használhatja a Shift Management panelt.')}${selectField('role_verified','Ellenőrzött tag rang',roles(config.roles.verified),'A tag ezt kapja az ellenőrzőgomb megnyomásakor.')}<div><label for="role_selfRoles">Önkiszolgáló rangok</label><select id="role_selfRoles" name="role_selfRoles" multiple size="7">${roleOptionsMulti(guild, config.community.selfRoles)}</select><div class="help">Legfeljebb 10 rang. Telefonon tartsd nyomva a több kijelöléshez.</div></div></div></section>
+<section id="roles" class="card section"><div class="section-kicker">Jogosultságok</div><h2 class="section-title">◇ Rangok és hozzáférés</h2><div class="field-grid">${selectField('role_human','Automatikus ember rang',roles(config.roles.human || config.roles.auto))}${selectField('role_bot','Automatikus bot rang',roles(config.roles.bot))}${selectField('role_dashboard','Webes kezelői rang',roles(config.roles.dashboard),'A tulajdonos és adminok mellett ez az egy rang léphet be.')}${selectField('role_shift','Szolgálati rang',roles(config.roles.shift),'Ez a rang használhatja a Shift Management panelt.')}${selectField('role_verified','Ellenőrzött tag rang',roles(config.roles.verified),'A tag ezt kapja az ellenőrzőgomb megnyomásakor.')}<div><label for="role_selfRoles">Önkiszolgáló rangok</label><select id="role_selfRoles" name="role_selfRoles" multiple size="7">${roleOptionsMulti(guild, config.community.selfRoles)}</select><div class="help">Legfeljebb 10 rang. Telefonon tartsd nyomva a több kijelöléshez.</div></div></div></section>
 
-<section class="card section"><div class="section-kicker">Kommunikáció</div><h2 class="section-title">💬 Botüzenetek</h2><div class="field-grid"><div><label for="message_welcome">Üdvözlőszöveg</label><textarea id="message_welcome" name="message_welcome">${escapeHtml(config.messages.welcome)}</textarea><div class="help">Használható: {tag}, {username}, {server}, {memberCount}</div></div><div><label for="message_goodbye">Búcsúzó szöveg</label><textarea id="message_goodbye" name="message_goodbye">${escapeHtml(config.messages.goodbye)}</textarea></div><div><label for="message_levelUp">Szintlépési szöveg</label><textarea id="message_levelUp" name="message_levelUp">${escapeHtml(config.messages.levelUp)}</textarea><div class="help">Használható: {tag}, {level}, {server}</div></div><div><label for="message_ticket">Általános ügyintézési panel szövege</label><textarea id="message_ticket" name="message_ticket">${escapeHtml(config.messages.ticket)}</textarea></div></div></section>
+<section class="card section"><div class="section-kicker">Kommunikáció</div><h2 class="section-title">💬 Botüzenetek</h2><div class="field-grid"><div><label for="message_welcome">Üdvözlőszöveg</label><textarea id="message_welcome" name="message_welcome">${escapeHtml(config.messages.welcome)}</textarea><div class="help">Használható: {tag}, {username}, {server}, {memberCount}</div></div><div><label for="message_goodbye">Búcsúzó szöveg</label><textarea id="message_goodbye" name="message_goodbye">${escapeHtml(config.messages.goodbye)}</textarea></div><div><label for="message_levelUp">Szintlépési szöveg</label><textarea id="message_levelUp" name="message_levelUp">${escapeHtml(config.messages.levelUp)}</textarea><div class="help">Használható: {tag}, {level}, {server}</div></div></div></section>
 
 <section id="community" class="card section"><div class="section-kicker">Aktivitás</div><h2 class="section-title">★ Közösségi rendszer</h2><div class="field-grid"><div><label for="community_xpCooldownSeconds">XP-időkorlát másodpercben</label><input id="community_xpCooldownSeconds" name="community_xpCooldownSeconds" type="number" min="15" max="300" value="${config.community.xpCooldownSeconds}"></div><div><label for="community_xpMin">Minimum XP üzenetenként</label><input id="community_xpMin" name="community_xpMin" type="number" min="1" max="50" value="${config.community.xpMin}"></div><div><label for="community_xpMax">Maximum XP üzenetenként</label><input id="community_xpMax" name="community_xpMax" type="number" min="1" max="100" value="${config.community.xpMax}"></div><div><label for="community_starboardThreshold">Starboard küszöb</label><input id="community_starboardThreshold" name="community_starboardThreshold" type="number" min="2" max="25" value="${config.community.starboardThreshold}"><div class="help">Ennyi ⭐ reakció után kerül ki az üzenet.</div></div><div><label>Szintjutalom rangok</label><textarea name="community_rewardRoles" placeholder="5:123456789012345678">${escapeHtml(config.community.rewardRoles.map((item) => `${item.level}:${item.roleId}`).join('\n'))}</textarea><div class="help">Soronként: szint:rangkód. Legfeljebb 25 jutalom.</div></div></div></section>
 
@@ -5813,6 +5833,10 @@ function configFromForm(guild, form) {
       goodbye: form.get('message_goodbye'),
       levelUp: form.get('message_levelUp'),
       ticket: form.get('message_ticket')
+    },
+    tickets: {
+      enabledTypes: ['support', 'report', 'purchase', 'partnership', 'other']
+        .filter((type) => form.has(`ticket_type_${type}`))
     },
     protection: {
       sensitivity: form.get('protection_sensitivity'),
@@ -5933,6 +5957,7 @@ function validateConfiguration(config, guildId = null) {
   }
   if (config.modules.starboard && !config.channels.starboard) missing.push('Starboard csatorna');
   if (config.modules.tempVoice && !config.channels.tempVoiceLobby) missing.push('ideiglenes hangszoba belépő');
+  if (config.modules.tickets && !config.tickets.enabledTypes.length) missing.push('legalább egy engedélyezett ticket-típus');
   if (missing.length) {
     throw new Error(`A bekapcsolt funkciókhoz még válaszd ki: ${[...new Set(missing)].join(', ')}.`);
   }
@@ -5940,9 +5965,12 @@ function validateConfiguration(config, guildId = null) {
 
 async function upsertPanel(channel, botId, titlePrefix, payload) {
   if (!channel?.isTextBased()) return;
+  const titlePrefixes = Array.isArray(titlePrefix) ? titlePrefix : [titlePrefix];
   const messages = await channel.messages.fetch({ limit: 50 }).catch(() => null);
   const existing = messages?.find((message) =>
-    message.author.id === botId && message.embeds.some((embed) => embed.title?.startsWith(titlePrefix))
+    message.author.id === botId && message.embeds.some((embed) =>
+      titlePrefixes.some((prefix) => embed.title?.startsWith(prefix))
+    )
   );
   if (existing) await existing.edit(payload).catch(() => null);
   else await channel.send(payload).catch(() => null);
@@ -5964,7 +5992,12 @@ async function syncConfiguredPanels(guild, config, botUser) {
   }
   if (moduleEnabled(guild.id, 'tickets') && config.channels.ticketPanel) {
     const channel = guild.channels.cache.get(config.channels.ticketPanel);
-    await upsertPanel(channel, botUser.id, config.language === 'en' ? '🎫 Support' : '🎫 Segítségkérés', ticketPanel(config.messages.ticket, config.language));
+    await upsertPanel(
+      channel,
+      botUser.id,
+      [config.language === 'en' ? '📨 Contact center' : '📨 Ügyintézési központ', '🎫 Segítségkérés', '🎫 Support tickets'],
+      ticketPanel(config.messages.ticket, config.language, config.tickets.enabledTypes)
+    );
   }
   if (moduleEnabled(guild.id, 'moderation') && config.channels.moderationPanel) {
     const channel = guild.channels.cache.get(config.channels.moderationPanel);
@@ -8882,7 +8915,7 @@ const {
   MessageFlags,
   PermissionFlagsBits
 } = require('discord.js');
-const { NAMES, COLORS } = require('./constants');
+const { NAMES, COLORS, SUPPORT_GUILD_ID } = require('./constants');
 const {
   ticketControls,
   ticketManagement,
@@ -8999,11 +9032,15 @@ function ticketOwner(channel) {
   return parts?.[0] === 'nexabot-ticket' ? parts[1] : null;
 }
 
-async function createTicket(interaction, type, details = null) {
+async function createTicket(interaction, type, details = null, options = {}) {
   await interaction.deferReply({ flags: EPHEMERAL });
   const guild = interaction.guild;
   if (!moduleEnabled(guild.id, 'tickets')) {
     return interaction.editReply(pick(guild.id, 'A segítségkérő rendszer ezen a szerveren ki van kapcsolva.', 'The ticket system is disabled on this server.'));
+  }
+  const guildConfig = getGuildConfig(guild.id);
+  if (!options.supportGateway && type !== 'order' && !guildConfig.tickets.enabledTypes.includes(type)) {
+    return interaction.editReply(pick(guild.id, 'Ez a ticketkategória ezen a szerveren nincs engedélyezve.', 'This ticket category is not enabled on this server.'));
   }
   const existing = guild.channels.cache.find(
     (channel) => channel.topic?.startsWith(`nexabot-ticket|${interaction.user.id}|`) && !channel.name.startsWith('lezart-')
@@ -9018,7 +9055,7 @@ async function createTicket(interaction, type, details = null) {
     return interaction.editReply(pick(guild.id, 'A ticket kategória vagy Staff rang nincs beállítva a webpanelen.', 'The ticket category or Staff role is not configured on the web dashboard.'));
   }
 
-  const english = getGuildConfig(guild.id).language === 'en';
+  const english = guildConfig.language === 'en';
   const categories = english ? {
     order: { slug: 'order', title: '🛒 New development order' },
     support: { slug: 'support', title: '💡 New support case' },
@@ -9075,7 +9112,7 @@ async function createTicket(interaction, type, details = null) {
   await channel.send({
     content: `${interaction.user} <@&${staffRole.id}>`,
     embeds: [embed],
-    components: [ticketControls(getGuildConfig(guild.id).language)]
+    components: [ticketControls(guildConfig.language)]
   });
   await dbQuery(
     `INSERT INTO nexabot_tickets (guild_id, channel_id, owner_id, category)
@@ -9087,11 +9124,21 @@ async function createTicket(interaction, type, details = null) {
   return interaction.editReply(pick(guild.id, `Elkészült a privát csatornád: ${channel}`, `Your private ticket is ready: ${channel}`));
 }
 
+async function createSupportTicket(interaction, type = 'support') {
+  if (interaction.guildId !== SUPPORT_GUILD_ID) {
+    return ephemeralError(interaction, 'A NEXA Support ticket kizárólag a hivatalos Support szerveren használható. Ezen a szerveren az általános Ügyintézési központot használd.');
+  }
+  return createTicket(interaction, type, null, { supportGateway: true });
+}
+
 async function handleCommand(interaction) {
   if (interaction.commandName === 'help') return handleHelpCommand(interaction);
   if (interaction.commandName === 'chronoguard') return handleChronoGuardCommand(interaction);
   if (interaction.commandName === 'aegis') return handleAegisCommand(interaction);
   if (interaction.commandName === 'support-szerver') {
+    if (interaction.guildId !== SUPPORT_GUILD_ID) {
+      return ephemeralError(interaction, `A Support szerver telepítője kizárólag a hivatalos NEXA Support szerveren használható. Szerver ID: ${SUPPORT_GUILD_ID}`);
+    }
     if (!isBotOwner(interaction.user.id)) {
       return ephemeralError(interaction, 'Ezt a telepítőt kizárólag a NEXA Bot elsődleges tulajdonosa használhatja.');
     }
@@ -9369,6 +9416,7 @@ async function handleButton(interaction) {
   }
 
   if (id === 'ticket_support') return createTicket(interaction, 'support');
+  if (id === 'support_ticket_open') return createSupportTicket(interaction, 'support');
   if (id === 'ticket_order') return interaction.showModal(orderModal());
   if (id === 'application_open') {
     if (!isBviGuild(interaction.guildId) || !moduleEnabled(interaction.guildId, 'bvi')) {
@@ -9575,6 +9623,7 @@ async function handleSelectMenu(interaction) {
     return handleDocumentSelect(interaction);
   }
   if (interaction.customId === 'ticket_category_select') return createTicket(interaction, interaction.values[0]);
+  if (interaction.customId === 'support_ticket_category_select') return createSupportTicket(interaction, interaction.values[0]);
   if (interaction.customId === 'ticket_user_add' || interaction.customId === 'ticket_user_remove') {
     if (!isStaff(interaction.member)) return ephemeralError(interaction, 'Csak staff tag kezelheti a ticket résztvevőit.');
     const userId = interaction.values[0];
@@ -10344,7 +10393,10 @@ function l(language, hu, en) {
   return language === 'en' ? en : hu;
 }
 
-function ticketPanel(customDescription = null, language = 'hu') {
+function ticketPanel(customDescription = null, language = 'hu', enabledTypes = null) {
+  const allowedTypes = new Set(Array.isArray(enabledTypes) && enabledTypes.length
+    ? enabledTypes
+    : ['support', 'report', 'purchase', 'partnership', 'other']);
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
     .setTitle(l(language, '📨 Ügyintézési központ', '📨 Contact center'))
@@ -10372,7 +10424,7 @@ function ticketPanel(customDescription = null, language = 'hu') {
       { label: l(language, 'Vásárlás', 'Purchase'), value: 'purchase', emoji: '🛒' },
       { label: l(language, 'Együttműködés', 'Cooperation'), value: 'partnership', emoji: '🤝' },
       { label: l(language, 'Egyéb', 'Other'), value: 'other', emoji: '📨' }
-    ]));
+    ].filter((option) => allowedTypes.has(option.value))));
   return { embeds: [embed], components: [categories, buttons] };
 }
 
@@ -10394,7 +10446,7 @@ function supportTicketPanel(language = 'en') {
     .setFooter({ text: l(language, 'NEXA Support • Hivatalos és bizalmas ügykezelés', 'NEXA Support • Official confidential case handling') });
 
   const categories = row(new StringSelectMenuBuilder()
-    .setCustomId('ticket_category_select')
+    .setCustomId('support_ticket_category_select')
     .setPlaceholder(l(language, 'NEXA ügytípus kiválasztása…', 'Select a NEXA support topic…'))
     .addOptions([
       { label: l(language, 'Technikai segítség', 'Technical support'), value: 'support', emoji: '🛠️' },
@@ -10404,7 +10456,7 @@ function supportTicketPanel(language = 'en') {
       { label: l(language, 'Egyéb NEXA ügy', 'Other NEXA request'), value: 'other', emoji: '📨' }
     ]));
   const direct = row(
-    new ButtonBuilder().setCustomId('ticket_support').setLabel(l(language, 'Gyors technikai ticket', 'Quick technical ticket')).setEmoji('⚡').setStyle(ButtonStyle.Success)
+    new ButtonBuilder().setCustomId('support_ticket_open').setLabel(l(language, 'Gyors technikai ticket', 'Quick technical ticket')).setEmoji('⚡').setStyle(ButtonStyle.Success)
   );
   return { embeds: [embed], components: [categories, direct] };
 }
@@ -13115,7 +13167,7 @@ const {
   Routes,
   SlashCommandBuilder
 } = require('discord.js');
-const { COLORS } = require('./constants');
+const { COLORS, SUPPORT_GUILD_ID } = require('./constants');
 const {
   getGuildConfig,
   setGuildConfig,
@@ -13334,7 +13386,7 @@ async function registerSupportCommandInOwnerGuilds({ rest, guilds, applicationId
   }
 
   const candidates = Array.from(guilds?.values?.() || guilds || [])
-    .filter((guild) => guild?.id && guild.ownerId === normalizedOwnerId);
+    .filter((guild) => guild?.id === SUPPORT_GUILD_ID && guild.ownerId === normalizedOwnerId);
   const command = localizeCommandJson(buildSupportSetupCommand().toJSON());
   const registered = [];
   const failed = [];
@@ -13686,7 +13738,7 @@ async function publishSupportPanels(guild, channels, roles, botUser) {
   published += await replaceInteractivePanel(
     channels.ticketPanel,
     botUser.id,
-    (message) => message.components.some((row) => row.components.some((component) => ['ticket_category_select', 'ticket_support'].includes(component.customId))),
+    (message) => message.components.some((row) => row.components.some((component) => ['support_ticket_category_select', 'support_ticket_open'].includes(component.customId))),
     supportTicketPanel('en')
   );
   return published;
@@ -13700,6 +13752,9 @@ async function applyRolePositions(guild, roles) {
 }
 
 async function setupSupportServer(guild, botUser, ownerMember) {
+  if (guild?.id !== SUPPORT_GUILD_ID) {
+    throw new Error(`A NEXA Support rendszer kizárólag ezen a szerveren telepíthető: ${SUPPORT_GUILD_ID}`);
+  }
   const roles = {};
   for (const spec of SUPPORT_ROLES) roles[spec.key] = await ensureRole(guild, spec);
   await applyRolePositions(guild, roles);
@@ -13838,6 +13893,9 @@ function resolveSupportResources(guild) {
 }
 
 async function repairSupportServer(guild, botUser, actorId) {
+  if (guild?.id !== SUPPORT_GUILD_ID) {
+    throw new Error(`A NEXA Support rendszer kizárólag ezen a szerveren javítható: ${SUPPORT_GUILD_ID}`);
+  }
   const { roles, channels, ticketCategory } = resolveSupportResources(guild);
   await applyRolePositions(guild, roles);
   await grantGuildPlan(guild.id, 'ultimate', {
@@ -13940,6 +13998,7 @@ function auditSupportServer(guild) {
 
 module.exports = {
   MANAGED_FOOTER,
+  SUPPORT_GUILD_ID,
   SUPPORT_CATEGORIES,
   SUPPORT_ROLES,
   auditSupportServer,

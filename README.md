@@ -32,7 +32,8 @@
 - teljes Anti-Nuke: már az első jogosulatlan csatorna-, rang-, jogosultság-, ban/kick/prune- vagy webhookműveletnél azonnali karantén és szerverlezárás;
 - Bot-Guard: kizárólag az előre engedélyezett bot-ID maradhat bent; minden más új bot az auditellenőrzés előtt azonnal kirúgásra kerül;
 - admin döntésig lezárt raid-riasztás, nyitva maradó döntési csatorna és újraindítás után is használható visszaállítási állapot;
-- kategóriás ticketek, claim/unclaim, lezárás és automatikus HTML transcript;
+- külön Ticket Centerből konfigurálható kategóriás ticketek (segítség, bejelentés, vásárlás, partnerség, egyéb), claim/unclaim, lezárás és automatikus HTML transcript;
+- a hivatalos NEXA Support Gateway kizárólag a `1556219615858655254` azonosítójú Support szerveren működik; más szerverek a saját, általános ticketpaneljüket kapják;
 - welcome/goodbye placeholder, külön ember- és bot-autorang;
 - XP, szintek, ranglista, önkiszolgáló rangpanel, ötletek, szavazás, bejelentés és giveaway;
 - egykattintásos tagellenőrzőpanel külön ellenőrzött ranggal és auditnaplóval;

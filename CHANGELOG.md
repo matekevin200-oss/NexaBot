@@ -2,6 +2,8 @@
 
 ## 12.0.0 – Stripe Billing Operations
 
+- Új, önálló Ticket Center került a szerver dashboardjára: külön állítható panelcsatorna, kategória, ügyintézői rang, panelszöveg és az öt engedélyezett ticket-típus.
+- A NEXA Support Gateway szerver- és komponensszinten a hivatalos `1556219615858655254` Support szerverhez lett zárva.
 - A normál szerverek külön, semleges Ügyintézési központ panelt kaptak; a hivatalos NEXA Support szerver saját Support Gateway megjelenést és kategóriákat használ.
 - Új nyilvános, magyar–angol Árak oldal Free, Pro és Ultimate csomaggal, eurós díjakkal.
 - Stripe Checkout havi és éves előfizetéshez; a kártyaadatokat a bot nem látja és nem tárolja.
