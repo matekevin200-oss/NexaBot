@@ -1,4 +1,29 @@
+# Changelog
+
+## 14.1.0 – Live Control Stability
+
+- Megtartja a kétirányú Web ↔ Discord Support Bridge-et és a Discordos Claim / Pending / Close / Reopen vezérlést.
+- Megtartja az automatikus webes ticket-frissítést, így nincs szükség kézi oldalfrissítésre.
+- Javítja az angol alapnyelvet: hiányzó/új konfigurációnál nem esik vissza magyarra.
+- Az új ticket-címkék és az AI alap rendszerüzenete is következetesen angol alapértelmezést kapott.
+- Owner Center továbbra is kizárólag a bot ownerének és explicit hozzáadott Owner felhasználóknak látható és elérhető.
+- Megtartja a szervertulajdonos Discord-nevének megjelenítését, a Subscription Center elnevezést és a hibás beállításhoz ugró validációt.
+
 # NEXA Bot változásnapló
+
+## 14.0.0 – Live Control
+
+- Élő Web Support szinkron: a ticket állapota, felelőse és üzenetei kézi oldalfrissítés nélkül követik a Discordot.
+- Discord Staff vezérlők a webes ticketekhez: Claim, Pending, Close és Reopen.
+- A webes és Discordos ticket ugyanazt a PostgreSQL rekordot használja; az állapotváltások eseményként és értesítésként is megjelennek.
+- A hivatalos Support szerver ticketjei kizárólag a kezelt TICKETS kategóriába kerülnek; a kategóriák és csatornák tényleges sorrendje automatikusan rendeződik.
+- Új szerverek alapnyelve és slash-command nyelve angol; a web EN alapértelmezésű, HU/EN váltással.
+- Az Árak/Pricing oldal helyett egységes Subscriptions/Előfizetés felület működik.
+- Stripe Checkout külön ellenőrzi a kiválasztott Pro/Ultimate havi és éves Price ID-t, és hibánál visszavisz az Előfizetés oldalra érthető üzenettel.
+- A dashboard konfigurációs hibái nem törlik a kitöltött adatokat: a rendszer ugyanazt az űrlapot rajzolja újra és a hibás mezőhöz visz.
+- A navigáció kiemeli az aktuális oldalt/szakaszt, a dashboard pedig külön kontextussávot kapott.
+- Az Owner Center továbbra is kizárólag a fő tulajdonos és a külön engedélyezett owner-userek számára látható; a szerverlistában a tulajdonos Discord-neve is megjelenik.
+- Modernizált sötét lila/türkiz webes arculat és tisztább Support/Subscription munkafolyamat.
 
 ## 13.0.0 – Premium Support Operations
 

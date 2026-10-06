@@ -1,11 +1,22 @@
-# NEXA Bot 13.0 Premium Support Operations Platform
+# NEXA Bot 14.1 Live Control Platform
 
 Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Az opcionális RP- és dokumentumrendszert kizárólag a bot tulajdonosa vagy az általa kijelölt Owner-kezelő kapcsolhatja be egy kiválasztott szerveren.
+
+## 14.0 újdonságok röviden
+
+- Discord és web között élő Support ticket-szinkron 2,5 másodperces automatikus frissítéssel.
+- Discord Staff gombok: Claim, Pending, Close és Reopen; az állapot a weben automatikusan követi a Discordot.
+- Angol az alapértelmezett nyelv új szervereken és a weben; HU/EN váltó megőrzi az aktuális oldalt.
+- Az Árak/Pricing rész helyett egységes Előfizetés/Subscriptions felület működik, külön havi/éves Stripe Price ID ellenőrzéssel.
+- Hibás dashboard-beállításnál a kitöltött űrlap megmarad, és a rendszer a hibás mezőhöz görget.
+- Az Owner Center hozzáférési modellje változatlanul owner + külön engedélyezett owner-user; a szerverkártyák a szervertulajdonos Discord-nevét is feloldják.
+- A hivatalos Support szerver kategóriái számozott sorrendet, javított ticket-célkategóriát és rendezett csatornákat kaptak.
+
 
 ## Fő funkciók
 
 - szerverenként külön mentett modulok, csatornák, rangok, nyelv és arculat;
-- magyar alapnyelv, szerverenként választható angol Discord-felület;
+- angol alapnyelv új szervereken és a weben, választható magyar felülettel; a szerverenkénti nyelv és slash-command nyelv külön kezelhető;
 - teljesen új grafit–réz NEXA Operations webes arculat: PC-re optimalizált, nyugodt prémium irányítópult, rendezett Owner-szerverlista és kétnyelvű publikus bemutatóoldal élő szerver-, tagszám-, ping-, uptime- és adatbázis-állapottal;
 - kétnyelvű Tudásközpont 14 rendszer részletes, gyakorlati magyarázatával: mit csinál, ki használhatja, hol állítható és mi kell hozzá;
 - Discord OAuth2 dashboard tulajdonos, admin és egy kijelölt kezelői rang részére;
@@ -34,7 +45,7 @@
 - admin döntésig lezárt raid-riasztás, nyitva maradó döntési csatorna és újraindítás után is használható visszaállítási állapot;
 - külön Ticket Centerből konfigurálható kategóriás ticketek (segítség, bejelentés, vásárlás, partnerség, egyéb), claim/unclaim, lezárás és automatikus HTML transcript;
 - a hivatalos NEXA Support Gateway kizárólag a `1556219615858655254` azonosítójú Support szerveren működik; más szerverek a saját, általános ticketpaneljüket kapják;
-- kétirányú Web Support Bridge: a weboldalon beadott segítségkérés privát Discord-ticketet nyit a hivatalos Support szerveren, a Staff Discord-válaszai pedig visszaolvashatók és megválaszolhatók a weben;
+- élő, kétirányú Web Support Bridge: a weboldalon beadott segítségkérés privát Discord-ticketet nyit a hivatalos Support szerveren; Discordból Claim/Pending/Close/Reopen kezelhető, a Staff válaszai és az állapotváltozások pedig automatikusan frissülnek a weben kézi újratöltés nélkül;
 - welcome/goodbye placeholder, külön ember- és bot-autorang;
 - XP, szintek, ranglista, önkiszolgáló rangpanel, ötletek, szavazás, bejelentés és giveaway;
 - egykattintásos tagellenőrzőpanel külön ellenőrzött ranggal és auditnaplóval;
@@ -74,9 +85,9 @@ A parancsot kizárólag a `BOT_OWNER_ID` értékében szereplő elsődleges bot-
 
 A telepítéshez a botnak ideiglenesen `Rendszergazda` jogosultság kell. A Discord Közösség funkció feltételeit a szervertulajdonosnak egyszer kézzel kell elfogadnia.
 
-## Csomagok és Stripe-előfizetés
+## Előfizetések és Stripe
 
-A szerver tulajdonosa, adminja vagy kijelölt webes kezelője a **Csomag és számlázás** oldalon indíthat előfizetést. A kártyaadatokat kizárólag a Stripe Checkout kezeli; a NEXA nem látja és nem tárolja őket. A Stripe webhook automatikusan aktiválja, frissíti vagy lejáratja a jogosultságot. Az Owner Centerben ettől függetlenül továbbra is adhatsz ingyenes csomagot.
+A szerver tulajdonosa, adminja vagy kijelölt webes kezelője az **Előfizetés** oldalon indíthat előfizetést. A kártyaadatokat kizárólag a Stripe Checkout kezeli; a NEXA nem látja és nem tárolja őket. A Stripe webhook automatikusan aktiválja, frissíti vagy lejáratja a jogosultságot. Az Owner Centerben ettől függetlenül továbbra is adhatsz ingyenes csomagot.
 
 | Csomag | Havi díj | Éves díj | Elérhető rendszerek |
 |---|---:|---:|---|
@@ -231,7 +242,7 @@ Az állapotvégpontok:
 A sikeres logban ez jelenik meg:
 
 ```text
-A NEXA Bot 13.0 Premium Support Operations Platform használatra kész.
+A NEXA Bot 14.1 Live Control Platform használatra kész.
 ```
 
 ## Használat
