@@ -1,4 +1,9 @@
-# NEXA Bot 15.1.0 — Command Deck
+# NEXA Bot 15.2.0 — Subscription Recovery
+
+- Valós Stripe API-diagnosztika ellenőrzi a Price ID-k aktív állapotát, EUR pénznemét, összegét, ismétlődő ciklusát és Test/Live módját.
+- Sikeres fizetés után a visszatérő oldal szerveroldalon újra lekéri és hitelesíti a Checkout Sessiont, majd azonnal aktiválja az előfizetést.
+- A webhook-késés többé nem akadályozza az aktiválást; a webhook továbbra is idempotens háttérbiztosítás és számlanapló.
+- Dupla kattintás elleni idempotens Checkout, szigorú szerver/felhasználó/csomag metaadat-ellenőrzés és PostgreSQL readiness figyelmeztetés került be.
 
 - Premium SaaS-style server control shell with dedicated Moderation, Automod, Welcome, Ticket, Logs, Reaction Role, Auto Role, Level, Giveaway, AI, Security, Stats and Settings routes.
 - Server context switcher, searchable sidebar, Ctrl/Cmd+K navigation focus, responsive mobile drawer and clearer active-location state.
@@ -16,7 +21,7 @@
 
 # Changelog
 
-## 15.1.0 – Live Control Stability
+## 15.2.0 – Live Control Stability
 
 - Megtartja a kétirányú Web ↔ Discord Support Bridge-et és a Discordos Claim / Pending / Close / Reopen vezérlést.
 - Megtartja az automatikus webes ticket-frissítést, így nincs szükség kézi oldalfrissítésre.

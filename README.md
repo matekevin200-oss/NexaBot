@@ -1,9 +1,15 @@
-# NEXA Bot 15.1 Live Control Platform
+# NEXA Bot 15.2 Live Control Platform
 
 Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Az opcionális RP- és dokumentumrendszert kizárólag a bot tulajdonosa vagy az általa kijelölt Owner-kezelő kapcsolhatja be egy kiválasztott szerveren.
 
-## 15.1 újdonságok röviden
+## 15.2 újdonságok röviden
 
+- A Subscription Center már közvetlenül a Stripe API-n ellenőrzi mind a négy Price ID-t: aktív állapot, ismétlődő ciklus, EUR pénznem, pontos összeg és Test/Live mód.
+- A sikeres Checkout visszatérés szerveroldali hitelesítést és azonnali előfizetés-aktiválást végez; nem marad a felhasználó kizárólag a webhook megérkezésére utalva.
+- A Checkout Session csak akkor aktiválható, ha a hitelesített Discord-felhasználó, szerver, csomag és számlázási ciklus egymással egyezik.
+- Stabil idempotenciakulcs akadályozza meg, hogy dupla kattintás több párhuzamos Checkout Sessiont indítson.
+- A Billing oldal külön figyelmeztet, ha nincs tartós PostgreSQL-kapcsolat, mert éles előfizetés memóriatárolással nem fogadható biztonságosan.
+- Az Owner Center Stripe-állapota immár élő API-diagnosztikát mutat, nem pusztán a környezeti változók formáját ellenőrzi.
 - Discord és web között élő Support ticket-szinkron 1,8 másodperces automatikus frissítéssel.
 - Discord Staff gombok: Claim, Pending, Close és Reopen; az állapot a weben automatikusan követi a Discordot.
 - Angol az alapértelmezett nyelv új szervereken és a weben; a tartós HU/EN váltó megőrzi az aktuális oldalt és az újabb belépés után is megmarad.
@@ -193,10 +199,13 @@ Titkos értéket soha ne tölts fel GitHubra, és ne írj `.js`, `.json`, `.yaml
 https://nexabot-25vo.onrender.com/webhooks/stripe
 ```
 
-5. Események: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`.
+5. Események: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_succeeded`, `invoice.payment_failed`.
 6. A webhook `whsec_...` titkát add meg `STRIPE_WEBHOOK_SECRET` néven, a szerveroldali kulcsot pedig `STRIPE_SECRET_KEY` néven.
 7. A Stripe Customer Portalban engedélyezd a csomagváltást, fizetési mód módosítását és lemondást.
 8. Először tesztkulcsokkal és Stripe tesztkártyával ellenőrizd a teljes folyamatot; élesítéskor minden kulcsot és Price ID-t együtt válts Live módra.
+9. Nyisd meg a weben az **Előfizetés** oldalt. Mind a hat Stripe-sornak ellenőrzött állapotot kell mutatnia; a Price soroknál a várt EUR összeg és ciklus is látható.
+
+Elvárt árak: Pro havi **4,99 EUR**, Pro éves **49,90 EUR**, Ultimate havi **9,99 EUR**, Ultimate éves **99,90 EUR**. A NEXA biztonsági okból nem engedi megnyitni a Checkoutot, ha egy Price más összegű, más pénznemű, egyszeri, inaktív vagy a Stripe-kulccsal ellentétes Test/Live módban van.
 
 ## Discord Developer Portal
 
@@ -247,7 +256,7 @@ Az állapotvégpontok:
 A sikeres logban ez jelenik meg:
 
 ```text
-A NEXA Bot 15.1 Live Control Platform használatra kész.
+A NEXA Bot 15.2 Live Control Platform használatra kész.
 ```
 
 ## Használat

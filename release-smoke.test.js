@@ -8,11 +8,11 @@ const source = fs.readFileSync(path.join(root, 'index.js'), 'utf8');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 
-test('release metadata is 15.1.0', () => {
-  assert.equal(pkg.version, '15.1.0');
-  assert.equal(lock.version, '15.1.0');
-  assert.equal(lock.packages[''].version, '15.1.0');
-  assert.match(source, /const APP_VERSION = '15\.1\.0'/);
+test('release metadata is 15.2.0', () => {
+  assert.equal(pkg.version, '15.2.0');
+  assert.equal(lock.version, '15.2.0');
+  assert.equal(lock.packages[''].version, '15.2.0');
+  assert.match(source, /const APP_VERSION = '15\.2\.0'/);
 });
 
 test('subscriptions replaces public pricing while preserving redirect', () => {
@@ -100,10 +100,15 @@ test('profile center and persistent language switch are available', () => {
   assert.match(source, /Profile & language/);
 });
 
-test('Stripe readiness validates key formats and explains missing setup', () => {
+test('Stripe subscription flow validates live configuration and reconciles Checkout', () => {
   assert.match(source, /\^sk_\(\?:test\|live\)_/);
   assert.match(source, /\^price_\[A-Za-z0-9\]\+/);
   assert.match(source, /STRIPE READINESS/);
-  assert.match(source, /MISSING \/ INVALID/);
+  assert.match(source, /async function validateStripeConfiguration/);
+  assert.match(source, /\/prices\/\$\{encodeURIComponent\(priceId\)\}/);
+  assert.match(source, /async function reconcileCheckoutSession/);
+  assert.match(source, /billing_checkout_reconciled/);
+  assert.match(source, /checkout\.session\.async_payment_succeeded/);
+  assert.match(source, /A tartós adatbázis nem érhető el/);
   assert.match(source, /data-billing-form/);
 });
