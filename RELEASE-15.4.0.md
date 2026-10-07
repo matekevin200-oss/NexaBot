@@ -11,7 +11,7 @@ A web új **Azure Command** arculatot kapott: kellemes sötétkék alap, égkék
 A `/cia telepites` kizárólag akkor fut, ha:
 
 1. a parancsot a `BOT_OWNER_ID` értékében megadott elsődleges bot-owner használja;
-2. a Discord-szerver tényleges tulajdonosa ugyanaz a személy;
+2. a bot-owner az adott Discord-szerveren `Rendszergazda` jogosultsággal rendelkezik; nem kell a szerver tulajdonosának lennie;
 3. a NEXA Bot rendelkezik `Rendszergazda` jogosultsággal és megfelelő rangpozícióval;
 4. az adott szerveren még nem történt sikeres CIA-telepítés.
 

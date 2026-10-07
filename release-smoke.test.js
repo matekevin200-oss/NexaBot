@@ -82,7 +82,10 @@ test('Command Deck keeps one unified server control entry with compatible deep r
   assert.match(source, /data-nav-search/);
   assert.match(source, /Ctrl K/);
   assert.match(source, /data-persist-draft/);
-  assert.match(source, /view: guildMatch\[2\] \|\| 'control'/);
+  assert.match(source, /const view = 'control'/);
+  assert.match(source, /guildMatch\[2\] && guildMatch\[2\] !== 'control'/);
+  assert.match(source, /return redirect\(response, `\/dashboard\/guild\/\$\{guild\.id\}\/control`\)/);
+  assert.doesNotMatch(source, /requestedView = \['control','overview','moderation'/);
 });
 
 test('live web support applies ticket state without forced reload', () => {
@@ -153,7 +156,8 @@ test('CIA faction installer is owner-only, complete and permanently one-time', (
   assert.match(source, /\.setName\('telepites'\)/);
   assert.match(source, /\.setName\('ellenorzes'\)/);
   assert.match(source, /if \(!isBotOwner\(interaction\.user\.id\)\)/);
-  assert.match(source, /interaction\.guild\.ownerId !== interaction\.user\.id/);
+  assert.match(source, /!interaction\.memberPermissions\?\.has\(PermissionFlagsBits\.Administrator\)/);
+  assert.match(source, /ownerMember\?\.permissions\?\.has\(PermissionFlagsBits\.Administrator\)/);
   assert.match(source, /function isCiaInstallationComplete\(guild\)/);
   assert.match(source, /installations\?\.cia\?\.completed \|\| ciaDiscordMarkerPresent\(guild\)/);
   assert.match(source, /error\.code = 'CIA_ALREADY_INSTALLED'/);

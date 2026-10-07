@@ -6047,9 +6047,7 @@ function selectField(name, label, options, help = '') {
 function settingsPage(guild, config, session, saved = false, options = {}) {
   const validationError = String(options.error || '').trim().slice(0, 700);
   const validationField = String(options.focus || '').trim().slice(0, 100);
-  const requestedView = String(options.view || 'control').toLowerCase();
-  const allowedViews = new Set(['control','overview','moderation','automod','welcome','tickets','logs','reaction-roles','auto-role','level','giveaway','ai','security','stats','settings']);
-  const view = allowedViews.has(requestedView) ? requestedView : 'control';
+  const view = 'control';
   const viewMeta = {
     control: ['Control Center','Minden szerverbeállítás egyetlen átlátható kezelőfelületen.'],
     overview: ['Overview','Live server health, active modules and configuration status.'],
@@ -7339,14 +7337,16 @@ async function handleRequest(client, request, response, healthProvider = null) {
       return sendHtml(response, 403, errorPage('Nincs hozzáférésed', 'Ehhez a szerverhez nincs kezelői jogosultságod.', session));
     }
     if (request.method === 'GET') {
-      return sendHtml(response, 200, settingsPage(guild, getGuildConfig(guild.id), session, url.searchParams.get('saved') === '1', { view: guildMatch[2] || 'control' }));
+      if (guildMatch[2] && guildMatch[2] !== 'control') {
+        return redirect(response, `/dashboard/guild/${guild.id}/control`);
+      }
+      return sendHtml(response, 200, settingsPage(guild, getGuildConfig(guild.id), session, url.searchParams.get('saved') === '1', { view: 'control' }));
     }
     if (request.method === 'POST') {
       let requestedConfig = null;
-      let requestedView = guildMatch[2] || 'control';
+      const requestedView = 'control';
       try {
         const form = await readBody(request);
-        requestedView = ['control','overview','moderation','automod','welcome','tickets','logs','reaction-roles','auto-role','level','giveaway','ai','security','stats','settings'].includes(String(form.get('dashboard_view') || '')) ? String(form.get('dashboard_view')) : requestedView;
         if (form.get('csrf') !== session.csrf) {
           return sendHtml(response, 403, errorPage('Session expired', 'Refresh the page, then try again.', session));
         }
@@ -9403,6 +9403,8 @@ async function registerCommands(readyClient) {
   }
   if (ciaGuildRegistration.registered.length) {
     console.log(`A /cia tulajdonosi parancs azonnal regisztrálva: ${ciaGuildRegistration.registered.join(', ')}`);
+  } else {
+    console.warn('A /cia parancshoz nem található olyan szerver, ahol a BOT_OWNER_ID fiók Rendszergazda vagy szervertulajdonos.');
   }
 }
 
@@ -9799,8 +9801,11 @@ async function handleCommand(interaction) {
     if (!isBotOwner(interaction.user.id)) {
       return ephemeralError(interaction, 'A CIA egyszeri telepítőjét kizárólag a NEXA Bot elsődleges tulajdonosa használhatja.');
     }
-    if (!interaction.guild || interaction.guild.ownerId !== interaction.user.id) {
-      return ephemeralError(interaction, 'A CIA rendszert csak egy általad tulajdonolt Discord-szerverre telepítheted.');
+    if (!interaction.guild) {
+      return ephemeralError(interaction, 'A CIA rendszer kizárólag Discord-szerveren telepíthető.');
+    }
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+      return ephemeralError(interaction, 'A CIA telepítéshez ezen a szerveren Rendszergazda jogosultsággal kell rendelkezned. Nem szükséges, hogy te legyél a szerver tulajdonosa.');
     }
     const botMember = interaction.guild.members.me || await interaction.guild.members.fetchMe().catch(() => null);
     if (!botMember?.permissions.has(PermissionFlagsBits.Administrator)) {
@@ -14568,8 +14573,15 @@ async function registerCiaCommandInOwnerGuilds({ rest, guilds, applicationId, ow
   const normalizedOwnerId = String(ownerId || '').trim();
   const normalizedApplicationId = String(applicationId || '').trim();
   if (!rest || !normalizedOwnerId || !normalizedApplicationId) return { registered: [], failed: [] };
-  const candidates = Array.from(guilds?.values?.() || guilds || [])
-    .filter((guild) => guild?.ownerId === normalizedOwnerId);
+  const candidates = [];
+  for (const guild of Array.from(guilds?.values?.() || guilds || [])) {
+    if (!guild?.id) continue;
+    let ownerMember = guild.members?.cache?.get(normalizedOwnerId) || null;
+    if (!ownerMember) ownerMember = await guild.members?.fetch?.(normalizedOwnerId).catch(() => null);
+    if (guild.ownerId === normalizedOwnerId || ownerMember?.permissions?.has(PermissionFlagsBits.Administrator)) {
+      candidates.push(guild);
+    }
+  }
   const command = localizeCommandJson(buildCiaSetupCommand().toJSON());
   const registered = [];
   const failed = [];
