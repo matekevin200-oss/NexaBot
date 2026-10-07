@@ -1,8 +1,8 @@
 {
   "name": "nexabot",
-  "version": "15.2.0",
+  "version": "15.3.0",
   "private": true,
-  "description": "NEXA Bot 15.2 Command Deck – premium Discord management, live Support Bridge, Owner Operations and Subscription platform",
+  "description": "NEXA Bot 15.3.0 Command Deck – premium Discord management, live Support Bridge, Owner Operations and Subscription platform",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {

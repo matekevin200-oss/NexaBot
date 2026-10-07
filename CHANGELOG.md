@@ -1,5 +1,11 @@
-# NEXA Bot 15.2.0 — Subscription Recovery
+# NEXA Bot 15.3.0 — Calm Horizon & Checkout Recovery
 
+- Teljesen új, nyugodtabb grafit–zsályazöld–pezsgő webes arculat és jobban tagolt asztali elrendezés.
+- Az Előfizetés oldal szerver → csomag → Stripe folyamatra lett bontva, külön állapotjelzővel és lenyitható diagnosztikával.
+- A Checkout gomb JSON-alapú indítást, 30 másodperces időkorlátot, betöltési állapotot és helyben látható hibaüzenetet kapott.
+- A Content Security Policy engedélyezi a Stripe Checkout és Customer Portal célcímeket, ezért a böngésző nem blokkolja csendben az átirányítást.
+- A teljesen hibás Stripe-beállítás többé nem hagy látszólag kattintható, de néma gombot: a csomagkártya rögtön megmutatja a hibát, és a részletes diagnosztikához visz.
+- Checkout indításakor csak a kiválasztott Price kerül ellenőrzésre; az általános négyáras diagnosztika párhuzamosan fut, így nem tud négyszeres várakozást okozni.
 - Valós Stripe API-diagnosztika ellenőrzi a Price ID-k aktív állapotát, EUR pénznemét, összegét, ismétlődő ciklusát és Test/Live módját.
 - Sikeres fizetés után a visszatérő oldal szerveroldalon újra lekéri és hitelesíti a Checkout Sessiont, majd azonnal aktiválja az előfizetést.
 - A webhook-késés többé nem akadályozza az aktiválást; a webhook továbbra is idempotens háttérbiztosítás és számlanapló.
@@ -21,7 +27,7 @@
 
 # Changelog
 
-## 15.2.0 – Live Control Stability
+## 15.2.1 – Live Control Stability
 
 - Megtartja a kétirányú Web ↔ Discord Support Bridge-et és a Discordos Claim / Pending / Close / Reopen vezérlést.
 - Megtartja az automatikus webes ticket-frissítést, így nincs szükség kézi oldalfrissítésre.

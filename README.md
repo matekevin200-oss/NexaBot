@@ -1,9 +1,15 @@
-# NEXA Bot 15.2 Live Control Platform
+# NEXA Bot 15.3.0 Live Control Platform
 
 Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Az opcionális RP- és dokumentumrendszert kizárólag a bot tulajdonosa vagy az általa kijelölt Owner-kezelő kapcsolhatja be egy kiválasztott szerveren.
 
-## 15.2 újdonságok röviden
+## 15.3.0 újdonságok röviden
 
+- Teljes Calm Horizon webes arculat: a korábbi kék-neon felület helyett nyugodtabb grafit, zsályazöld és pezsgő színvilág, erősebben elkülönülő navigációval és munkaterületekkel.
+- Az Előfizetés oldal új, háromlépcsős munkafolyamatot, külön szerverválasztót, nagyobb csomagkártyákat, szolgáltatáslistát és lenyitható Stripe-diagnosztikát kapott.
+- A fizetési gomb aszinkron, látható állapotú Checkout-indítást használ: siker esetén közvetlenül a Stripe-ra visz, hiba vagy időtúllépés esetén pedig ugyanott megmutatja a pontos okot.
+- A biztonsági fejléc most kifejezetten engedélyezi a Stripe Checkout és Customer Portal célcímeket, így a böngésző nem tudja csendben blokkolni az átirányítást.
+- A fizetési kártyán nincs több néma, letiltott gomb: hibás Stripe-beállításnál látható magyarázat és a pontos diagnosztikához vezető gomb jelenik meg.
+- Checkoutkor csak a kiválasztott ár kerül újraellenőrzésre, a teljes Stripe-diagnosztika pedig négy párhuzamos kéréssel fut.
 - A Subscription Center már közvetlenül a Stripe API-n ellenőrzi mind a négy Price ID-t: aktív állapot, ismétlődő ciklus, EUR pénznem, pontos összeg és Test/Live mód.
 - A sikeres Checkout visszatérés szerveroldali hitelesítést és azonnali előfizetés-aktiválást végez; nem marad a felhasználó kizárólag a webhook megérkezésére utalva.
 - A Checkout Session csak akkor aktiválható, ha a hitelesített Discord-felhasználó, szerver, csomag és számlázási ciklus egymással egyezik.
@@ -26,7 +32,7 @@
 
 - szerverenként külön mentett modulok, csatornák, rangok, nyelv és arculat;
 - angol alapnyelv új szervereken és a weben, választható magyar felülettel; a szerverenkénti nyelv és slash-command nyelv külön kezelhető;
-- teljesen új mélykék–menta NEXA Command Deck arculat: PC-re optimalizált prémium irányítópult, profilmenü, rendezett Owner-szerverlista és kétnyelvű publikus bemutatóoldal élő szerver-, tagszám-, ping-, uptime- és adatbázis-állapottal;
+- teljesen új grafit–zsályazöld–pezsgő NEXA Calm Horizon arculat: PC-re optimalizált prémium irányítópult, profilmenü, rendezett Owner-szerverlista és kétnyelvű publikus bemutatóoldal élő szerver-, tagszám-, ping-, uptime- és adatbázis-állapottal;
 - kétnyelvű Tudásközpont 14 rendszer részletes, gyakorlati magyarázatával: mit csinál, ki használhatja, hol állítható és mi kell hozzá;
 - Discord OAuth2 dashboard tulajdonos, admin és egy kijelölt kezelői rang részére;
 - külön Owner Center: szerverhálózat, uptime, ping, memória, adatbázis, használat, hibák és audit;
@@ -159,7 +165,7 @@ src/
 | `CHRONOGUARD_SIGNING_KEY` | ajánlott | Külön, legalább 32 karakteres HMAC-kulcs a pillanatképlánc aláírásához; hiányában a `SESSION_SECRET` használatos |
 | `OPENAI_API_KEY` | csak AI-hoz | Kizárólag szerveroldali environment variable |
 | `OPENAI_MODEL` | nem | Alapérték: `gpt-5-mini` |
-| `STRIPE_SECRET_KEY` | fizetéshez | Stripe szerveroldali `sk_live_...` vagy teszthez `sk_test_...` kulcs |
+| `STRIPE_SECRET_KEY` | fizetéshez | Stripe szerveroldali standard (`sk_live_...`) vagy korlátozott (`rk_live_...`) éles kulcs; tesztben az ezeknek megfelelő `*_test_...` kulcs |
 | `STRIPE_WEBHOOK_SECRET` | fizetéshez | A `/webhooks/stripe` végponthoz tartozó `whsec_...` aláírási titok |
 | `STRIPE_PRICE_PRO_MONTHLY` | fizetéshez | Pro havi Stripe Price ID |
 | `STRIPE_PRICE_PRO_YEARLY` | fizetéshez | Pro éves Stripe Price ID |
@@ -256,7 +262,7 @@ Az állapotvégpontok:
 A sikeres logban ez jelenik meg:
 
 ```text
-A NEXA Bot 15.2 Live Control Platform használatra kész.
+A NEXA Bot 15.3.0 Live Control Platform használatra kész.
 ```
 
 ## Használat

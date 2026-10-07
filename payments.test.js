@@ -95,6 +95,20 @@ test('Stripe config performs live checks for every recurring EUR Price', async (
   assert.ok(Object.values(result.prices).every(Boolean));
 }));
 
+test('Stripe Price diagnostics start in parallel instead of blocking one-by-one', async () => withStripeEnvironment(async () => {
+  const { payments } = loadPayments();
+  const pending = [];
+  global.fetch = (url) => new Promise((resolve) => {
+    const id = decodeURIComponent(String(url).split('/').pop());
+    pending.push(() => resolve(new Response(JSON.stringify(priceFor(id)), { status: 200 })));
+  });
+  const validation = payments.validateStripeConfiguration(process.env, { force: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(pending.length, 4);
+  pending.forEach((release) => release());
+  assert.equal((await validation).fullyReady, true);
+}));
+
 test('Stripe config rejects wrong amount, currency, interval and mode', () => {
   const { payments } = loadPayments();
   const base = priceFor('price_1ProMonth');
@@ -107,12 +121,25 @@ test('Stripe config rejects wrong amount, currency, interval and mode', () => {
   assert.match(redacted, /STRIPE_KEY_REDACTED/);
 });
 
+test('Stripe accepts a restricted live server key', () => {
+  const { payments } = loadPayments();
+  const environment = {
+    ...stripeEnvironment,
+    STRIPE_SECRET_KEY: 'rk_live_abc123DEF456'
+  };
+  const readiness = payments.paymentReadiness(environment);
+  assert.equal(readiness.secret, true);
+  assert.equal(payments.stripeMode(environment), 'live');
+});
+
 test('Checkout sends verified server-side subscription metadata', async () => withStripeEnvironment(async () => {
   const { payments } = loadPayments();
   let checkoutBody = null;
+  let priceChecks = 0;
   global.fetch = async (url, options = {}) => {
     const value = String(url);
     if (value.includes('/v1/prices/')) {
+      priceChecks += 1;
       return new Response(JSON.stringify(priceFor(decodeURIComponent(value.split('/').pop()))), { status: 200 });
     }
     assert.equal(value, 'https://api.stripe.com/v1/checkout/sessions');
@@ -132,6 +159,7 @@ test('Checkout sends verified server-side subscription metadata', async () => wi
     returnUrl: 'https://nexabot.example.com'
   });
   assert.equal(checkout.id, 'cs_test_checkout123');
+  assert.equal(priceChecks, 1, 'checkout should validate only the selected Price');
   assert.equal(checkoutBody.get('mode'), 'subscription');
   assert.equal(checkoutBody.get('line_items[0][price]'), stripeEnvironment.STRIPE_PRICE_PRO_MONTHLY);
   assert.equal(checkoutBody.get('metadata[guild_id]'), '1556219615858655254');
