@@ -1,4 +1,17 @@
-# NEXA Bot 15.3.0 — Calm Horizon & Checkout Recovery
+# NEXA Bot változásnapló
+
+## 15.4.0 – Azure Command & CIA One-Time Factory
+
+- Visszatért az egységes szerver-kezelőközpont: az Anti-Nuke, Ticket, Automod és a többi modul nem külön bal oldali menüpontként jelenik meg.
+- Új sötétkék, égkék és türkiz Azure Command arculat, nagyobb PC-s munkaterület, tisztább aktív állapotok és átrendezett beállításkártyák készült.
+- Új, kizárólag az elsődleges bot-owner által használható `/cia telepites` parancs hozza létre a teljes CIA RP frakciószervert.
+- A CIA gyár 15 rangot, 12 jogosultságkezelt kategóriát, teljes csatornaszerkezetet, ticketet, szolgálatot, moderációs panelt, 10 kérdéses TGF-et és hat dokumentum-workflow-t telepít.
+- Sikeres telepítés után kettős, adatbázis- és Discord-alapú végleges zár akadályozza meg az újrafuttatást.
+- A `/cia ellenorzes` semmit nem módosít; megmutatja a zárat és a hiányzó rangokat, kategóriákat vagy csatornákat.
+- A Render újraindítása nem futtat CIA-telepítést, és nem írja felül a már kialakított szervert.
+- Új automatikus tesztek védik a CIA owner-korlátozását, egyszeri telepítését, a webes navigációt és az Azure Command arculatot.
+
+## 15.3.0 – Calm Horizon & Checkout Recovery
 
 - Teljesen új, nyugodtabb grafit–zsályazöld–pezsgő webes arculat és jobban tagolt asztali elrendezés.
 - Az Előfizetés oldal szerver → csomag → Stripe folyamatra lett bontva, külön állapotjelzővel és lenyitható diagnosztikával.
@@ -25,8 +38,6 @@
 - Added Stripe configuration diagnostics, strict key/Price ID format validation and visible checkout loading state.
 - Refreshed the desktop-first interface with a high-contrast deep-blue/mint Command Deck theme and account popover.
 
-# Changelog
-
 ## 15.2.1 – Live Control Stability
 
 - Megtartja a kétirányú Web ↔ Discord Support Bridge-et és a Discordos Claim / Pending / Close / Reopen vezérlést.
@@ -38,8 +49,6 @@
 - Render-újraindításkor a Support szerver csak olvasási auditot kap; automatikus újratelepítés vagy szerkezetmódosítás nincs.
 - Új Profilközpont, tartós nyelvválasztás, Stripe Readiness diagnosztika és egyértelmű fizetési betöltési állapot készült.
 - A web új, mélykék–menta, PC-központú Command Deck arculatot és lenyíló fiókmenüt kapott.
-
-# NEXA Bot változásnapló
 
 ## 14.0.0 – Live Control
 

@@ -8,11 +8,11 @@ const source = fs.readFileSync(path.join(root, 'index.js'), 'utf8');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 
-test('release metadata is 15.3.0', () => {
-  assert.equal(pkg.version, '15.3.0');
-  assert.equal(lock.version, '15.3.0');
-  assert.equal(lock.packages[''].version, '15.3.0');
-  assert.match(source, /const APP_VERSION = '15\.3\.0'/);
+test('release metadata is 15.4.0', () => {
+  assert.equal(pkg.version, '15.4.0');
+  assert.equal(lock.version, '15.4.0');
+  assert.equal(lock.packages[''].version, '15.4.0');
+  assert.match(source, /const APP_VERSION = '15\.4\.0'/);
 });
 
 test('subscriptions replaces public pricing while preserving redirect', () => {
@@ -66,15 +66,23 @@ test('Support server has ordered managed categories and safe ticket destination'
 });
 
 
-test('Command Deck has dedicated server control routes and focused views', () => {
+test('Command Deck keeps one unified server control entry with compatible deep routes', () => {
   for (const route of ['overview','moderation','automod','welcome','tickets','logs','reaction-roles','auto-role','level','giveaway','ai','security','stats','settings']) {
     assert.ok(source.includes(route), `missing dedicated dashboard view ${route}`);
   }
+  const serverNavigation = source.match(/const serverNav = activeGuildId \? ([\s\S]+?) : '';/);
+  assert.ok(serverNavigation, 'server navigation definition missing');
+  assert.match(serverNavigation[0], /Control Center/);
+  assert.match(serverNavigation[0], /\/control/);
+  assert.doesNotMatch(serverNavigation[0], /nav\('security'/);
+  assert.doesNotMatch(serverNavigation[0], /nav\('tickets'/);
+  assert.doesNotMatch(serverNavigation[0], /nav\('automod'/);
   assert.match(source, /data-dashboard-view/);
   assert.match(source, /data-server-switch/);
   assert.match(source, /data-nav-search/);
   assert.match(source, /Ctrl K/);
   assert.match(source, /data-persist-draft/);
+  assert.match(source, /view: guildMatch\[2\] \|\| 'control'/);
 });
 
 test('live web support applies ticket state without forced reload', () => {
@@ -125,11 +133,55 @@ test('Stripe checkout gives visible feedback and a direct browser navigation', (
   assert.match(source, /form-action 'self' https:\/\/checkout\.stripe\.com https:\/\/billing\.stripe\.com/);
 });
 
-test('Calm Horizon UI clearly separates navigation and billing workflow', () => {
+test('Azure Command UI provides a calm professional unified workspace', () => {
   assert.match(source, /class="nexa-v153/);
-  assert.match(source, /NEXA Bot 15\.3\.0 • Calm Horizon/);
-  assert.match(source, /--primary:#d6a16a;--accent:#79c4a3/);
+  assert.match(source, /NEXA Bot 15\.4\.0 • Azure Command/);
+  assert.match(source, /NEXA Azure Command — calm, desktop-first operations theme/);
+  assert.match(source, /--primary:#4b9dff;--accent:#5ed8c4/);
+  assert.match(source, /guild-settings\.view-control \.settings/);
+  assert.match(source, /class="settings-jump"/);
   assert.match(source, /class="billing-steps"/);
   assert.match(source, /class="billing-selector card"/);
   assert.match(source, /class="card section billing-diagnostics"/);
+});
+
+test('CIA faction installer is owner-only, complete and permanently one-time', () => {
+  assert.match(source, /const CIA_INSTALLATION_VERSION = 1/);
+  assert.match(source, /const CIA_INSTALL_MARKER = `NEXA_CIA_INSTALLATION_V\$\{CIA_INSTALLATION_VERSION\}`/);
+  assert.match(source, /function buildCiaSetupCommand\(\)/);
+  assert.match(source, /\.setName\('cia'\)/);
+  assert.match(source, /\.setName\('telepites'\)/);
+  assert.match(source, /\.setName\('ellenorzes'\)/);
+  assert.match(source, /if \(!isBotOwner\(interaction\.user\.id\)\)/);
+  assert.match(source, /interaction\.guild\.ownerId !== interaction\.user\.id/);
+  assert.match(source, /function isCiaInstallationComplete\(guild\)/);
+  assert.match(source, /installations\?\.cia\?\.completed \|\| ciaDiscordMarkerPresent\(guild\)/);
+  assert.match(source, /error\.code = 'CIA_ALREADY_INSTALLED'/);
+  assert.match(source, /config\.installations\.cia = \{/);
+  assert.match(source, /await channels\.systemControl\.setTopic\(`/);
+});
+
+test('CIA factory installs roles, permissioned categories, panels and workflows', () => {
+  for (const role of ['CIA Főigazgató', 'CIA Főigazgató-helyettes', 'Műveleti Parancsnok', 'Különleges Ügynök', 'Hírszerzési Tiszt', 'Felfüggesztett']) {
+    assert.ok(source.includes(role), `missing CIA role ${role}`);
+  }
+  for (const category of ['CIA BELÉPÉS', 'CIA INFORMÁCIÓ', 'MŰVELETI KÖZPONT', 'HÍRSZERZÉS', 'BELSŐ ELLENŐRZÉS', 'IGAZGATÓSÁG']) {
+    assert.ok(source.includes(category), `missing CIA category ${category}`);
+  }
+  for (const capability of ['ciaApplicationTemplate', 'ciaDocumentTypes', 'publishCiaPanels', 'ticketPanel', 'shiftPanel', 'staffPanel']) {
+    assert.match(source, new RegExp(`function ${capability}\\(`));
+  }
+  assert.match(source, /await grantGuildPlan\(guild\.id, 'ultimate'/);
+  assert.match(source, /config\.protection\.whitelistRoles/);
+  assert.match(source, /antiNuke: true/);
+});
+
+test('CIA setup never auto-runs after a Render restart', () => {
+  const readyBlock = source.match(/client\.once\(Events\.ClientReady,[\s\S]+?client\.on\(Events\.InteractionCreate/);
+  assert.ok(readyBlock, 'ClientReady block missing');
+  assert.doesNotMatch(readyBlock[0], /await setupCiaServer/);
+  assert.match(source, /registerCiaCommandInOwnerGuilds/);
+  const globalCommands = source.match(/Routes\.applicationCommands\(process\.env\.CLIENT_ID\)[\s\S]+?\.map\(\(item\) => localizeCommandJson/);
+  assert.ok(globalCommands, 'global command registration block missing');
+  assert.doesNotMatch(globalCommands[0], /buildCiaSetupCommand\(\)/);
 });

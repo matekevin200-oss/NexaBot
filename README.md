@@ -1,10 +1,20 @@
-# NEXA Bot 15.3.0 Live Control Platform
+# NEXA Bot 15.4.0 Azure Command Platform
 
 Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Az opcionális RP- és dokumentumrendszert kizárólag a bot tulajdonosa vagy az általa kijelölt Owner-kezelő kapcsolhatja be egy kiválasztott szerveren.
 
-## 15.3.0 újdonságok röviden
+## 15.4.0 újdonságok röviden
 
-- Teljes Calm Horizon webes arculat: a korábbi kék-neon felület helyett nyugodtabb grafit, zsályazöld és pezsgő színvilág, erősebben elkülönülő navigációval és munkaterületekkel.
+- Visszatért az egységes, egyoldalas szerver-kezelőközpont: az Anti-Nuke, Ticket, Automod és a többi modul nem külön bal oldali menüpontokban van szétszórva.
+- Új Azure Command arculat: nyugodt sötétkék, égkék és türkiz színvilág, nagyobb asztali munkaterület, üveghatású kártyák és egyértelmű aktív állapotok.
+- Új, kizárólag a fő bot-owner által használható `/cia telepites` rendszer. Egy futással létrehozza a teljes CIA RP rang-, kategória-, csatorna-, jogosultság-, ticket-, szolgálat-, TGF-, dokumentum- és védelmi struktúrát.
+- A CIA telepítő siker után adatbázis- és Discord-jelzővel végleg lezárja magát az adott szerveren; Render-újraindításkor sem fut újra.
+- A `/cia ellenorzes` módosítás nélkül megmutatja a telepítési zárat, a szerkezet teljességét és az esetleges hiányzó elemeket.
+- A CIA rendszer automatikusan Ultimate hozzáférést, szigorú Anti-Raid/Anti-Nuke védelmet, vak bírálatú 10 kérdéses felvételt és hat részletes CIA iratsablont állít be.
+- A vezetői dokumentumjóváhagyást a szerverhez kijelölt dashboard-kezelői rang is használhatja.
+
+## A 15.3.0-ból megtartott fejlesztések
+
+- A 15.3 fizetési, Support Bridge-, nyelvi és adatmegőrzési fejlesztései változatlanul megmaradtak; a korábbi Calm Horizon vizuális réteget az Azure Command arculat váltja fel.
 - Az Előfizetés oldal új, háromlépcsős munkafolyamatot, külön szerverválasztót, nagyobb csomagkártyákat, szolgáltatáslistát és lenyitható Stripe-diagnosztikát kapott.
 - A fizetési gomb aszinkron, látható állapotú Checkout-indítást használ: siker esetén közvetlenül a Stripe-ra visz, hiba vagy időtúllépés esetén pedig ugyanott megmutatja a pontos okot.
 - A biztonsági fejléc most kifejezetten engedélyezi a Stripe Checkout és Customer Portal célcímeket, így a böngésző nem tudja csendben blokkolni az átirányítást.
@@ -32,7 +42,7 @@
 
 - szerverenként külön mentett modulok, csatornák, rangok, nyelv és arculat;
 - angol alapnyelv új szervereken és a weben, választható magyar felülettel; a szerverenkénti nyelv és slash-command nyelv külön kezelhető;
-- teljesen új grafit–zsályazöld–pezsgő NEXA Calm Horizon arculat: PC-re optimalizált prémium irányítópult, profilmenü, rendezett Owner-szerverlista és kétnyelvű publikus bemutatóoldal élő szerver-, tagszám-, ping-, uptime- és adatbázis-állapottal;
+- Azure Command arculat: PC-re optimalizált sötétkék–égkék–türkiz kezelőközpont, profilmenü, rendezett Owner-szerverlista és kétnyelvű publikus bemutatóoldal élő szerver-, tagszám-, ping-, uptime- és adatbázis-állapottal;
 - kétnyelvű Tudásközpont 14 rendszer részletes, gyakorlati magyarázatával: mit csinál, ki használhatja, hol állítható és mi kell hozzá;
 - Discord OAuth2 dashboard tulajdonos, admin és egy kijelölt kezelői rang részére;
 - külön Owner Center: szerverhálózat, uptime, ping, memória, adatbázis, használat, hibák és audit;
@@ -54,11 +64,11 @@
 - moderációs Case ID és adatbázis: ban, unban, kick, timeout, untimeout, warn, warnings, clearwarns, clear, slowmode, lock, unlock és nick;
 - Automod: spam/flood, ismétlés, mass mention, invite, link, scam, tiltott szavak, caps és emoji spam;
 - whitelist felhasználó, rang és csatorna szerint;
-- külön webes Anti-Raid irányítóközpont érzékenység-, csatorna-, whitelist- és büntetésbeállítással;
+- az egységes szerver-kezelőközpont Anti-Raid szakaszában állítható érzékenység, naplócsatorna, whitelist és büntetési rend;
 - teljes Anti-Nuke: már az első jogosulatlan csatorna-, rang-, jogosultság-, ban/kick/prune- vagy webhookműveletnél azonnali karantén és szerverlezárás;
 - Bot-Guard: kizárólag az előre engedélyezett bot-ID maradhat bent; minden más új bot az auditellenőrzés előtt azonnal kirúgásra kerül;
 - admin döntésig lezárt raid-riasztás, nyitva maradó döntési csatorna és újraindítás után is használható visszaállítási állapot;
-- külön Ticket Centerből konfigurálható kategóriás ticketek (segítség, bejelentés, vásárlás, partnerség, egyéb), claim/unclaim, lezárás és automatikus HTML transcript;
+- az egységes szerver-kezelőközpont Ticket szakaszából konfigurálható kategóriás ticketek (segítség, bejelentés, vásárlás, partnerség, egyéb), claim/unclaim, lezárás és automatikus HTML transcript;
 - a hivatalos NEXA Support Gateway kizárólag a `1556219615858655254` azonosítójú Support szerveren működik; más szerverek a saját, általános ticketpaneljüket kapják;
 - élő, kétirányú Web Support Bridge: a weboldalon beadott segítségkérés privát Discord-ticketet nyit a hivatalos Support szerveren; Discordból Claim/Pending/Close/Reopen kezelhető, a Staff válaszai és az állapotváltozások pedig automatikusan frissülnek a weben kézi újratöltés nélkül;
 - welcome/goodbye placeholder, külön ember- és bot-autorang;
@@ -262,7 +272,7 @@ Az állapotvégpontok:
 A sikeres logban ez jelenik meg:
 
 ```text
-A NEXA Bot 15.3.0 Live Control Platform használatra kész.
+A NEXA Bot 15.4.0 Azure Command Platform használatra kész.
 ```
 
 ## Használat
@@ -296,7 +306,7 @@ A NEXA Bot 15.3.0 Live Control Platform használatra kész.
 
 1. Az Owner Centerben adj a szervernek **Ultimate** csomagot. Az Owner által RP-re engedélyezett szerver ezt automatikusan megkapja.
 2. A szerver dashboardján kapcsold be a **Védelem** modult.
-3. A **Külön Anti-Raid irányítóközpontban** válaszd a `minden-log` csatornát, és kapcsold be az összes őrt, az Anti-Nuke-ot és az azonnali szerverlezárást.
+3. Nyisd meg a szerver **Kezelőközpontját**, majd az **Anti-Raid** résznél válaszd a `minden-log` csatornát, és kapcsold be az összes őrt, az Anti-Nuke-ot és az azonnali szerverlezárást.
 4. A Discord **Szerverbeállítások → Rangok** oldalán húzd a NEXA Bot rangját minden más bot és minden általa kezelendő rang fölé.
 5. Minden engedélyezett külső bot ID-jét add a **NEXA Bot-Guard** listájához még a meghívása előtt. A listán nem szereplő botot a NEXA azonnal kirúgja.
 6. A `/vedelem statusz` paranccsal ellenőrizd a szükséges jogosultságokat és a rangpozíciót.
