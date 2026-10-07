@@ -9825,6 +9825,29 @@ async function handleCommand(interaction) {
       if (audit.missingChannels.length) lines.push(`**Hiányzó csatornák:** ${audit.missingChannels.join(', ')}`);
       return interaction.reply({ content: `## CIA rendszerellenőrzés\n${lines.join('\n')}`, flags: EPHEMERAL });
     }
+    if (action === 'rangok-frissitese') {
+      await interaction.deferReply({ flags: EPHEMERAL });
+      try {
+        const result = await refreshCiaAmericanRanks(interaction.guild, interaction.client.user);
+        await recordAudit('cia_american_ranks_refresh', {
+          actorId: interaction.user.id,
+          guildId: interaction.guildId,
+          metadata: { roles: result.count, hierarchyUpdated: result.hierarchyUpdated }
+        });
+        return interaction.editReply(
+          `✅ **Az amerikai CIA ranghierarchia elkészült.**\n` +
+          `• ${result.count} rang frissítve\n` +
+          `• A rangpozíciók és jogosultságok megmaradtak\n` +
+          `• A szerver csatornái, paneljei, kérdései és botüzenetei továbbra is magyarok\n` +
+          `• Hierarchiapanel: ${result.hierarchyUpdated ? 'frissítve' : 'nem található, ezért kihagyva'}`
+        );
+      } catch (error) {
+        await recordError(error, { command: 'cia rangok-frissitese', guildId: interaction.guildId, userId: interaction.user.id });
+        if (error.code === 'CIA_NOT_INSTALLED') return interaction.editReply(`⚠️ ${error.message}`);
+        if (error.code === 'CIA_INSTALL_RUNNING') return interaction.editReply(`⏳ ${error.message}`);
+        return interaction.editReply(`❌ A rangfrissítés megszakadt: ${String(error.message || error).slice(0, 1200)}`);
+      }
+    }
     await interaction.deferReply({ flags: EPHEMERAL });
     try {
       const result = await setupCiaServer(interaction.guild, interaction.client.user, interaction.member);
@@ -14322,33 +14345,33 @@ const CIA_PANEL_FOOTER = 'NEXA CIA RP Setup • one-time managed message';
 const ciaInstallLocks = new Set();
 
 const CIA_ROLES = Object.freeze([
-  { key: 'director', name: '👑 CIA Főigazgató', color: 0xd4af37, hoist: true, permissions: [PermissionFlagsBits.Administrator] },
+  { key: 'director', name: '👑 Director of the CIA (D/CIA)', legacyNames: ['👑 CIA Főigazgató', '👑 Director of the CIA'], color: 0xd4af37, hoist: true, permissions: [PermissionFlagsBits.Administrator] },
   {
-    key: 'deputy', name: '⭐ CIA Főigazgató-helyettes', color: 0xc0392b, hoist: true,
+    key: 'deputy', name: '⭐ Deputy Director of the CIA (DD/CIA)', legacyNames: ['⭐ CIA Főigazgató-helyettes', '⭐ Deputy Director of the CIA'], color: 0xc0392b, hoist: true,
     permissions: [PermissionFlagsBits.ViewAuditLog, PermissionFlagsBits.ManageGuild, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageRoles, PermissionFlagsBits.ManageWebhooks, PermissionFlagsBits.ManageMessages, PermissionFlagsBits.ManageThreads, PermissionFlagsBits.KickMembers, PermissionFlagsBits.BanMembers, PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.ManageNicknames, PermissionFlagsBits.MoveMembers, PermissionFlagsBits.MentionEveryone]
   },
   {
-    key: 'chiefOfStaff', name: '🏛️ Kabinetfőnök', color: 0xe74c3c, hoist: true,
+    key: 'chiefOfStaff', name: '🏛️ Executive Director (EXDIR)', legacyNames: ['🏛️ Kabinetfőnök', '🏛️ Executive Director'], color: 0xe74c3c, hoist: true,
     permissions: [PermissionFlagsBits.ViewAuditLog, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageRoles, PermissionFlagsBits.ManageMessages, PermissionFlagsBits.ManageThreads, PermissionFlagsBits.KickMembers, PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.ManageNicknames, PermissionFlagsBits.MoveMembers]
   },
   {
-    key: 'directorateHead', name: '🛡️ Igazgatósági Vezető', color: 0x9b59b6, hoist: true,
+    key: 'directorateHead', name: '🛡️ Deputy Director for Operations (DDO)', legacyNames: ['🛡️ Igazgatósági Vezető', '🛡️ Director of Operations'], color: 0x9b59b6, hoist: true,
     permissions: [PermissionFlagsBits.ViewAuditLog, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageMessages, PermissionFlagsBits.ManageThreads, PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.ManageNicknames, PermissionFlagsBits.MoveMembers]
   },
   {
-    key: 'operationsCommander', name: '🎖️ Műveleti Parancsnok', color: 0x8e44ad, hoist: true,
+    key: 'operationsCommander', name: '🎖️ Chief of Station (COS)', legacyNames: ['🎖️ Műveleti Parancsnok', '🎖️ Chief of Station'], color: 0x8e44ad, hoist: true,
     permissions: [PermissionFlagsBits.ManageMessages, PermissionFlagsBits.ManageThreads, PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.ManageNicknames, PermissionFlagsBits.MoveMembers]
   },
-  { key: 'seniorAgent', name: '🕶️ Vezető Különleges Ügynök', color: 0x2980b9, hoist: true, permissions: [] },
-  { key: 'specialAgent', name: '🕵️ Különleges Ügynök', color: 0x3498db, hoist: true, permissions: [] },
-  { key: 'intelligenceOfficer', name: '🔎 Hírszerzési Tiszt', color: 0x16a085, hoist: true, permissions: [] },
-  { key: 'fieldAgent', name: '📡 Terepi Ügynök', color: 0x1abc9c, hoist: true, permissions: [] },
-  { key: 'trainee', name: '🎓 Próbaidős Ügynök', color: 0x2ecc71, hoist: true, permissions: [] },
-  { key: 'candidate', name: '📋 CIA Jelölt', color: 0x95a5a6, permissions: [] },
-  { key: 'verified', name: '✅ Ellenőrzött Személy', color: 0x57f287, permissions: [] },
-  { key: 'operationAlert', name: '🚨 Műveleti Riasztás', color: 0xe67e22, mentionable: true, permissions: [] },
-  { key: 'announcements', name: '📢 CIA Közlemények', color: 0xf1c40f, mentionable: true, permissions: [] },
-  { key: 'suspended', name: '⛔ Felfüggesztett', color: 0x2c3e50, permissions: [] }
+  { key: 'seniorAgent', name: '🕶️ Deputy Chief of Station (DCOS)', legacyNames: ['🕶️ Vezető Különleges Ügynök', '🕶️ Deputy Chief of Station'], color: 0x2980b9, hoist: true, permissions: [] },
+  { key: 'specialAgent', name: '🕵️ Case Officer (CO)', legacyNames: ['🕵️ Különleges Ügynök', '🕵️ Senior Operations Officer'], color: 0x3498db, hoist: true, permissions: [] },
+  { key: 'intelligenceOfficer', name: '🎯 Targeting Officer (TO)', legacyNames: ['🔎 Hírszerzési Tiszt', '🔎 Intelligence Officer'], color: 0x16a085, hoist: true, permissions: [] },
+  { key: 'fieldAgent', name: '📡 Staff Operations Officer (SOO)', legacyNames: ['📡 Terepi Ügynök', '📡 Operations Officer'], color: 0x1abc9c, hoist: true, permissions: [] },
+  { key: 'trainee', name: '🎓 Professional Trainee (PT)', legacyNames: ['🎓 Próbaidős Ügynök', '🎓 Junior Operations Officer'], color: 0x2ecc71, hoist: true, permissions: [] },
+  { key: 'candidate', name: '📋 CIA Jelölt', legacyNames: ['📋 CIA Applicant'], color: 0x95a5a6, permissions: [] },
+  { key: 'verified', name: '✅ Ellenőrzött állomány', legacyNames: ['✅ Ellenőrzött Személy', '✅ Verified Personnel'], color: 0x57f287, permissions: [] },
+  { key: 'operationAlert', name: '🚨 Műveleti Riasztás', legacyNames: ['🚨 Operation Alert'], color: 0xe67e22, mentionable: true, permissions: [] },
+  { key: 'announcements', name: '📢 CIA Közlemények', legacyNames: ['📢 CIA Announcements'], color: 0xf1c40f, mentionable: true, permissions: [] },
+  { key: 'suspended', name: '⛔ Felfüggesztett', legacyNames: ['⛔ Suspended'], color: 0x2c3e50, permissions: [] }
 ]);
 
 const CIA_CATEGORIES = Object.freeze([
@@ -14515,7 +14538,10 @@ function buildCiaSetupCommand() {
       .setDescription('Egyszer létrehozza a teljes CIA rang-, csatorna-, jog- és panelrendszert.'))
     .addSubcommand((subcommand) => subcommand
       .setName('ellenorzes')
-      .setDescription('Módosítás nélkül ellenőrzi a CIA telepítés állapotát.'));
+      .setDescription('Módosítás nélkül ellenőrzi a CIA telepítés állapotát.'))
+    .addSubcommand((subcommand) => subcommand
+      .setName('rangok-frissitese')
+      .setDescription('A telepített CIA rangokat amerikai elnevezésekre frissíti.'));
 }
 
 function buildSupportSetupCommand() {
@@ -14986,7 +15012,8 @@ async function applyRolePositions(guild, roles) {
 }
 
 function ciaRoleBySpec(guild, spec) {
-  return guild.roles.cache.find((role) => role.name === spec.name && !role.managed);
+  const names = new Set([spec.name, ...(spec.legacyNames || [])]);
+  return guild.roles.cache.find((role) => names.has(role.name) && !role.managed);
 }
 
 async function ensureCiaRole(guild, spec) {
@@ -15148,8 +15175,8 @@ function ciaStaticPanels() {
     announcements: [ciaInfoEmbed('📢 Hivatalos CIA-közlemények', 'A vezetőség jóváhagyott közleményei és szolgálati értesítései jelennek meg itt. Az értesítéshez válaszd ki a megfelelő rangot az értesítési panelen.')],
     recruitmentInfo: [ciaInfoEmbed('🕵️ Felvételi tájékoztató', 'A jelentkezést a `📝・jelentkezés` csatornában indíthatod. Válaszolj részletesen és saját szavaiddal. A bírálat vak eljárásban történik, az eredményről a bot privát üzenetet küld.')],
     handbook: [ciaInfoEmbed('📘 Állományi kézikönyv', 'A szolgálat megkezdése előtt ellenőrizd a rangodat, a kijelölt feladatodat, a hívójeledet és a szükséges felszerelést. Minden műveletet eligazítás, végrehajtás, jelentés és lezárás követ.')],
-    hierarchy: [ciaInfoEmbed('🔰 Szolgálati hierarchia', 'Főigazgató → Főigazgató-helyettes → Kabinetfőnök → Igazgatósági Vezető → Műveleti Parancsnok → Vezető Különleges Ügynök → Különleges Ügynök → Hírszerzési Tiszt → Terepi Ügynök → Próbaidős Ügynök.')],
-    ranks: [ciaInfoEmbed('🎖️ Rendfokozatok és hatáskörök', 'A rang határozza meg az elérhető csatornákat, a dokumentumok használatát és a vezetői döntési jogot. Jogosultságot kizárólag a kijelölt vezető adhat vagy vehet el.')],
+    hierarchy: [ciaInfoEmbed('🔰 Szolgálati hierarchia', '**Vezetési lánc:** Director of the CIA (D/CIA) → Deputy Director of the CIA (DD/CIA) → Executive Director (EXDIR) → Deputy Director for Operations (DDO) → Chief of Station (COS) → Deputy Chief of Station (DCOS).\n\n**Szakmai beosztások:** Case Officer (CO), Targeting Officer (TO), Staff Operations Officer (SOO), Professional Trainee (PT). A CIA a valóságban nem katonai rendfokozatokat, hanem vezetői és szakmai beosztásokat használ.')],
+    ranks: [ciaInfoEmbed('🎖️ Beosztások és hatáskörök', 'Az angol elnevezések a valódi CIA nyilvános vezetői és Directorate of Operations beosztásaihoz igazodnak. A NEXA hozzáférési sorrendje a szerver működéséhez szükséges RP-jogosultsági rend; nem állítja, hogy a szakmai munkakörök a valóságban katonai rangsort alkotnak.')],
     radioCodes: [ciaInfoEmbed('📻 Rádiófegyelem', 'Használj rövid, tényszerű közléseket: egység/hívójel, helyszín, esemény, szükséges intézkedés. Minősített adatot nyilvános rádión ne közölj.')],
     equipment: [ciaInfoEmbed('🧰 Felszerelési rend', 'Csak a feladathoz és ranghoz engedélyezett felszerelés használható. Az átvételt, elvesztést és rendkívüli felhasználást dokumentálni kell.')],
     protocols: [ciaInfoEmbed('📑 Általános eljárásrend', 'Minden ügyet a legkisebb szükséges jogosultsággal kezelj. Rögzítsd az időpontot, résztvevőket, tényeket, bizonyítékokat, döntést és a további teendőt.')],
@@ -15323,6 +15350,75 @@ function auditCiaServer(guild) {
   };
 }
 
+async function refreshCiaAmericanRanks(guild, botUser) {
+  if (!isCiaInstallationComplete(guild)) {
+    const error = new Error('Előbb telepítsd a CIA rendszert a /cia telepites paranccsal.');
+    error.code = 'CIA_NOT_INSTALLED';
+    throw error;
+  }
+  if (ciaInstallLocks.has(guild.id)) {
+    const error = new Error('A CIA rendszer módosítása ezen a szerveren már folyamatban van.');
+    error.code = 'CIA_INSTALL_RUNNING';
+    throw error;
+  }
+
+  ciaInstallLocks.add(guild.id);
+  try {
+    const config = JSON.parse(JSON.stringify(getGuildConfig(guild.id)));
+    const storedRoleIds = config.installations?.cia?.roles || {};
+    const roles = {};
+
+    for (const spec of CIA_ROLES) {
+      let role = storedRoleIds[spec.key] ? guild.roles.cache.get(storedRoleIds[spec.key]) : null;
+      if (!role && storedRoleIds[spec.key]) role = await guild.roles.fetch(storedRoleIds[spec.key]).catch(() => null);
+      if (!role || role.managed) role = ciaRoleBySpec(guild, spec);
+
+      if (!role) {
+        role = await guild.roles.create({
+          name: spec.name,
+          color: spec.color,
+          hoist: Boolean(spec.hoist),
+          mentionable: Boolean(spec.mentionable),
+          permissions: spec.permissions,
+          reason: `${CIA_SETUP_REASON} – American rank migration`
+        });
+      } else {
+        role = await role.edit({
+          name: spec.name,
+          color: spec.color,
+          hoist: Boolean(spec.hoist),
+          mentionable: Boolean(spec.mentionable),
+          reason: `${CIA_SETUP_REASON} – American rank migration`
+        });
+      }
+      roles[spec.key] = role;
+    }
+
+    await applyCiaRolePositions(guild, roles);
+
+    const storedHierarchyId = config.installations?.cia?.channels?.hierarchy;
+    let hierarchyChannel = storedHierarchyId ? guild.channels.cache.get(storedHierarchyId) : null;
+    if (!hierarchyChannel && storedHierarchyId) hierarchyChannel = await guild.channels.fetch(storedHierarchyId).catch(() => null);
+    if (!hierarchyChannel) hierarchyChannel = guild.channels.cache.find((channel) => channel.type === ChannelType.GuildText && channel.name === '🔰・szolgálati-hierarchia');
+    const hierarchyUpdated = Boolean(hierarchyChannel?.isTextBased?.() && botUser?.id);
+    if (hierarchyUpdated) await sendCiaStaticPanel(hierarchyChannel, ciaStaticPanels().hierarchy, botUser.id);
+
+    config.installations = config.installations || {};
+    config.installations.cia = {
+      ...(config.installations.cia || {}),
+      completed: true,
+      version: config.installations.cia?.version || CIA_INSTALLATION_VERSION,
+      roles: Object.fromEntries(Object.entries(roles).map(([key, role]) => [key, role.id])),
+      rankStyle: 'american',
+      ranksUpdatedAt: new Date().toISOString()
+    };
+    await setGuildConfig(guild.id, config);
+    return { count: Object.keys(roles).length, hierarchyUpdated };
+  } finally {
+    ciaInstallLocks.delete(guild.id);
+  }
+}
+
 async function setupCiaServer(guild, botUser, ownerMember) {
   if (!guild?.id || !ownerMember?.id) throw new Error('A CIA telepítéshez szerver és tulajdonos szükséges.');
   if (isCiaInstallationComplete(guild)) {
@@ -15442,6 +15538,7 @@ async function setupCiaServer(guild, botUser, ownerMember) {
       version: CIA_INSTALLATION_VERSION,
       installedAt: new Date().toISOString(),
       installedBy: ownerMember.id,
+      rankStyle: 'american',
       roles: Object.fromEntries(Object.entries(roles).map(([key, role]) => [key, role.id])),
       categories: Object.fromEntries(Object.entries(categories).map(([key, category]) => [key, category.id])),
       channels: Object.fromEntries(Object.entries(channels).map(([key, channel]) => [key, channel.id]))
@@ -15730,6 +15827,7 @@ module.exports = {
   buildSupportSetupCommand,
   isCiaInstallationComplete,
   publishSupportPanels,
+  refreshCiaAmericanRanks,
   repairSupportServer,
   registerCiaCommandInOwnerGuilds,
   registerSupportCommandInOwnerGuilds,

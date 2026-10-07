@@ -17,7 +17,7 @@ A `/cia telepites` kizárólag akkor fut, ha:
 
 A telepítő létrehozza:
 
-- a CIA teljes ranghierarchiáját és jogosultságait;
+- a nyilvánosan ismert valódi CIA vezetői és Directorate of Operations beosztásokhoz igazított angol szerepköröket, miközben a teljes szerverfelület magyar marad;
 - 12 rendezett, célzott hozzáférésű kategóriát;
 - a nyilvános beléptető-, belső, kiképzési, műveleti, hírszerzési, adminisztrációs, ellenőrzési és igazgatósági csatornákat;
 - gombos ellenőrzést, értesítési rangokat, CIA ticketet, szolgálati és moderációs panelt;
@@ -35,6 +35,8 @@ A végleges zár csak a teljes telepítés és a panelek sikeres kihelyezése ut
 - Render- vagy bot-újraindításkor nem telepít újra semmit.
 
 Ha a folyamat a végleges zár előtt hibával megszakad, a hiba javítása után biztonságosan újraindítható. A `/cia ellenorzes` parancs módosítás nélkül felsorolja a hiányzó elemeket.
+
+Ha a CIA rendszer egy korábbi 15.4-es csomaggal már elkészült, a `/cia rangok-frissitese` egyszerűen átnevezi a NEXA által kezelt rangokat a hitelesebb amerikai elnevezésekre, újratelepítés és csatornatörlés nélkül.
 
 ## Frissítés
 

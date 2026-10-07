@@ -9,6 +9,8 @@
 - Új, kizárólag a fő bot-owner által használható `/cia telepites` rendszer. Egy futással létrehozza a teljes CIA RP rang-, kategória-, csatorna-, jogosultság-, ticket-, szolgálat-, TGF-, dokumentum- és védelmi struktúrát. Nem kell a szerver tulajdonosának lenned: a saját `BOT_OWNER_ID` fiókodnak Rendszergazda jog szükséges.
 - A CIA telepítő siker után adatbázis- és Discord-jelzővel végleg lezárja magát az adott szerveren; Render-újraindításkor sem fut újra.
 - A `/cia ellenorzes` módosítás nélkül megmutatja a telepítési zárat, a szerkezet teljességét és az esetleges hiányzó elemeket.
+- A CIA szerver magyar marad, miközben a vezetői és műveleti szerepkörök a valódi amerikai CIA nyilvános elnevezéseihez igazodnak (D/CIA, DD/CIA, EXDIR, DDO, COS, DCOS, Case Officer, Targeting Officer, Staff Operations Officer és Professional Trainee). Ezek valós vezetői vagy szakmai beosztások, nem kitalált katonai rendfokozatok.
+- Már telepített CIA szerveren a fő bot-owner a `/cia rangok-frissitese` paranccsal nevezi át biztonságosan a kezelt rangokat; a csatornák, jogosultságok, panelek és magyar tartalmak megmaradnak.
 - A CIA rendszer automatikusan Ultimate hozzáférést, szigorú Anti-Raid/Anti-Nuke védelmet, vak bírálatú 10 kérdéses felvételt és hat részletes CIA iratsablont állít be.
 - A vezetői dokumentumjóváhagyást a szerverhez kijelölt dashboard-kezelői rang is használhatja.
 

@@ -155,6 +155,7 @@ test('CIA faction installer is owner-only, complete and permanently one-time', (
   assert.match(source, /\.setName\('cia'\)/);
   assert.match(source, /\.setName\('telepites'\)/);
   assert.match(source, /\.setName\('ellenorzes'\)/);
+  assert.match(source, /\.setName\('rangok-frissitese'\)/);
   assert.match(source, /if \(!isBotOwner\(interaction\.user\.id\)\)/);
   assert.match(source, /!interaction\.memberPermissions\?\.has\(PermissionFlagsBits\.Administrator\)/);
   assert.match(source, /ownerMember\?\.permissions\?\.has\(PermissionFlagsBits\.Administrator\)/);
@@ -166,7 +167,7 @@ test('CIA faction installer is owner-only, complete and permanently one-time', (
 });
 
 test('CIA factory installs roles, permissioned categories, panels and workflows', () => {
-  for (const role of ['CIA Főigazgató', 'CIA Főigazgató-helyettes', 'Műveleti Parancsnok', 'Különleges Ügynök', 'Hírszerzési Tiszt', 'Felfüggesztett']) {
+  for (const role of ['Director of the CIA (D/CIA)', 'Deputy Director of the CIA (DD/CIA)', 'Executive Director (EXDIR)', 'Deputy Director for Operations (DDO)', 'Chief of Station (COS)', 'Case Officer (CO)', 'Targeting Officer (TO)', 'Staff Operations Officer (SOO)', 'Professional Trainee (PT)']) {
     assert.ok(source.includes(role), `missing CIA role ${role}`);
   }
   for (const category of ['CIA BELÉPÉS', 'CIA INFORMÁCIÓ', 'MŰVELETI KÖZPONT', 'HÍRSZERZÉS', 'BELSŐ ELLENŐRZÉS', 'IGAZGATÓSÁG']) {
@@ -178,6 +179,10 @@ test('CIA factory installs roles, permissioned categories, panels and workflows'
   assert.match(source, /await grantGuildPlan\(guild\.id, 'ultimate'/);
   assert.match(source, /config\.protection\.whitelistRoles/);
   assert.match(source, /antiNuke: true/);
+  assert.match(source, /config\.language = 'hu'/);
+  assert.match(source, /rankStyle: 'american'/);
+  assert.match(source, /function refreshCiaAmericanRanks\(guild, botUser\)/);
+  assert.match(source, /A CIA a valóságban nem katonai rendfokozatokat/);
 });
 
 test('CIA setup never auto-runs after a Render restart', () => {
