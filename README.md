@@ -1,23 +1,26 @@
-# NEXA Bot 14.1 Live Control Platform
+# NEXA Bot 15.1 Live Control Platform
 
 Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Az opcionális RP- és dokumentumrendszert kizárólag a bot tulajdonosa vagy az általa kijelölt Owner-kezelő kapcsolhatja be egy kiválasztott szerveren.
 
-## 14.0 újdonságok röviden
+## 15.1 újdonságok röviden
 
-- Discord és web között élő Support ticket-szinkron 2,5 másodperces automatikus frissítéssel.
+- Discord és web között élő Support ticket-szinkron 1,8 másodperces automatikus frissítéssel.
 - Discord Staff gombok: Claim, Pending, Close és Reopen; az állapot a weben automatikusan követi a Discordot.
-- Angol az alapértelmezett nyelv új szervereken és a weben; HU/EN váltó megőrzi az aktuális oldalt.
+- Angol az alapértelmezett nyelv új szervereken és a weben; a tartós HU/EN váltó megőrzi az aktuális oldalt és az újabb belépés után is megmarad.
 - Az Árak/Pricing rész helyett egységes Előfizetés/Subscriptions felület működik, külön havi/éves Stripe Price ID ellenőrzéssel.
+- A Stripe Readiness panel pontosan megmutatja, melyik Render-változó hiányzik vagy hibás anélkül, hogy titkos értéket jelenítene meg.
 - Hibás dashboard-beállításnál a kitöltött űrlap megmarad, és a rendszer a hibás mezőhöz görget.
 - Az Owner Center hozzáférési modellje változatlanul owner + külön engedélyezett owner-user; a szerverkártyák a szervertulajdonos Discord-nevét is feloldják.
 - A hivatalos Support szerver kategóriái számozott sorrendet, javított ticket-célkategóriát és rendezett csatornákat kaptak.
+- Új Profile & Language központ mutatja a Discord-identitást, kezelhető szervereket, hozzáférési szintet és a tartós nyelvválasztást.
+- A Render újraindítása csak olvasási ellenőrzést végez: nem telepíti újra és nem módosítja automatikusan a Discord-szerver struktúráját.
 
 
 ## Fő funkciók
 
 - szerverenként külön mentett modulok, csatornák, rangok, nyelv és arculat;
 - angol alapnyelv új szervereken és a weben, választható magyar felülettel; a szerverenkénti nyelv és slash-command nyelv külön kezelhető;
-- teljesen új grafit–réz NEXA Operations webes arculat: PC-re optimalizált, nyugodt prémium irányítópult, rendezett Owner-szerverlista és kétnyelvű publikus bemutatóoldal élő szerver-, tagszám-, ping-, uptime- és adatbázis-állapottal;
+- teljesen új mélykék–menta NEXA Command Deck arculat: PC-re optimalizált prémium irányítópult, profilmenü, rendezett Owner-szerverlista és kétnyelvű publikus bemutatóoldal élő szerver-, tagszám-, ping-, uptime- és adatbázis-állapottal;
 - kétnyelvű Tudásközpont 14 rendszer részletes, gyakorlati magyarázatával: mit csinál, ki használhatja, hol állítható és mi kell hozzá;
 - Discord OAuth2 dashboard tulajdonos, admin és egy kijelölt kezelői rang részére;
 - külön Owner Center: szerverhálózat, uptime, ping, memória, adatbázis, használat, hibák és audit;
@@ -25,8 +28,8 @@
 - AEGIS Permission DNA: veszélyes jogosultságok, identitásonkénti robbanási sugár, ranghierarchia és elszigetelhetőség elemzése; kriptográfiai bázis és jogosultság-drift az Owner Centerben;
 - kereshető, lapozott Owner szerverlista és szerverenkénti részletes állapotlap modul-, csatorna-, rang-, jogosultság-, NEXA Shield-, audit- és hibanézettel;
 - owner-kezelők, AI-engedélylista, user/guild blacklist, maintenance és globális modul-vészkapcsoló;
-- biztonságos Stripe Checkout és Customer Portal havi/éves Pro, Ultimate és Enterprise előfizetéssel, automatikus aktiválással, lemondással és lejáratkezeléssel;
-- Owner által ingyen kiosztható Pro, Ultimate és Enterprise jogosultsági csomagok, megadható lejárattal vagy korlátlan időre;
+- biztonságos Stripe Checkout és Customer Portal havi/éves Pro és Ultimate előfizetéssel, automatikus aktiválással, lemondással és lejáratkezeléssel;
+- Owner által ingyen kiosztható Pro és Ultimate jogosultsági csomagok, megadható lejárattal vagy korlátlan időre;
 - Owner-only RP modul: szerverenkénti engedélyezés, TGF, részletes dokumentumpanelek és vezetői jóváhagyás;
 - Owner Document Control: az Owner Centerben szerverenként kiválasztható alapértelmezett használati rang, dokumentumtípusonkénti rangfelülírás, kapcsolható ügyszám és Discord-listás személymegjelölés; a felhívások és egyszerű közlemények alapból nem kapnak ügyszámot;
 - Workflow Studio: az Owner Centerben saját dokumentum- és ügyiratsablon készíthető legfeljebb öt egyedi kérdéssel, célcsatornával, használati ranggal, pinggel, automatikus ügyszámmal és opcionális vezetői jóváhagyással;
@@ -65,7 +68,7 @@
 - teljes magyar–angol Discord slash-command lokalizáció: a parancsok, alparancsok, mezők, leírások és választási lehetőségek a felhasználó Discord-nyelvén jelennek meg;
 - Owner-only NEXA Support Server Factory: egyetlen parancsból idempotensen létrehozza vagy frissíti a hivatalos támogatási szerver 13 rangját, 7 kategóriáját, teljes csatornaszerkezetét, pontos jogosultságait, ellenőrző-, nyelv- és ticketpaneljeit, valamint kész magyar–angol tájékoztatóit;
 
-## Hivatalos Support szerver automatikus telepítése
+## Hivatalos Support szerver kézi telepítése és biztonságos indítása
 
 A parancsot kizárólag a `BOT_OWNER_ID` értékében szereplő elsődleges bot-tulajdonos használhatja, és csak a saját tulajdonú Discord-szerverén.
 
@@ -82,6 +85,8 @@ A parancsot kizárólag a `BOT_OWNER_ID` értékében szereplő elsődleges bot-
 - `javitas`: helyreállítja a support modulokat, a tagellenőrzést, a rangsorrendet és a paneleket;
 - `angolositas`: a meglévő kezelt szervert veszteség nélkül angol alapnyelvre állítja; a magyar nyelv a `🇭🇺 Magyar` ranggal és a `🇭🇺・hungarian-chat` csatornában marad elérhető;
 - `ellenorzes`: felsorolja a hiányzó rangokat, kategóriákat és csatornákat.
+
+> **Render-újraindítási védelem:** a bot minden induláskor kizárólag olvasási auditot futtat a hivatalos Support szerveren. Nem hoz létre, nem nevez át és nem töröl rangot, kategóriát, csatornát vagy panelt. Ha hiányt talál, a logban jelzi; módosítás csak a botowner által kézzel futtatott `/support-szerver telepites`, `/support-szerver javitas`, `/support-szerver panelek` vagy `/support-szerver angolositas` paranccsal történik.
 
 A telepítéshez a botnak ideiglenesen `Rendszergazda` jogosultság kell. A Discord Közösség funkció feltételeit a szervertulajdonosnak egyszer kézzel kell elfogadnia.
 
@@ -242,7 +247,7 @@ Az állapotvégpontok:
 A sikeres logban ez jelenik meg:
 
 ```text
-A NEXA Bot 14.1 Live Control Platform használatra kész.
+A NEXA Bot 15.1 Live Control Platform használatra kész.
 ```
 
 ## Használat
@@ -260,7 +265,7 @@ A NEXA Bot 14.1 Live Control Platform használatra kész.
 - Custom Commands: nyisd meg a szerver **Custom Command kezelő** oldalát;
 - Owner Center: a `BOT_OWNER_ID` fiókkal belépve automatikusan megnyílik.
 - Előfizetés: a szerver dashboardján nyisd meg a **Csomag és számlázás** oldalt, válassz csomagot és havi/éves ciklust, majd fejezd be a Stripe Checkoutot. Lemondás vagy kártyamódosítás a **Számlázás és lemondás kezelése** gombbal történik.
-- Ingyenes csomag kiosztása: az Owner Centerben válaszd ki a Pro, Ultimate vagy Enterprise csomagot és a lejáratot; az eltávolítás csak az Owner-ajándékot veszi el, a külön Stripe-előfizetést nem.
+- Ingyenes csomag kiosztása: az Owner Centerben válaszd ki a Pro vagy Ultimate csomagot és a lejáratot; az eltávolítás csak az Owner-ajándékot veszi el, a külön Stripe-előfizetést nem.
 - RP-rendszer: az Owner Center szerverlistáján nyomd meg az **RP bekapcsolása** gombot. Ezután Discordon a `/telepites` a teljes alap RP-rendszert, a `/dokumentum-panelek` pedig a már meglévő dokumentumcsatornák paneljeit telepíti.
 - Dokumentumjogosultság: az Owner Center szerverkártyáján nyisd meg az **Iratvezérlés** oldalt, válaszd ki az **Alapértelmezett használati rangot**, majd ments. Ettől kezdve nem a fix „Operatív állomány”, hanem a kiválasztott rang használhatja a paneleket. Egyes dokumentumtípusokhoz külön rang is megadható.
 - Egyedi ügyirat: **Owner Center → szerver → Workflow Studio**. Add meg a kérdéseket, célcsatornát és szabályokat, mentsd, majd nyomd meg a **Panel kihelyezése** gombot.

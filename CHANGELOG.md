@@ -1,6 +1,22 @@
+# NEXA Bot 15.1.0 — Command Deck
+
+- Premium SaaS-style server control shell with dedicated Moderation, Automod, Welcome, Ticket, Logs, Reaction Role, Auto Role, Level, Giveaway, AI, Security, Stats and Settings routes.
+- Server context switcher, searchable sidebar, Ctrl/Cmd+K navigation focus, responsive mobile drawer and clearer active-location state.
+- Safe focused views keep the complete settings form in the DOM so hidden configuration is preserved when saving.
+- Session draft recovery protects unsaved configuration from accidental navigation/reload.
+- Client/server validation keeps values, highlights the invalid field and scrolls directly to it.
+- Web Support state changes now apply live without forcing a page reload; Discord Close/Pending/Reopen updates the web composer in place.
+- Live Support polling tightened to 1.8 seconds with status toasts and reconnect state.
+- Owner Center remains limited to BOT_OWNER_ID plus explicit Owner operators; server owner Discord name/username and ID remain visible.
+- Subscription naming remains Subscription/Előfizetés only; no public “Prices/Árak” navigation item.
+- Render restarts now perform a read-only Support audit and never recreate or overwrite Discord roles, channels or panels.
+- Added a dedicated profile and account-security page with a persistent English/Hungarian language preference.
+- Added Stripe configuration diagnostics, strict key/Price ID format validation and visible checkout loading state.
+- Refreshed the desktop-first interface with a high-contrast deep-blue/mint Command Deck theme and account popover.
+
 # Changelog
 
-## 14.1.0 – Live Control Stability
+## 15.1.0 – Live Control Stability
 
 - Megtartja a kétirányú Web ↔ Discord Support Bridge-et és a Discordos Claim / Pending / Close / Reopen vezérlést.
 - Megtartja az automatikus webes ticket-frissítést, így nincs szükség kézi oldalfrissítésre.
@@ -8,6 +24,9 @@
 - Az új ticket-címkék és az AI alap rendszerüzenete is következetesen angol alapértelmezést kapott.
 - Owner Center továbbra is kizárólag a bot ownerének és explicit hozzáadott Owner felhasználóknak látható és elérhető.
 - Megtartja a szervertulajdonos Discord-nevének megjelenítését, a Subscription Center elnevezést és a hibás beállításhoz ugró validációt.
+- Render-újraindításkor a Support szerver csak olvasási auditot kap; automatikus újratelepítés vagy szerkezetmódosítás nincs.
+- Új Profilközpont, tartós nyelvválasztás, Stripe Readiness diagnosztika és egyértelmű fizetési betöltési állapot készült.
+- A web új, mélykék–menta, PC-központú Command Deck arculatot és lenyíló fiókmenüt kapott.
 
 # NEXA Bot változásnapló
 
