@@ -1,8 +1,8 @@
 {
   "name": "nexabot",
-  "version": "20.0.0",
+  "version": "20.1.0",
   "private": true,
-  "description": "NEXA Bot 20.0.0 NEXA OS Studio – owner-only local Discord server operating studio, recovery center and management platform",
+  "description": "NEXA Bot 20.1.0 CIA Expanded – primary-owner CIA updates, expanded roleplay server and NEXA OS Studio",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {

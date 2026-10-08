@@ -1,4 +1,19 @@
-# NEXA Bot 20.0.0 NEXA OS Studio Platform
+# NEXA Bot 20.1.0 — CIA Expanded / NEXA OS Studio
+
+## 20.1.0 CIA-bővítés
+
+- 26 kezelt rang és beosztás, 17 kategória, 117 csatorna (101 szöveges, 16 hangszoba).
+- `/cia ujratelepites`: kizárólag az elsődleges BOT_OWNER_ID fiók frissítheti / javíthatja a CIA rendszert.
+- Tulajdonosi ellenőrzés a parancskezelőben és a belső telepítő / rangfrissítő függvényekben.
+- A régi V1 telepítés támogatott; első telepítés helyett a tulajdonosi újratelepítés használható.
+- ID alapján kezeli a meglévő, akár átnevezett rangokat és csatornákat; hiányzó elemeket pótol.
+- Megmaradnak a tagi rangkiosztások, ticketek, beszélgetések és egyedileg módosított TGF-kérdések.
+- Magyar CIA-bemutató, beosztásleírások, szolgálati és kiképzési rend, szakterületek és munkaszobák.
+- Javítva a rangfrissítő hiányzó importja és a camelCase erőforráskulcsok mentése.
+- Újraindítás önmagában nem telepít; CIA-kezelés továbbra is kizárólag Discordon.
+- Ellenőrzés: 45/45 automatikus teszt, köztük 7 CIA futási próba, valamint Node szintaxisellenőrzés. Éles Discordon nem futott telepítés ebben a beszélgetésben.
+
+Használat: [CIA-UTMUTATO-20.1.0.md](CIA-UTMUTATO-20.1.0.md).
 
 Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Az opcionális RP- és dokumentumrendszert kizárólag a bot tulajdonosa vagy az általa kijelölt Owner-kezelő kapcsolhatja be egy kiválasztott szerveren.
 
@@ -27,10 +42,10 @@
 - Visszatért az egységes, egyoldalas szerver-kezelőközpont: az Anti-Nuke, Ticket, Automod és a többi modul nem külön bal oldali menüpontokban van szétszórva.
 - Új Azure Command arculat: nyugodt sötétkék, égkék és türkiz színvilág, nagyobb asztali munkaterület, üveghatású kártyák és egyértelmű aktív állapotok.
 - Új, kizárólag a fő bot-owner által használható `/cia telepites` rendszer. Egy futással létrehozza a teljes CIA RP rang-, kategória-, csatorna-, jogosultság-, ticket-, szolgálat-, TGF-, dokumentum- és védelmi struktúrát. Nem kell a szerver tulajdonosának lenned: a saját `BOT_OWNER_ID` fiókodnak Rendszergazda jog szükséges.
-- A CIA telepítő siker után adatbázis- és Discord-jelzővel végleg lezárja magát az adott szerveren; Render-újraindításkor sem fut újra.
+- A CIA első telepítését adatbázis- és Discord-jelző védi. A fő botowner a `/cia ujratelepites` paranccsal bármikor frissítheti és bővítheti; Render-újraindításkor nem fut újra.
 - A `/cia ellenorzes` módosítás nélkül megmutatja a telepítési zárat, a szerkezet teljességét és az esetleges hiányzó elemeket.
 - A CIA szerver magyar marad, miközben a vezetői és műveleti szerepkörök a valódi amerikai CIA nyilvános elnevezéseihez igazodnak (D/CIA, DD/CIA, EXDIR, DDO, COS, DCOS, Case Officer, Targeting Officer, Staff Operations Officer és Professional Trainee). Ezek valós vezetői vagy szakmai beosztások, nem kitalált katonai rendfokozatok.
-- Már telepített CIA szerveren a fő bot-owner a `/cia rangok-frissitese` paranccsal nevezi át biztonságosan a kezelt rangokat; a csatornák, jogosultságok, panelek és magyar tartalmak megmaradnak.
+- Már telepített CIA szerveren a fő bot-owner a `/cia rangok-frissitese` paranccsal frissítheti a beosztásneveket, a `/cia ujratelepites` paranccsal pedig a teljes struktúrát; a csatornák, jogosultságok, panelek és magyar tartalmak megmaradnak.
 - A CIA rendszer automatikusan Ultimate hozzáférést, szigorú Anti-Raid/Anti-Nuke védelmet, vak bírálatú 10 kérdéses felvételt és hat részletes CIA iratsablont állít be.
 - A vezetői dokumentumjóváhagyást a szerverhez kijelölt dashboard-kezelői rang is használhatja.
 
@@ -295,7 +310,7 @@ Az állapotvégpontok:
 A sikeres logban ez jelenik meg:
 
 ```text
-A NEXA Bot 20.0.0 NEXA OS Studio Platform használatra kész.
+A NEXA Bot 20.1.0 CIA Expanded / NEXA OS Studio Platform használatra kész.
 ```
 
 ## Használat

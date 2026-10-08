@@ -8,11 +8,11 @@ const source = fs.readFileSync(path.join(root, 'index.js'), 'utf8');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 
-test('release metadata is 20.0.0', () => {
-  assert.equal(pkg.version, '20.0.0');
-  assert.equal(lock.version, '20.0.0');
-  assert.equal(lock.packages[''].version, '20.0.0');
-  assert.match(source, /const APP_VERSION = '20\.0\.0'/);
+test('release metadata is 20.1.0', () => {
+  assert.equal(pkg.version, '20.1.0');
+  assert.equal(lock.version, '20.1.0');
+  assert.equal(lock.packages[''].version, '20.1.0');
+  assert.match(source, /const APP_VERSION = '20\.1\.0'/);
 });
 
 test('subscriptions replaces public pricing while preserving redirect', () => {
@@ -142,7 +142,7 @@ test('Stripe checkout gives visible feedback and a direct browser navigation', (
 
 test('Azure Command UI provides a calm professional unified workspace', () => {
   assert.match(source, /class="nexa-v153/);
-  assert.match(source, /NEXA Bot 20\.0\.0 • NEXA OS Studio/);
+  assert.match(source, /NEXA Bot 20\.1\.0 • NEXA OS Studio/);
   assert.match(source, /NEXA Azure Command — calm, desktop-first operations theme/);
   assert.match(source, /--primary:#4b9dff;--accent:#5ed8c4/);
   assert.match(source, /guild-settings\.view-control \.settings/);
@@ -162,14 +162,15 @@ test('Platform 20 uses a responsive system architecture instead of oversized leg
   assert.match(source, /@media\(max-width:850px\).*\.platform-system,.platform-system\.system-featured\{grid-column:span 12/s);
 });
 
-test('CIA faction installer is owner-only, complete and permanently one-time', () => {
-  assert.match(source, /const CIA_INSTALLATION_VERSION = 1/);
+test('CIA first install is locked and only the primary owner can reinstall', () => {
+  assert.match(source, /const CIA_INSTALLATION_VERSION = 2/);
   assert.match(source, /const CIA_INSTALL_MARKER = `NEXA_CIA_INSTALLATION_V\$\{CIA_INSTALLATION_VERSION\}`/);
   assert.match(source, /function buildCiaSetupCommand\(\)/);
   assert.match(source, /\.setName\('cia'\)/);
   assert.match(source, /\.setName\('telepites'\)/);
   assert.match(source, /\.setName\('ellenorzes'\)/);
   assert.match(source, /\.setName\('rangok-frissitese'\)/);
+  assert.match(source, /\.setName\('ujratelepites'\)/);
   assert.match(source, /if \(!isBotOwner\(interaction\.user\.id\)\)/);
   assert.match(source, /!interaction\.memberPermissions\?\.has\(PermissionFlagsBits\.Administrator\)/);
   assert.match(source, /ownerMember\?\.permissions\?\.has\(PermissionFlagsBits\.Administrator\)/);
@@ -195,7 +196,7 @@ test('CIA factory installs roles, permissioned categories, panels and workflows'
   assert.match(source, /antiNuke: true/);
   assert.match(source, /config\.language = 'hu'/);
   assert.match(source, /rankStyle: 'american'/);
-  assert.match(source, /function refreshCiaAmericanRanks\(guild, botUser\)/);
+  assert.match(source, /function refreshCiaAmericanRanks\(guild, botUser, ownerMember\)/);
   assert.match(source, /A CIA a valóságban nem katonai rendfokozatokat/);
 });
 

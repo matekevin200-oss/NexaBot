@@ -1,4 +1,4 @@
-// NEXA Bot 20.0.0 NEXA OS Studio release — generated automatically.
+// NEXA Bot 20.1.0 CIA Expanded release — NEXA OS Studio platform.
 const __nativeRequire = require;
 const __path = __nativeRequire('node:path').posix;
 const __modules = {
@@ -2035,8 +2035,10 @@ const TRANSLATIONS = Object.freeze({
   'support-szerver.javitas': ['repair', 'Repair support modules, roles, channels and global blocks.'],
   'support-szerver.angolositas': ['english-migration', 'Safely migrate the existing Support server to English.'],
   'support-szerver.ellenorzes': ['check', 'Check required roles, categories and channels.'],
-  cia: ['cia', 'Owner-only one-time CIA faction server installer.'],
+  cia: ['cia', 'Primary-owner-only CIA installer, updater and reinstaller.'],
   'cia.telepites': ['install', 'Create the complete CIA faction structure once.'],
+  'cia.ujratelepites': ['reinstall', 'Only the primary owner: update and expand the installed CIA system.'],
+  'cia.rangok-frissitese': ['refresh-roles', 'Refresh installed CIA role names and reference panels.'],
   'cia.ellenorzes': ['check', 'Check the installed CIA faction structure without changing it.'],
   hitelesites: ['verification', 'Manage button-based member verification.'],
   'hitelesites.panel': ['panel', 'Post or refresh the verification panel.'],
@@ -3331,10 +3333,10 @@ function sanitizeConfig(guildId, input = {}) {
     .map(sanitizeId).filter(Boolean))].slice(0, 100);
 
   const ciaInstallation = input.installations?.cia;
-  if (ciaInstallation?.completed === true) {
+  if (ciaInstallation && typeof ciaInstallation === 'object') {
     const safeResourceMap = (value, limit) => Object.fromEntries(
       Object.entries(value && typeof value === 'object' ? value : {})
-        .filter(([key]) => /^[a-z0-9_]{1,50}$/.test(key))
+        .filter(([key]) => /^[a-zA-Z0-9_]{1,50}$/.test(key))
         .map(([key, id]) => [key, sanitizeId(id)])
         .filter(([, id]) => Boolean(id))
         .slice(0, limit)
@@ -3343,7 +3345,7 @@ function sanitizeConfig(guildId, input = {}) {
     const ranksUpdatedAt = String(ciaInstallation.ranksUpdatedAt || '').trim().slice(0, 40);
     const lastRepairedAt = String(ciaInstallation.lastRepairedAt || '').trim().slice(0, 40);
     config.installations.cia = {
-      completed: true,
+      completed: ciaInstallation.completed === true,
       version: Math.min(100, Math.max(1, Number.parseInt(ciaInstallation.version, 10) || 1)),
       installedAt: /^\d{4}-\d{2}-\d{2}T/.test(installedAt) ? installedAt : new Date().toISOString(),
       installedBy: sanitizeId(ciaInstallation.installedBy),
@@ -3353,7 +3355,7 @@ function sanitizeConfig(guildId, input = {}) {
       repairCount: Math.min(10000, Math.max(0, Number.parseInt(ciaInstallation.repairCount, 10) || 0)),
       roles: safeResourceMap(ciaInstallation.roles, 50),
       categories: safeResourceMap(ciaInstallation.categories, 30),
-      channels: safeResourceMap(ciaInstallation.channels, 100)
+      channels: safeResourceMap(ciaInstallation.channels, 200)
     };
   }
 
@@ -5805,7 +5807,7 @@ ${dashboardTheme()}
 @media(min-width:1500px){.nexa-v153 .owner-server-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:1180px){.billing-selector{grid-template-columns:1fr}.billing-selector form{grid-template-columns:1fr auto}.billing-grid{grid-template-columns:1fr}.billing-grid>section:first-child{position:static}.billing-plan{min-height:520px}}@media(max-width:900px){.nexa-v153 .topbar{height:64px}.nexa-v153 .app{grid-template-columns:1fr}.nexa-v153 .app .sidebar{top:64px;height:calc(100vh - 64px)}.nexa-v153 main{padding:24px 18px 96px}.nexa-v153 .contextbar{top:64px}.billing-steps{grid-template-columns:1fr}.billing-plans{grid-template-columns:1fr}.billing-plan{min-height:0}.billing-selector form{grid-template-columns:1fr}.billing-selector .btn{width:100%}}@media(max-width:760px){.profile-summary{display:none}.profile-menu summary{min-width:auto}.profile-hero{grid-template-columns:1fr;text-align:center}.profile-avatar-large{margin:auto}.language-grid,.readiness-grid{grid-template-columns:1fr}.billing-page-head{align-items:flex-start}.billing-page-head>.btn{width:100%}.billing-selector{padding:15px}.billing-plans-shell{padding:18px}.billing-diagnostics summary{align-items:flex-start;flex-direction:column}}
 
 /* NEXA Azure Command — calm, desktop-first operations theme */
-.footer-release{font-size:0!important}.footer-release::after{content:'NEXA Bot 20.0.0 • NEXA OS Studio';font-size:10px}
+.footer-release{font-size:0!important}.footer-release::after{content:'NEXA Bot 20.1.0 • NEXA OS Studio';font-size:10px}
 .nexa-v153{--primary:#4b9dff;--accent:#5ed8c4;--cyan:#78c8ff;--bg:#07101d;--panel:#0a1423;--card:#0e1b2d;--card2:#13243a;--line:#263b55;--text:#f4f8ff;--muted:#91a4bd;--red:#ff7185;--gold:#efc46b;background:radial-gradient(1050px 640px at 82% -12%,rgba(63,137,225,.22),transparent 70%),radial-gradient(820px 580px at -12% 78%,rgba(61,188,171,.10),transparent 72%),linear-gradient(150deg,#07101d 0,#091625 48%,#07111f 100%);background-attachment:fixed}.nexa-v153::before{background:linear-gradient(180deg,rgba(4,10,19,.03),rgba(4,10,19,.52))}.nexa-v153 .topbar{background:rgba(6,15,27,.9);border-bottom-color:#20344d;box-shadow:0 12px 40px rgba(0,0,0,.26)}.nexa-v153 .brand-mark{background:linear-gradient(145deg,#6fc4ff,#3578dc);color:#04101f;box-shadow:0 0 0 1px rgba(192,229,255,.3),0 13px 38px rgba(37,116,213,.25)}.nexa-v153 .brand-text span{color:#6fe1cd}.nexa-v153 .live-pill{background:#0b211f;border-color:#245950;color:#a9eee0}.nexa-v153 .live-dot{background:#62d9c5;box-shadow:0 0 0 4px rgba(98,217,197,.09),0 0 18px rgba(98,217,197,.55)}.nexa-v153 .navlinks,.nexa-v153 .locale-switch{background:#0b1727;border-color:#253a53}.nexa-v153 .navlinks a.active,.nexa-v153 .locale-switch a.active{background:#172b44;box-shadow:inset 0 0 0 1px #315074}.nexa-v153 .app{grid-template-columns:286px minmax(0,1fr)}.nexa-v153 .sidebar{background:linear-gradient(180deg,rgba(9,20,35,.985),rgba(5,13,24,.99));border-right-color:#1f344c}.nexa-v153 .side-label{color:#6f88a7}.nexa-v153 .side-search,.nexa-v153 .server-context{border-color:#29415d;background:#0b192a}.nexa-v153 .server-context{background:linear-gradient(145deg,rgba(75,157,255,.13),rgba(94,216,196,.045))}.nexa-v153 .server-select{background:#081524!important;border-color:#2d4868!important}.nexa-v153 .side-link{color:#91a7c2}.nexa-v153 .side-link:hover{background:#10223a;border-color:#29496b}.nexa-v153 .side-link.active{background:linear-gradient(90deg,rgba(75,157,255,.20),rgba(94,216,196,.065));border-color:#32618b;box-shadow:inset 3px 0 #5fb5ff,0 10px 26px rgba(0,0,0,.12);color:#f7fbff}.nexa-v153 .side-icon{background:#12263e;border-color:#29435f}.nexa-v153 .side-link.active .side-icon{background:#1d4266;color:#8ad8ff}.nexa-v153 main{max-width:1700px;padding:38px 46px 120px}.nexa-v153 .contextbar{background:linear-gradient(180deg,rgba(7,16,29,.985),rgba(7,16,29,.74),transparent);color:#7991ae}.nexa-v153 .contextbar strong{color:#dceaff}.nexa-v153 .page-head{border-bottom-color:#203750}.nexa-v153 .section-kicker{color:#70c8ff}.nexa-v153 .card{border-color:#263e5a;background:linear-gradient(145deg,rgba(15,30,49,.98),rgba(9,20,35,.98));box-shadow:0 22px 68px rgba(0,0,0,.25)}.nexa-v153 .card::before{display:block;background:rgba(75,157,255,.055)}.nexa-v153 .card:hover{border-color:#355b7f}.nexa-v153 .stat{border-color:#28435f;background:linear-gradient(145deg,#11263e,#0b1b2d)}.nexa-v153 .control-ribbon{border-color:#28415d;background:#081624}.nexa-v153 .control-ribbon>div{border-color:#213a55;background:linear-gradient(180deg,#11263d,#0b1a2c)}.nexa-v153 .settings-jump{border-color:#2a4664;background:rgba(8,21,36,.96);box-shadow:0 14px 45px rgba(0,0,0,.25)}.nexa-v153 .settings-jump a{color:#91a9c4}.nexa-v153 .settings-jump a:hover,.nexa-v153 .settings-jump a.active{background:#183450;color:#fff;box-shadow:inset 0 0 0 1px #396589}.nexa-v153 .switch{background:#0c1c2e;border-color:#263f5b}.nexa-v153 .switch:hover{background:#112740;border-color:#3a6389}.nexa-v153 select,.nexa-v153 textarea,.nexa-v153 input[type=text],.nexa-v153 input[type=number],.nexa-v153 input[type=url],.nexa-v153 input[type=color],.nexa-v153 input[type=password],.nexa-v153 input[type=datetime-local],.nexa-v153 input[type=search]{background:#071523!important;border-color:#2a4563!important;color:#f4f8ff!important}.nexa-v153 select:focus,.nexa-v153 textarea:focus,.nexa-v153 input:focus{border-color:#58aaff!important;box-shadow:0 0 0 3px rgba(75,157,255,.13)!important}.nexa-v153 .btn{border-color:#6db8ff;background:linear-gradient(135deg,#58abff,#3474d0);color:#fff;box-shadow:0 11px 28px rgba(38,105,191,.24)}.nexa-v153 .btn.secondary{background:#11243a;border-color:#31506f;color:#dceaff}.nexa-v153 .btn.green{background:linear-gradient(135deg,#62d9c5,#2e9f8d);border-color:#78ead6;color:#041713}.nexa-v153 .badge{background:#0c2928;border-color:#2b6760;color:#8ee6d7}.nexa-v153 .badge.pro{background:#112c48;border-color:#35658f;color:#9ed3ff}.nexa-v153 .badge.ultimate{background:#182844;border-color:#4c6896;color:#bfd7ff}.nexa-v153 .notice{background:#0d2928;border-color:#296158;color:#b7e9df}.nexa-v153 .notice.warn{background:#2b2414;border-color:#6d582d;color:#f0d79c}.nexa-v153 .notice.error,.nexa-v153 .error{background:#2a151d;border-color:#753344;color:#ffc1cc}.nexa-v153 .owner-server,.nexa-v153 .server.card{background:linear-gradient(145deg,#10243a,#091929)}.nexa-v153 .owner-server-metrics{background:#29425e;border-color:#29425e}.nexa-v153 .owner-server-metric{background:#0d1d30}.nexa-v153 .profile-menu[open] summary,.nexa-v153 .profile-menu summary:hover{background:#10243a;border-color:#315273}.nexa-v153 .profile-popover{background:rgba(8,20,34,.99);border-color:#315273}.nexa-v153 .profile-popover a:hover{background:#142c47}.nexa-v153 .language-card,.nexa-v153 .readiness-item{background:#0c1d30;border-color:#29435f}.nexa-v153 table{border-color:#29435f}.nexa-v153 thead{background:#091726}.nexa-v153 th,.nexa-v153 td{border-color:#213950}.nexa-v153 .savebar{border-color:#315371;background:rgba(7,18,31,.96);box-shadow:0 20px 62px rgba(0,0,0,.42)}.nexa-v153 .billing-steps>div{border-color:#263f5b;background:#0c1b2d}.nexa-v153 .billing-steps>div.active{border-color:#37638a;background:linear-gradient(145deg,#132b45,#0d1e32)}.nexa-v153 .billing-plan{border-color:#2b4765;background:linear-gradient(160deg,#10243a,#09192a)}.nexa-v153 .billing-plan.featured{border-color:#4b82b3;box-shadow:inset 0 3px #5eafff}.nexa-v153 .billing-cycle label{border-color:#2d4a69;background:#0a192a}.nexa-v153 .billing-cycle label:has(input:checked){border-color:#4e91ca;background:#122b47}.nexa-v153 .billing-feature-list{border-color:#263f5b}.nexa-v153 .billing-feature-list li{border-color:#213950}.nexa-v153 .billing-feature-list li::before{color:#62d9c5}
 @media(min-width:1500px){.nexa-v153 .guild-settings.view-control .settings{grid-template-columns:repeat(12,minmax(0,1fr));align-items:start}.nexa-v153 .guild-settings.view-control .settings>.card{grid-column:span 6}.nexa-v153 .guild-settings.view-control .settings>#modules,.nexa-v153 .guild-settings.view-control .settings>#tickets,.nexa-v153 .guild-settings.view-control .settings>#anti-raid,.nexa-v153 .guild-settings.view-control .settings>#protection,.nexa-v153 .guild-settings.view-control .settings>#channels,.nexa-v153 .guild-settings.view-control .settings>#roles,.nexa-v153 .guild-settings.view-control .settings>#messages,.nexa-v153 .guild-settings.view-control .settings>#branding,.nexa-v153 .guild-settings.view-control .settings>.savebar{grid-column:1/-1}}
 
@@ -5815,7 +5817,7 @@ ${dashboardTheme()}
 /* NEXA OS Studio 20 */
 .os-studio{display:grid;gap:20px}.os-studio-hero{position:relative;overflow:hidden;min-height:320px;padding:48px;border:1px solid #315576;border-radius:30px;background:radial-gradient(600px 340px at 85% 18%,rgba(89,190,255,.22),transparent 68%),radial-gradient(480px 300px at 12% 100%,rgba(86,224,195,.12),transparent 70%),linear-gradient(135deg,#0b1c31,#081421 72%);box-shadow:0 34px 100px rgba(0,0,0,.35);display:flex;align-items:center}.os-studio-hero>div:first-child{position:relative;z-index:2;max-width:850px}.os-version{display:inline-flex;padding:7px 11px;border:1px solid #397499;border-radius:999px;background:rgba(66,161,220,.1);color:#8bd8ff;font:900 10px ui-monospace,monospace;letter-spacing:1.3px}.os-studio-hero h1{margin:19px 0 12px;font-size:clamp(44px,6vw,76px);line-height:.95;letter-spacing:-4px}.os-studio-hero h1 em{font-style:normal;background:linear-gradient(100deg,#6cc6ff,#6fe4c9);-webkit-background-clip:text;color:transparent}.os-studio-hero p{max-width:760px;margin:0;color:#a5b9cf;font-size:17px}.os-studio-pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px}.os-studio-pills span{padding:7px 10px;border:1px solid #294964;border-radius:9px;background:#0a1828;color:#8faac2;font:800 9px ui-monospace,monospace;letter-spacing:.8px}.os-orbit{position:absolute;right:75px;top:50%;width:170px;height:170px;transform:translateY(-50%);display:grid;place-items:center;border:1px solid rgba(111,214,255,.22);border-radius:50%;box-shadow:0 0 80px rgba(69,164,224,.15)}.os-orbit::before,.os-orbit::after{content:'';position:absolute;border:1px solid rgba(105,224,201,.17);border-radius:50%}.os-orbit::before{inset:-28px}.os-orbit::after{inset:32px}.os-orbit i{position:absolute;width:12px;height:12px;border-radius:50%;background:#70e1c9;box-shadow:0 0 22px #70e1c9;animation:osOrbit 6s linear infinite;transform-origin:0 85px}.os-orbit b{font-size:68px;letter-spacing:-5px;color:#dff5ff}.os-orbit span{position:absolute;right:17px;bottom:18px;color:#70e1c9;font:900 13px ui-monospace,monospace}@keyframes osOrbit{to{transform:rotate(360deg)}}.studio-owner-lock{padding:13px 16px;border:1px solid #2c4a64;border-radius:13px;background:#0b1928;color:#97abc1;font-size:12px}.studio-steps{position:sticky;top:128px;z-index:8;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:8px;border:1px solid #284760;border-radius:17px;background:rgba(7,19,31,.92);backdrop-filter:blur(18px)}.studio-steps a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:11px;text-decoration:none;color:#8fa7bd}.studio-steps a:hover{background:#112a43;color:#fff}.studio-steps b{display:grid;place-items:center;width:30px;height:30px;border:1px solid #315979;border-radius:9px;color:#75caff;font:900 10px ui-monospace,monospace}.studio-steps span{font-size:12px;font-weight:850}.studio-builder,.studio-preview{padding:30px;border:1px solid #294a65;border-radius:24px;background:linear-gradient(145deg,rgba(12,29,47,.98),rgba(7,19,31,.98));box-shadow:0 24px 70px rgba(0,0,0,.26)}.studio-builder-copy{max-width:800px;margin-bottom:24px}.studio-builder-copy h2{margin:5px 0;font-size:32px}.studio-builder-copy p{margin:0;color:var(--muted)}.studio-prompt{display:grid;gap:8px}.studio-prompt>span,.studio-control-row label{font-size:12px;font-weight:850;color:#c8d9e8}.studio-prompt textarea{min-height:170px;font-size:15px;line-height:1.65}.studio-prompt small{color:#718ba2}.studio-block{margin-top:28px;padding-top:24px;border-top:1px solid #223d54}.studio-block-head{display:flex;gap:13px;align-items:flex-start;margin-bottom:15px}.studio-block-head>span{display:grid;place-items:center;width:38px;height:38px;border:1px solid #32638a;border-radius:11px;background:#102b45;color:#76cbff;font:900 11px ui-monospace,monospace}.studio-block-head h3{margin:0}.studio-block-head p{margin:2px 0 0;color:var(--muted);font-size:12px}.studio-template-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.studio-template input,.studio-feature input{position:absolute;opacity:0;pointer-events:none}.studio-template>span{display:grid;min-height:132px;padding:16px;border:1px solid #29445d;border-radius:15px;background:#091827;cursor:pointer;transition:.18s}.studio-template>span:hover{transform:translateY(-2px);border-color:#42739a}.studio-template input:checked+span{border-color:#64bfff;background:linear-gradient(145deg,#123252,#0c2239);box-shadow:inset 0 0 0 1px rgba(104,198,255,.2),0 12px 30px rgba(31,110,168,.18)}.studio-template i{font-style:normal;font-size:24px;color:#74d9c6}.studio-template strong{margin-top:8px}.studio-template small{color:#8299ae;font-size:10px;line-height:1.35}.studio-feature-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.studio-feature>span{position:relative;display:flex;align-items:center;gap:9px;min-height:54px;padding:12px 42px 12px 13px;border:1px solid #29445d;border-radius:13px;background:#091827;cursor:pointer;font-size:12px}.studio-feature strong{font-size:11px}.studio-feature i{position:absolute;right:13px;width:28px;height:16px;border-radius:999px;background:#233a4d}.studio-feature i::after{content:'';position:absolute;left:3px;top:3px;width:10px;height:10px;border-radius:50%;background:#7890a3;transition:.18s}.studio-feature input:checked+span{border-color:#347a73;background:#0c282a}.studio-feature input:checked+span i{background:#2b8073}.studio-feature input:checked+span i::after{left:15px;background:#8ff1dd}.studio-control-row{display:grid;grid-template-columns:minmax(170px,.6fr) minmax(170px,.6fr) minmax(240px,1fr);align-items:end;gap:12px;margin-top:24px}.studio-control-row label{display:grid;gap:7px}.studio-generate{min-height:50px;font-size:13px}.studio-generate span{font-size:18px}.studio-preview-head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding-bottom:22px;border-bottom:1px solid #26455e}.studio-preview-head h2{margin:5px 0 3px;font-size:34px}.studio-preview-head p{margin:0;color:var(--muted)}.studio-hash{display:grid;gap:4px;text-align:right}.studio-hash span{color:#6f899f;font:800 9px ui-monospace,monospace}.studio-hash code{padding:8px 10px;border:1px solid #315979;border-radius:10px;background:#091725;color:#8bd6ff}.studio-simulation{display:grid;grid-template-columns:170px 1fr;gap:25px;margin:22px 0;padding:22px;border:1px solid #2d5c5a;border-radius:20px;background:linear-gradient(145deg,#0b2929,#0a2025)}.studio-simulation.warning{border-color:#6b5b31;background:linear-gradient(145deg,#292313,#181b1c)}.studio-simulation.blocked{border-color:#723746;background:linear-gradient(145deg,#2b1720,#171923)}.studio-score{position:relative;display:grid;place-items:center;align-content:center;width:140px;height:140px;border-radius:50%;background:radial-gradient(circle at center,#0c1d2b 55%,transparent 57%),conic-gradient(#65dbc5 calc(var(--score)*1%),#24384a 0);box-shadow:0 0 35px rgba(66,184,164,.13)}.studio-score strong{font-size:39px;line-height:1}.studio-score span{margin-top:4px;color:#83a199;font:800 8px ui-monospace,monospace}.studio-sim-body h3{margin:3px 0}.studio-sim-body>p{margin:0 0 14px;color:#91a9b9}.studio-diff{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.studio-diff>div{display:grid;padding:12px;border:1px solid #2b4b5d;border-radius:12px;background:rgba(6,17,27,.45)}.studio-diff b{font-size:20px;color:#7ddfc9}.studio-diff span{font-size:11px;font-weight:800}.studio-diff small{color:#718b9c;font-size:9px}.studio-diff .safe b{color:#82e6d2}.studio-metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:18px 0}.studio-metrics>div{display:grid;padding:15px;border:1px solid #29465f;border-radius:14px;background:#0a1929}.studio-metrics strong{font-size:24px}.studio-metrics span{color:#8098ad;font-size:10px;text-transform:uppercase}.studio-modules{display:flex;align-items:center;justify-content:space-between;gap:18px}.studio-modules>div:last-child{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}.studio-modules>div:last-child span{padding:6px 9px;border:1px solid #2f6b64;border-radius:8px;background:#0d2b2a;color:#8ae6d5;font:800 9px ui-monospace,monospace}.studio-blueprint-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:18px 0}.studio-category{overflow:hidden;border:1px solid #29465f;border-radius:17px;background:#091827}.studio-category-head{display:flex;align-items:center;gap:12px;padding:15px;border-bottom:1px solid #263f57;background:linear-gradient(90deg,#112a44,#0b1d30)}.studio-category-head>span{color:#69c6ff;font:900 19px ui-monospace,monospace}.studio-category-head small{color:#6e879c;font:800 8px ui-monospace,monospace}.studio-category-head h3{margin:1px 0 0;font-size:14px}.studio-channel-list{display:grid}.studio-channel-list>div{display:grid;grid-template-columns:24px 1fr auto;align-items:center;gap:8px;padding:10px 13px;border-bottom:1px solid #1d3347}.studio-channel-list>div:last-child{border-bottom:0}.studio-channel-list i{color:#68c7ff;font-style:normal}.studio-channel-list span{display:grid}.studio-channel-list strong{font-size:11px}.studio-channel-list small{color:#6e879d;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.studio-channel-list b{color:#6b859a;font:800 8px ui-monospace,monospace}.studio-color{display:inline-block;width:9px;height:9px;margin-right:8px;border-radius:50%}.studio-deploy{display:grid;grid-template-columns:1fr minmax(340px,.75fr);gap:24px;margin-top:18px;padding:25px;border:1px solid #347267;border-radius:20px;background:linear-gradient(135deg,#0d2d2b,#0a2027)}.studio-deploy h3{margin:4px 0}.studio-deploy p{margin:0;color:#91aaa7}.studio-deploy form{display:grid;grid-template-columns:1fr auto;align-items:end;gap:10px}.studio-deploy label{display:grid;gap:6px;font-size:11px;font-weight:800}.studio-deploy .btn[disabled]{opacity:.45;cursor:not-allowed;filter:grayscale(.5)}.studio-two-col{display:grid;grid-template-columns:1fr 1fr;gap:15px}.studio-last form{display:grid;grid-template-columns:1fr auto;align-items:end;gap:10px;margin-top:16px}.studio-last form label{display:grid;gap:6px;font-size:11px;font-weight:800}.studio-history{display:grid}.studio-history-row{display:grid;grid-template-columns:34px 1fr auto auto;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid #223a51}.studio-history-row:last-child{border-bottom:0}.studio-history-row>span{color:#6ebff1;font:900 10px ui-monospace,monospace}.studio-history-row>div{display:grid}.studio-history-row strong{font-size:11px}.studio-history-row small{color:#70889e;font-size:9px}.studio-history-row code{color:#82d7c7;font-size:9px}.studio-history-row>b{color:#849cb1;font:800 9px ui-monospace,monospace}.studio-empty{border-style:dashed!important;background:#0a1928!important;color:#8aa2b8!important}
 @media(max-width:1250px){.os-orbit{opacity:.35;right:30px}.studio-template-grid,.studio-feature-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.studio-two-col{grid-template-columns:1fr}.studio-simulation{grid-template-columns:140px 1fr}.studio-score{width:120px;height:120px}}@media(max-width:760px){.os-studio-hero{min-height:0;padding:28px 22px}.os-orbit{display:none}.os-studio-hero h1{font-size:45px}.studio-steps{position:static;grid-template-columns:repeat(2,1fr)}.studio-builder,.studio-preview{padding:19px}.studio-template-grid,.studio-feature-grid,.studio-blueprint-grid{grid-template-columns:1fr}.studio-control-row,.studio-deploy,.studio-deploy form,.studio-last form{grid-template-columns:1fr}.studio-simulation{grid-template-columns:1fr}.studio-score{margin:auto}.studio-diff,.studio-metrics{grid-template-columns:repeat(2,1fr)}.studio-preview-head,.studio-modules{align-items:flex-start;flex-direction:column}.studio-hash{text-align:left}.studio-history-row{grid-template-columns:30px 1fr auto}.studio-history-row>b{display:none}}
-</style></head><body class="nexa-v153 ${ownerView ? 'owner-mode' : ''}${activePage ? ` page-${escapeHtml(activePage)}` : ''}"><header class="topbar"><div class="topbar-inner">${user ? `<button class="sidebar-toggle" type="button" data-sidebar-toggle aria-label="Menu">☰</button>` : ``}<a class="brand" href="${homeUrl}"><span class="brand-mark">N</span><span class="brand-text">Nexa<span>Bot</span></span></a><div class="live-pill"><i class="live-dot"></i> NEXA CORE ONLINE</div><nav class="navlinks" aria-label="${pageLanguage === 'en' ? 'Main navigation' : 'Fő navigáció'}"><a${navClass('platform')} href="${platformUrl}">${platformLabel}</a><a${navClass('commands')} href="${commandsUrl}">${commandsLabel}</a><a${navClass('subscriptions')} href="${pricingUrl}">${pricingLabel}</a><a${navClass('guide')} href="${guideUrl}">${guideLabel}</a><a${navClass('privacy')} href="${privacyUrl}">${privacyLabel}</a></nav><div class="spacer"></div>${localeSwitcher}${userMenu}</div></header>${user ? `<div class="app"><aside class="sidebar">${sidebarNavigation}<div class="footer-note">${escapeHtml(productName)}<br><span class="footer-release">NEXA Bot 20.0.0 • NEXA OS Studio</span></div></aside><main><div class="contextbar"><span>NEXA</span><b>›</b><span>${ownerView ? 'OWNER' : 'CONTROL'}</span><b>›</b><strong data-current-location>${escapeHtml(title)}</strong></div>${content}</main></div>` : `<main class="public-main">${content}</main>`}<script src="/assets/nexa-dashboard.js" defer></script></body></html>`;
+</style></head><body class="nexa-v153 ${ownerView ? 'owner-mode' : ''}${activePage ? ` page-${escapeHtml(activePage)}` : ''}"><header class="topbar"><div class="topbar-inner">${user ? `<button class="sidebar-toggle" type="button" data-sidebar-toggle aria-label="Menu">☰</button>` : ``}<a class="brand" href="${homeUrl}"><span class="brand-mark">N</span><span class="brand-text">Nexa<span>Bot</span></span></a><div class="live-pill"><i class="live-dot"></i> NEXA CORE ONLINE</div><nav class="navlinks" aria-label="${pageLanguage === 'en' ? 'Main navigation' : 'Fő navigáció'}"><a${navClass('platform')} href="${platformUrl}">${platformLabel}</a><a${navClass('commands')} href="${commandsUrl}">${commandsLabel}</a><a${navClass('subscriptions')} href="${pricingUrl}">${pricingLabel}</a><a${navClass('guide')} href="${guideUrl}">${guideLabel}</a><a${navClass('privacy')} href="${privacyUrl}">${privacyLabel}</a></nav><div class="spacer"></div>${localeSwitcher}${userMenu}</div></header>${user ? `<div class="app"><aside class="sidebar">${sidebarNavigation}<div class="footer-note">${escapeHtml(productName)}<br><span class="footer-release">NEXA Bot 20.1.0 • NEXA OS Studio</span></div></aside><main><div class="contextbar"><span>NEXA</span><b>›</b><span>${ownerView ? 'OWNER' : 'CONTROL'}</span><b>›</b><strong data-current-location>${escapeHtml(title)}</strong></div>${content}</main></div>` : `<main class="public-main">${content}</main>`}<script src="/assets/nexa-dashboard.js" defer></script></body></html>`;
 }
 
 function publicLanguage(url, request = null) {
@@ -5861,7 +5863,7 @@ function landing(client, session, language = 'hu') {
   const dashboardHref = session ? '/dashboard' : '/login';
   const query = en ? '?lang=en' : '';
   const copy = en ? {
-    eyebrow: 'NEXA BOT 20.0.0 · NEXA OS STUDIO',
+    eyebrow: 'NEXA BOT 20.1.0 · NEXA OS STUDIO',
     headlineA: 'Your server.', headlineB: 'Operating at its next level.',
     lead: 'Moderation, support, community automation, AI and serious server protection in one auditable control system built for growth.',
     dashboard: session ? 'Open dashboard' : 'Sign in with Discord', invite: 'Invite NEXA Bot', explore: 'Explore the platform',
@@ -5873,9 +5875,9 @@ function landing(client, session, language = 'hu') {
     accessKicker: 'Flexible access', accessTitle: 'Start free. Upgrade when your server grows.', accessLead: 'Secure monthly and annual Stripe subscriptions work alongside complimentary plans granted by the bot owner.',
     securityKicker: 'Security architecture', securityTitle: 'Protection that can explain every action.', securityLead: 'Sensitive operations are permission-checked, rate-limited and written to an audit trail. Secrets remain server-side.',
     ctaKicker: 'NEXA is ready', ctaTitle: 'Give your Discord server a real operating system.', ctaLead: 'Invite the bot, sign in with Discord and configure each server independently from a responsive command center.',
-    footer: 'Discord management platform · Version 20.0.0', privacy: 'Privacy', terms: 'Terms', commands: 'Commands'
+    footer: 'Discord management platform · Version 20.1.0', privacy: 'Privacy', terms: 'Terms', commands: 'Commands'
   } : {
-    eyebrow: 'NEXA BOT 20.0.0 · NEXA OS STUDIO',
+    eyebrow: 'NEXA BOT 20.1.0 · NEXA OS STUDIO',
     headlineA: 'A szervered.', headlineB: 'Egy szinttel feljebb.',
     lead: 'Moderáció, ügyféltámogatás, közösségi automatizálás, AI és komoly szervervédelem egyetlen auditálható, növekedésre tervezett rendszerben.',
     dashboard: session ? 'Vezérlőpult megnyitása' : 'Belépés Discorddal', invite: 'NEXA Bot meghívása', explore: 'Platform felfedezése',
@@ -5887,7 +5889,7 @@ function landing(client, session, language = 'hu') {
     accessKicker: 'Rugalmas hozzáférés', accessTitle: 'Kezdd ingyen. Válts, amikor nő a szervered.', accessLead: 'A biztonságos havi és éves Stripe-előfizetés együtt működik a bot Owner által ingyen kiosztott csomagokkal.',
     securityKicker: 'Biztonsági architektúra', securityTitle: 'Védelem, amely minden döntésről elszámol.', securityLead: 'Az érzékeny műveleteket jogosultság-ellenőrzés, rate limit és auditnapló védi. A titkos kulcsok kizárólag szerveroldalon maradnak.',
     ctaKicker: 'A NEXA készen áll', ctaTitle: 'Adj valódi operációs rendszert a Discord-szerverednek.', ctaLead: 'Hívd meg a botot, lépj be Discorddal, majd állíts be minden szervert külön a mobilbarát irányítóközpontból.',
-    footer: 'Discord management platform · 20.0.0-es verzió', privacy: 'Adatvédelem', terms: 'Feltételek', commands: 'Parancsok'
+    footer: 'Discord management platform · 20.1.0-es verzió', privacy: 'Adatvédelem', terms: 'Feltételek', commands: 'Parancsok'
   };
   const capabilities = en ? [
     ['MD', 'Moderation with context', 'Every action becomes a searchable Case ID instead of disappearing into chat history.', ['Ban, kick and timeout', 'Warnings and clearing', 'Lock and slowmode', 'Member information']],
@@ -6204,7 +6206,7 @@ function publicInfoPage(kind, session, language = 'hu') {
   };
   const [title, description, sections] = pages[kind] || pages.commands;
   const query = en ? '?lang=en' : '';
-  return layout(title, `<section class="hero"><div class="eyebrow">NEXA Bot 20.0.0</div><h1>${escapeHtml(title)}</h1><p class="lead">${escapeHtml(description)}</p><div class="actions"><a class="btn secondary" href="/${query}">← ${en ? 'Home' : 'Kezdőlap'}</a><a class="btn" href="${escapeHtml(inviteUrl())}">${en ? 'Invite bot' : 'Bot meghívása'}</a></div></section><div class="grid">${sections.map(([name, body], index) => `<article class="card${kind === 'platform' && index < 2 ? ' feature-wide' : ''}"><div class="feature-icon">${['◈','⌾','⬢','↗','▤','✦'][index] || '◇'}</div><h2>${escapeHtml(name)}</h2><p class="muted">${escapeHtml(body)}</p></article>`).join('')}</div>`, session, null, language, kind);
+  return layout(title, `<section class="hero"><div class="eyebrow">NEXA Bot 20.1.0</div><h1>${escapeHtml(title)}</h1><p class="lead">${escapeHtml(description)}</p><div class="actions"><a class="btn secondary" href="/${query}">← ${en ? 'Home' : 'Kezdőlap'}</a><a class="btn" href="${escapeHtml(inviteUrl())}">${en ? 'Invite bot' : 'Bot meghívása'}</a></div></section><div class="grid">${sections.map(([name, body], index) => `<article class="card${kind === 'platform' && index < 2 ? ' feature-wide' : ''}"><div class="feature-icon">${['◈','⌾','⬢','↗','▤','✦'][index] || '◇'}</div><h2>${escapeHtml(name)}</h2><p class="muted">${escapeHtml(body)}</p></article>`).join('')}</div>`, session, null, language, kind);
 }
 
 function knowledgeBasePage(session, language = 'hu') {
@@ -6246,7 +6248,7 @@ function knowledgeBasePage(session, language = 'hu') {
     ? { title: 'NEXA Knowledge Base', lead: 'A practical map of every major NEXA system: what it does, who can use it, where to configure it and what it needs.', what: 'What does it do?', who: 'Who can use it?', where: 'Where do I configure it?', need: 'What does it need?', back: 'Back to home', open: 'Open dashboard' }
     : { title: 'NEXA Tudásközpont', lead: 'Gyakorlati térkép minden fontos NEXA-rendszerhez: mit tud, ki használhatja, hol állítható és mi kell a működéséhez.', what: 'Mit csinál?', who: 'Ki használhatja?', where: 'Hol állítod?', need: 'Mi kell hozzá?', back: 'Vissza a kezdőlapra', open: 'Vezérlőpult megnyitása' };
   const cards = entries.map(([number, title, what, who, where, need], index) => `<details class="knowledge-card"${index === 0 ? ' open' : ''}><summary><span>${escapeHtml(number)}</span><strong>${escapeHtml(title)}</strong><i>+</i></summary><div class="knowledge-body"><dl><div><dt>${labels.what}</dt><dd>${escapeHtml(what)}</dd></div><div><dt>${labels.who}</dt><dd>${escapeHtml(who)}</dd></div><div><dt>${labels.where}</dt><dd>${escapeHtml(where)}</dd></div><div><dt>${labels.need}</dt><dd>${escapeHtml(need)}</dd></div></dl></div></details>`).join('');
-  const content = `<section class="knowledge-hero"><div class="eyebrow">NEXA 20.0.0 • SYSTEM ATLAS</div><h1>${labels.title}</h1><p class="lead">${labels.lead}</p><div class="actions"><a class="btn secondary" href="/${en ? '?lang=en' : ''}">← ${labels.back}</a><a class="btn" href="${session ? '/dashboard' : '/login'}">${labels.open}</a></div></section><nav class="knowledge-index" aria-label="${en ? 'Knowledge categories' : 'Tudástár kategóriák'}">${entries.map(([number, title]) => `<span><b>${escapeHtml(number)}</b>${escapeHtml(title)}</span>`).join('')}</nav><section class="knowledge-grid">${cards}</section>`;
+  const content = `<section class="knowledge-hero"><div class="eyebrow">NEXA 20.1.0 • SYSTEM ATLAS</div><h1>${labels.title}</h1><p class="lead">${labels.lead}</p><div class="actions"><a class="btn secondary" href="/${en ? '?lang=en' : ''}">← ${labels.back}</a><a class="btn" href="${session ? '/dashboard' : '/login'}">${labels.open}</a></div></section><nav class="knowledge-index" aria-label="${en ? 'Knowledge categories' : 'Tudástár kategóriák'}">${entries.map(([number, title]) => `<span><b>${escapeHtml(number)}</b>${escapeHtml(title)}</span>`).join('')}</nav><section class="knowledge-grid">${cards}</section>`;
   return layout(labels.title, content, session, null, language, 'guide');
 }
 
@@ -6380,7 +6382,7 @@ async function ownerDashboard(client, session, saved = false, options = {}) {
     ? `<nav class="pagination" aria-label="Szerverlista oldalak">${page > 1 ? `<a class="btn secondary small" href="${queryFor(page - 1)}">← Előző</a>` : ''}<span>${page}. oldal / ${totalPages}</span>${page < totalPages ? `<a class="btn secondary small" href="${queryFor(page + 1)}">Következő →</a>` : ''}</nav>`
     : '';
   const financialSection = `<section class="card section"><div class="section-kicker">Stripe pénzügyi áttekintés</div><h2 class="section-title">◉ Bevétel és számlaesemények</h2><div class="stats"><div class="stat"><div class="stat-value">${formatMinorCurrency(Number(paymentSummary.total_paid || 0), 'eur')}</div><div class="stat-label">Összes sikeres fizetés</div></div><div class="stat"><div class="stat-value">${formatMinorCurrency(Number(paymentSummary.paid_30d || 0), 'eur')}</div><div class="stat-label">Utolsó 30 nap</div></div><div class="stat"><div class="stat-value">${Number(paymentSummary.successful || 0)}</div><div class="stat-label">Sikeres számla</div></div><div class="stat"><div class="stat-value">${Number(paymentSummary.failed || 0)}</div><div class="stat-label">Sikertelen / nyitott</div></div></div><p class="muted">A kimutatás a Stripe webhook által rögzített bruttó EUR-számlaösszegeket mutatja. Kártyaadatot nem tárol.</p><div style="overflow:auto"><table><thead><tr><th>Stripe számla</th><th>Szerver ID</th><th>Összeg</th><th>Pénznem</th><th>Állapot</th><th>Időpont</th></tr></thead><tbody>${paymentRows}</tbody></table></div></section>`;
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 20.0.0 • Owner Command Center</div><h1>Hálózati irányítóközpont</h1><p class="muted">A teljes botinfrastruktúra, jogosultsági csomagok, védelem és AI-hozzáférés egy helyen.</p></div><a class="btn secondary" href="${escapeHtml(inviteUrl())}">Bot meghívása</a></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 20.1.0 • Owner Command Center</div><h1>Hálózati irányítóközpont</h1><p class="muted">A teljes botinfrastruktúra, jogosultsági csomagok, védelem és AI-hozzáférés egy helyen.</p></div><a class="btn secondary" href="${escapeHtml(inviteUrl())}">Bot meghívása</a></div>
 ${saved ? '<div class="notice">✅ A tulajdonosi beállítás mentve.</div>' : ''}
 <nav class="desktop-owner-nav" aria-label="Owner Center szakaszok"><a href="#overview">Áttekintés</a><a href="#system">Rendszer</a>${isBotOwner(session.user.id) ? '<a href="#architect">NEXA OS Studio</a>' : ''}<a href="#packages">Csomagok</a><a href="#access">Hozzáférések</a><a href="#audit">Audit</a><a href="#servers">Szerverek</a></nav>
 ${financialSection}
@@ -6430,7 +6432,7 @@ async function ownerGuildPage(guild, session) {
   const errorRows = errors.length ? errors.map((item) => `<tr><td>${escapeHtml(item.created_at || item.createdAt || '')}</td><td>${escapeHtml(item.error_type || item.errorType)}</td><td>${escapeHtml(item.message)}</td></tr>`).join('') : '<tr><td colspan="3" class="status-ok">Nincs rögzített hiba ennél a szervernél.</td></tr>';
   const securityReady = !readiness.missingPermissions.length && !readiness.higherBots.length;
   const joinedAt = botMember?.joinedAt ? botMember.joinedAt.toLocaleString('hu-HU') : 'Ismeretlen';
-  const content = `<div class="page-head"><div>${guildIcon(guild)}<div class="section-kicker">NEXA Bot 20.0.0 • Owner Server Inspector</div><h1>${escapeHtml(guild.name)}</h1><p class="muted">${escapeHtml(guild.id)} • részletes, csak tulajdonosi rendszerállapot</p></div><div class="actions"><a class="btn secondary" href="/owner">← Owner Center</a><a class="btn" href="/dashboard/guild/${escapeHtml(guild.id)}">Beállítások</a>${isBotOwner(session.user.id) ? `<a class="btn green" href="/owner/architect/${escapeHtml(guild.id)}">NEXA OS Studio</a>` : ''}<a class="btn green" href="/owner/chronoguard/${escapeHtml(guild.id)}">ChronoGuard</a><a class="btn" href="/owner/aegis/${escapeHtml(guild.id)}">AEGIS Permission DNA</a><a class="btn" href="/owner/shifts/${escapeHtml(guild.id)}">Szolgálatkezelés</a>${rpActive ? `<a class="btn green" href="/owner/documents/${escapeHtml(guild.id)}">Iratvezérlés</a><a class="btn green" href="/owner/document-studio/${escapeHtml(guild.id)}">Workflow Studio</a><a class="btn green" href="/owner/tgf-forge/${escapeHtml(guild.id)}">TGF Forge</a><a class="btn" href="/owner/erlc/${escapeHtml(guild.id)}">ER:LC Bridge</a>` : ''}</div></div>
+  const content = `<div class="page-head"><div>${guildIcon(guild)}<div class="section-kicker">NEXA Bot 20.1.0 • Owner Server Inspector</div><h1>${escapeHtml(guild.name)}</h1><p class="muted">${escapeHtml(guild.id)} • részletes, csak tulajdonosi rendszerállapot</p></div><div class="actions"><a class="btn secondary" href="/owner">← Owner Center</a><a class="btn" href="/dashboard/guild/${escapeHtml(guild.id)}">Beállítások</a>${isBotOwner(session.user.id) ? `<a class="btn green" href="/owner/architect/${escapeHtml(guild.id)}">NEXA OS Studio</a>` : ''}<a class="btn green" href="/owner/chronoguard/${escapeHtml(guild.id)}">ChronoGuard</a><a class="btn" href="/owner/aegis/${escapeHtml(guild.id)}">AEGIS Permission DNA</a><a class="btn" href="/owner/shifts/${escapeHtml(guild.id)}">Szolgálatkezelés</a>${rpActive ? `<a class="btn green" href="/owner/documents/${escapeHtml(guild.id)}">Iratvezérlés</a><a class="btn green" href="/owner/document-studio/${escapeHtml(guild.id)}">Workflow Studio</a><a class="btn green" href="/owner/tgf-forge/${escapeHtml(guild.id)}">TGF Forge</a><a class="btn" href="/owner/erlc/${escapeHtml(guild.id)}">ER:LC Bridge</a>` : ''}</div></div>
   ${blacklisted ? '<div class="notice error">🚫 Ez a szerver jelenleg blacklisten van, ezért a normál botfunkciók le vannak tiltva.</div>' : ''}
   <div class="stats"><div class="stat"><div class="stat-value">${Number(guild.memberCount || 0)}</div><div class="stat-label">Tag</div></div><div class="stat"><div class="stat-value">${guild.channels.cache.size}</div><div class="stat-label">Csatorna</div></div><div class="stat"><div class="stat-value">${guild.roles.cache.size}</div><div class="stat-label">Rang</div></div><div class="stat"><div class="stat-value">${planName(entitlement.plan)}</div><div class="stat-label">Csomag</div></div></div>
   <div class="grid"><section class="card"><div class="section-kicker">Azonosítás</div><h2>Szerveradatok</h2><div class="status-list"><div class="status-row"><strong>Tulajdonos</strong><span>${escapeHtml(owner?.user?.tag || owner?.displayName || guild.ownerId)}<br><span class="muted">${escapeHtml(guild.ownerId)}</span></span></div><div class="status-row"><strong>Bot csatlakozott</strong><span>${escapeHtml(joinedAt)}</span></div><div class="status-row"><strong>RP-rendszer</strong><span class="${rpActive ? 'status-ok' : 'muted'}">${rpActive ? '● Owner által engedélyezve' : '○ Kikapcsolva'}</span></div><div class="status-row"><strong>Csomag forrása</strong><span>${escapeHtml(entitlement.source || 'default')}</span></div></div></section>
@@ -6573,7 +6575,7 @@ function ownerDocumentsPage(guild, session, saved = false) {
     }).join('');
     return `<section class="section" style="margin-top:28px"><div class="page-head"><div><div class="section-kicker">Dokumentumcsoport</div><h2>${escapeHtml(categoryNames[groupKey] || groupKey)}</h2></div></div><div class="grid">${cards}</div></section>`;
   }).join('');
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 20.0.0 • Owner Document Control</div><h1>Irat- és jogosultságvezérlés</h1><p class="muted">${escapeHtml(guild.name)} • Itt állíthatod be, melyik Discord-rang használhatja a dokumentumpaneleket.</p></div><a class="btn secondary" href="/owner">← Owner Center</a></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 20.1.0 • Owner Document Control</div><h1>Irat- és jogosultságvezérlés</h1><p class="muted">${escapeHtml(guild.name)} • Itt állíthatod be, melyik Discord-rang használhatja a dokumentumpaneleket.</p></div><a class="btn secondary" href="/owner">← Owner Center</a></div>
 ${saved ? '<div class="notice">✅ A dokumentumszabályok mentve, a meglévő Discord-panelek frissítve.</div>' : ''}
 <div class="notice warn">Az egyszerű felhívások és tájékoztatások alapból nem kapnak ügyszámot. A hivatalos, jóváhagyásos iratok alapból igen.</div>
 <form method="post" action="/owner/documents/${escapeHtml(guild.id)}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><section class="card section"><div class="section-kicker">Globális jogosultság</div><h2 class="section-title">Ki használhatja a dokumentumrendszert?</h2><div class="field-grid"><div><label for="doc_default_role">Alapértelmezett használati rang</label><select id="doc_default_role" name="doc_default_role" required>${roleOptions(guild, defaultAccessRoleId, 'Válassz egy rangot')}</select><div class="help">Ez váltja le a korábbi, fix „Operatív állomány” korlátozást. A kiválasztott rang használhatja az összes olyan panelt, amelynél lent nem adsz meg külön rangot.</div></div></div></section>${sections}<div class="savebar"><span class="muted">A mentés után a bot frissíti a már kihelyezett dokumentumpaneleket is.</span><button class="btn green" type="submit">Minden szabály mentése</button></div></form>`;
@@ -6600,7 +6602,7 @@ function ownerDocumentStudioPage(guild, session, options = {}) {
     const notificationRole = guild.roles.cache.get(template.notificationRoleId);
     return `<article class="card template-card"><div class="section-kicker">${escapeHtml(template.key)}</div><h3>${escapeHtml(template.emoji)} ${escapeHtml(template.title)}</h3><p class="muted">${template.fields.length} kérdés • ${channel ? `#${escapeHtml(channel.name)}` : 'hiányzó csatorna'} • használat: ${role ? escapeHtml(role.name) : 'alapértelmezett rang'} • értesítés: ${notificationRole ? `@${escapeHtml(notificationRole.name)}` : 'nincs rangping'}</p><div class="actions"><a class="btn secondary small" href="/owner/document-studio/${guild.id}?edit=${encodeURIComponent(template.key)}">Szerkesztés</a><form method="post" action="/owner/document-studio/${guild.id}/install"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="template_key" value="${escapeHtml(template.key)}"><button class="btn green small" type="submit">Panel kihelyezése</button></form><form method="post" action="/owner/document-studio/${guild.id}/delete"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="template_key" value="${escapeHtml(template.key)}"><button class="btn danger small" type="submit">Törlés</button></form></div></article>`;
   }).join('') : '<div class="notice warn">Még nincs egyedi dokumentumsablon. Készítsd el az elsőt az alábbi szerkesztőben.</div>';
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.0.0 • Workflow Studio</div><h1>Egyedi dokumentumstúdió</h1><p class="muted">${escapeHtml(guild.name)} • Saját kérdések, célcsatorna, rang, ping, ügyszám és vezetői jóváhagyás.</p></div><div class="actions"><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a><a class="btn" href="/owner/documents/${guild.id}">Alap iratok</a></div></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.1.0 • Workflow Studio</div><h1>Egyedi dokumentumstúdió</h1><p class="muted">${escapeHtml(guild.name)} • Saját kérdések, célcsatorna, rang, ping, ügyszám és vezetői jóváhagyás.</p></div><div class="actions"><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a><a class="btn" href="/owner/documents/${guild.id}">Alap iratok</a></div></div>
   ${options.saved ? '<div class="notice">✅ A sablon mentve. A panel most már kihelyezhető a kiválasztott Discord-csatornába.</div>' : ''}
   ${options.installed ? '<div class="notice">✅ A dokumentumpanel kihelyezve vagy frissítve.</div>' : ''}
   <section class="section"><div class="page-head"><div><div class="section-kicker">Aktív sablonok</div><h2>Dokumentumfolyamatok</h2></div></div><div class="grid">${cards}</div></section>
@@ -6662,7 +6664,7 @@ async function ownerChronoGuardPage(guild, session, options = {}) {
       : options.scanned ? '<div class="notice">✅ A Shadow Scan lefutott. A kockázati eredmény lent látható.</div>'
         : options.restored ? `<div class="notice">✅ A biztonságos helyreállítás lefutott. ${escapeHtml(options.restored)}</div>`
           : '';
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.0.0 • ChronoGuard Digital Twin</div><h1>Szerver-időgép és incidensközpont</h1><p class="muted">${escapeHtml(guild.name)} • A szerver szerkezetének aláírt digitális ikre, eltérésmagyarázat, bizonyítékkapszula és előnézetes helyreállítás.</p></div><div class="actions"><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a><form method="post" action="/owner/chronoguard/${guild.id}/scan"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><button class="btn" type="submit">Shadow Scan futtatása</button></form></div></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.1.0 • ChronoGuard Digital Twin</div><h1>Szerver-időgép és incidensközpont</h1><p class="muted">${escapeHtml(guild.name)} • A szerver szerkezetének aláírt digitális ikre, eltérésmagyarázat, bizonyítékkapszula és előnézetes helyreállítás.</p></div><div class="actions"><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a><form method="post" action="/owner/chronoguard/${guild.id}/scan"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><button class="btn" type="submit">Shadow Scan futtatása</button></form></div></div>
   ${notice}
   ${!overview.available ? '<div class="notice error">A ChronoGuard használatához élő PostgreSQL DATABASE_URL szükséges.</div>' : ''}
   <div class="stats"><div class="stat"><div class="stat-value">${Number(diff.riskScore || 0)}/100</div><div class="stat-label">Drift kockázat</div></div><div class="stat"><div class="stat-value">${chronoRiskLabel(diff.riskLevel)}</div><div class="stat-label">Veszélyszint</div></div><div class="stat"><div class="stat-value">${snapshots.length}</div><div class="stat-label">Megőrzött állapot</div></div><div class="stat"><div class="stat-value">${baseline ? 'AKTÍV' : 'NINCS'}</div><div class="stat-label">Digitális bázis</div></div></div>
@@ -6695,7 +6697,7 @@ async function ownerAegisPage(guild, session, options = {}) {
     options.baseline ? '<div class="notice">✅ Az új, jóváhagyott jogosultsági bázis rögzítve.</div>' : '',
     options.error ? `<div class="notice error">${escapeHtml(options.error)}</div>` : ''
   ].join('');
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.0.0 • AEGIS PERMISSION DNA</div><h1>Jogosultsági intelligencia</h1><p class="muted">${escapeHtml(guild.name)} • Veszélyes jogok, robbanási sugár, elszigetelhetőség és kriptográfiai jogosultság-eltérés egy helyen.</p></div><div class="actions"><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a><a class="btn secondary" href="/tudaskozpont">Mit tud az AEGIS?</a></div></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.1.0 • AEGIS PERMISSION DNA</div><h1>Jogosultsági intelligencia</h1><p class="muted">${escapeHtml(guild.name)} • Veszélyes jogok, robbanási sugár, elszigetelhetőség és kriptográfiai jogosultság-eltérés egy helyen.</p></div><div class="actions"><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a><a class="btn secondary" href="/tudaskozpont">Mit tud az AEGIS?</a></div></div>
   ${notices}
   <div class="grid" style="grid-template-columns:minmax(260px,.55fr) minmax(0,1.45fr)"><section class="card" style="display:grid;place-items:center"><div class="aegis-score" style="--score:${Number(current.postureScore)}%"><div><strong>${Number(current.postureScore)}</strong><span>biztonsági pont / 100</span></div></div><p class="muted" style="text-align:center">Minél magasabb, annál kisebb a jogosultsági robbanási sugár.</p></section><section class="card"><div class="section-kicker">Élő Permission DNA</div><h2>Jelenlegi jogosultsági lenyomat</h2><code class="dna-code">${escapeHtml(current.permissionDna)}</code><div class="status-list" style="margin-top:14px"><div class="status-row"><strong>Jóváhagyott bázis</strong><span>${baseline ? `#${escapeHtml(baseline.id)} • ${escapeHtml(String(baseline.dna_hash).slice(0, 18))}…` : 'Még nincs'}</span></div><div class="status-row"><strong>Eltérés a bázistól</strong><span class="${diff.changed ? 'status-bad' : 'status-ok'}">${baseline ? (diff.changed ? '● IGEN' : '● NINCS') : '○ Először rögzíts bázist'}</span></div><div class="status-row"><strong>Kockázatváltozás</strong><span>${Number(diff.riskDelta || 0) > 0 ? '+' : ''}${Number(diff.riskDelta || 0)} pont</span></div><div class="status-row"><strong>Érintett identitások</strong><span>${escapeHtml(changedNames || 'Nincs')}</span></div></div><div class="actions"><form method="post" action="/owner/aegis/${guild.id}/scan"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><button class="btn" type="submit">Teljes vizsgálat</button></form><form method="post" action="/owner/aegis/${guild.id}/baseline"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><button class="btn secondary" type="submit">Jóváhagyott bázis rögzítése</button></form></div></section></div>
   <div class="stats"><div class="stat"><div class="stat-value risk-critical">${Number(current.counts.critical)}</div><div class="stat-label">Kritikus identitás</div></div><div class="stat"><div class="stat-value risk-high">${Number(current.counts.high)}</div><div class="stat-label">Magas kockázat</div></div><div class="stat"><div class="stat-value">${Number(current.counts.uncontainable)}</div><div class="stat-label">Nem elszigetelhető</div></div><div class="stat"><div class="stat-value">${Number(current.counts.untrustedBots)}</div><div class="stat-label">Ismeretlen bot</div></div></div>
@@ -6756,7 +6758,7 @@ async function ownerShiftsPage(guild, session, options = {}) {
     const name = member?.displayName || member?.user?.username || row.user_id;
     return `<form class="record" method="post" action="/owner/shifts/${guild.id}/record/${row.id}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div><strong>${escapeHtml(name)}</strong><div class="muted">${escapeHtml(row.user_id)} • #${escapeHtml(row.id)}</div><div class="badge ${row.ended_at ? '' : 'pro'}">${row.ended_at ? formatDuration(row.active_seconds) : 'AKTÍV'}</div></div><div><label>Kezdés • Budapest</label><input type="datetime-local" name="started_at" value="${escapeHtml(budapestInput(row.started_at))}" required></div><div><label>Befejezés • Budapest</label><input type="datetime-local" name="ended_at" value="${escapeHtml(budapestInput(row.ended_at))}"><div class="help">Üresen hagyva aktív szolgálat.</div></div><div><label>Szünet másodpercben</label><input type="number" name="break_seconds" min="0" max="31536000" value="${Number(row.break_seconds || 0)}"></div><div class="actions"><button class="btn green small" name="operation" value="update" type="submit">Mentés</button><button class="btn danger small" name="operation" value="delete" type="submit">Törlés</button></div></form>`;
   }).join('') : '<div class="notice warn">A szűréshez nem található szolgálati rekord.</div>';
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.0.0 • Shift Operations</div><h1>Szolgálati irányítóközpont</h1><p class="muted">${escapeHtml(guild.name)} • Aktív és lezárt szolgálatok szerkesztése, törlése és nullázása.</p></div><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.1.0 • Shift Operations</div><h1>Szolgálati irányítóközpont</h1><p class="muted">${escapeHtml(guild.name)} • Aktív és lezárt szolgálatok szerkesztése, törlése és nullázása.</p></div><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a></div>
   ${options.saved ? '<div class="notice">✅ A szolgálati adat módosítása rögzítve és auditálva.</div>' : ''}
   <div class="stats"><div class="stat"><div class="stat-value">${overview.active}</div><div class="stat-label">Aktív szolgálat</div></div><div class="stat"><div class="stat-value">${overview.completed}</div><div class="stat-label">Lezárt műszak</div></div><div class="stat"><div class="stat-value">${overview.members}</div><div class="stat-label">Érintett tag</div></div><div class="stat"><div class="stat-value">${formatDuration(overview.seconds)}</div><div class="stat-label">Összes aktív idő</div></div></div>
   <section class="card section"><div class="section-kicker">Keresés és veszélyes műveletek</div><h2 class="section-title">Tulajdonosi kezelés</h2><div class="owner-tools"><form method="get" action="/owner/shifts/${guild.id}"><label>Tag Discord ID szerinti szűrése</label><input type="text" name="user" inputmode="numeric" maxlength="22" value="${escapeHtml(options.userId || '')}" placeholder="123456789012345678"><div class="actions"><button class="btn" type="submit">Szűrés</button><a class="btn secondary" href="/owner/shifts/${guild.id}">Összes</a></div></form><form method="post" action="/owner/shifts/${guild.id}/reset-user"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><label>Egy tag teljes nullázása</label><input type="text" name="user_id" inputmode="numeric" maxlength="22" placeholder="Discord felhasználói ID" required><label>Megerősítés</label><input type="text" name="confirmation" placeholder="Írd be: RESET" required><button class="btn danger" type="submit">Tag szolgálatának nullázása</button></form><form method="post" action="/owner/shifts/${guild.id}/reset-all"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><label>Teljes szerver nullázása</label><p class="muted">Minden aktív és korábbi szolgálati rekord végleg törlődik.</p><input type="text" name="confirmation" placeholder="Írd be: TELJES RESET" required><button class="btn danger" type="submit">Minden szolgálat nullázása</button></form></div></section>
@@ -6780,7 +6782,7 @@ async function ownerErlcPage(guild, session, options = {}) {
   }).join('') || '<tr><td colspan="5" class="muted">Nincs online játékos vagy az API nem elérhető.</td></tr>';
   const staff = live?.Staff || {};
   const staffCount = Object.values(staff).reduce((sum, group) => sum + Object.keys(group || {}).length, 0);
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.0.0 • ER:LC Bridge</div><h1>ER:LC integráció</h1><p class="muted">${escapeHtml(guild.name)} • Privát szerver állapot, játékosok, staff és owneres parancsvezérlés.</p></div><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.1.0 • ER:LC Bridge</div><h1>ER:LC integráció</h1><p class="muted">${escapeHtml(guild.name)} • Privát szerver állapot, játékosok, staff és owneres parancsvezérlés.</p></div><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a></div>
   ${options.saved ? '<div class="notice">✅ Az ER:LC kulcs ellenőrizve, titkosítva és elmentve.</div>' : ''}${options.commandSent ? '<div class="notice">✅ Az ER:LC parancsot az API elfogadta.</div>' : ''}${apiError ? `<div class="notice error">⚠️ ER:LC API: ${escapeHtml(apiError)}</div>` : ''}
   <div class="stats"><div class="stat"><div class="stat-value">${live ? Number(live.CurrentPlayers || 0) : '—'}</div><div class="stat-label">Online játékos</div></div><div class="stat"><div class="stat-value">${live ? Number(live.MaxPlayers || 0) : '—'}</div><div class="stat-label">Férőhely</div></div><div class="stat"><div class="stat-value">${live ? (Array.isArray(live.Queue) ? live.Queue.length : 0) : '—'}</div><div class="stat-label">Várólista</div></div><div class="stat"><div class="stat-value">${live ? staffCount : '—'}</div><div class="stat-label">ER:LC staff</div></div></div>
   <div class="grid"><section class="card"><div class="section-kicker">Titkos kapcsolat</div><h2>API-kulcs</h2><div class="status-list"><div class="status-row"><strong>Állapot</strong><span class="${integration.enabled ? 'status-ok' : 'muted'}">${integration.configured ? (integration.enabled ? '● Bekapcsolva' : '○ Kikapcsolva') : '○ Nincs beállítva'}</span></div><div class="status-row"><strong>Forrás</strong><span>${escapeHtml(integration.source || '—')}</span></div><div class="status-row"><strong>Kulcs</strong><span>${escapeHtml(integration.keyMask)}</span></div><div class="status-row"><strong>ER:LC szerver</strong><span>${escapeHtml(live?.Name || integration.serverName || '—')}</span></div><div class="status-row"><strong>Join Key</strong><span>${escapeHtml(live?.JoinKey || integration.joinKey || '—')}</span></div></div></section><section class="card"><div class="section-kicker">Kulcs cseréje</div><h2>Biztonságos beállítás</h2><form method="post" action="/owner/erlc/${guild.id}/save"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><label>ER:LC Server Key</label><input type="password" name="server_key" minlength="10" maxlength="500" autocomplete="new-password" placeholder="A kulcs értéke nem lesz többé megjelenítve" required><p class="help">Mentés előtt a NEXA élő API-hívással ellenőrzi, majd AES-256-GCM titkosítással tárolja. A GitHubba nem kerül.</p><button class="btn green" type="submit">Kapcsolat tesztelése és mentése</button></form>${integration.source === 'database' ? `<div class="actions"><form method="post" action="/owner/erlc/${guild.id}/toggle"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="enabled" value="${integration.enabled ? '0' : '1'}"><button class="btn secondary" type="submit">${integration.enabled ? 'Ideiglenes kikapcsolás' : 'Bekapcsolás'}</button></form><form method="post" action="/owner/erlc/${guild.id}/delete"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="text" name="confirmation" placeholder="Írd be: ERLC TÖRLÉS" required><button class="btn danger" type="submit">Kulcs törlése</button></form></div>` : ''}</section></div>
@@ -6801,7 +6803,7 @@ async function dashboardList(client, session) {
   const persistence = isPersistentStore() ? '' : `<div class="notice warn">⚠️ ${en ? 'DATABASE_URL is not configured. Changes may be lost after a restart.' : 'Nincs DATABASE_URL beállítva. A módosítások újraindításkor elveszhetnek.'}</div>`;
   const members = guilds.reduce((sum, item) => sum + Number(item.botGuild.memberCount || 0), 0);
   const modules = guilds.reduce((sum, item) => sum + Object.values(getGuildConfig(item.botGuild.id).modules).filter(Boolean).length, 0);
-  return layout(en ? 'My servers' : 'Szervereim', `<div class="page-head"><div><div class="section-kicker">NEXA Bot 20.0.0 • Command Deck</div><h1>${en ? 'Server network' : 'Szerverhálózat'}</h1><p class="muted">${en ? 'Only servers where you are an owner, administrator or authorized manager are shown.' : 'Csak azok a szerverek láthatók, amelyekhez tulajdonosi, adminisztrátori vagy kijelölt kezelői jogosultságod van.'}</p></div></div><div class="stats"><div class="stat"><div class="stat-value">${guilds.length}</div><div class="stat-label">${en ? 'Managed servers' : 'Kezelt szerver'}</div></div><div class="stat"><div class="stat-value">${members}</div><div class="stat-label">${en ? 'Total members' : 'Összes tag'}</div></div><div class="stat"><div class="stat-value">${modules}</div><div class="stat-label">${en ? 'Configured modules' : 'Konfigurált modul'}</div></div><div class="stat"><div class="stat-value">ONLINE</div><div class="stat-label">NEXA Core</div></div></div>${persistence}<div class="grid">${cards}</div>`, session);
+  return layout(en ? 'My servers' : 'Szervereim', `<div class="page-head"><div><div class="section-kicker">NEXA Bot 20.1.0 • Command Deck</div><h1>${en ? 'Server network' : 'Szerverhálózat'}</h1><p class="muted">${en ? 'Only servers where you are an owner, administrator or authorized manager are shown.' : 'Csak azok a szerverek láthatók, amelyekhez tulajdonosi, adminisztrátori vagy kijelölt kezelői jogosultságod van.'}</p></div></div><div class="stats"><div class="stat"><div class="stat-value">${guilds.length}</div><div class="stat-label">${en ? 'Managed servers' : 'Kezelt szerver'}</div></div><div class="stat"><div class="stat-value">${members}</div><div class="stat-label">${en ? 'Total members' : 'Összes tag'}</div></div><div class="stat"><div class="stat-value">${modules}</div><div class="stat-label">${en ? 'Configured modules' : 'Konfigurált modul'}</div></div><div class="stat"><div class="stat-value">ONLINE</div><div class="stat-label">NEXA Core</div></div></div>${persistence}<div class="grid">${cards}</div>`, session);
 }
 
 async function profilePage(client, session) {
@@ -7192,7 +7194,7 @@ async function webSupportPage(session, notice = '') {
   const tickets = await listWebTickets(session.user.id);
   const statusText = (status) => en ? ({ open: 'OPEN', pending: 'PENDING', closed: 'CLOSED' }[status] || String(status).toUpperCase()) : ({ open: 'NYITOTT', pending: 'VÁRAKOZIK', closed: 'LEZÁRT' }[status] || String(status).toUpperCase());
   const rows = tickets.length ? tickets.map((ticket) => `<a class="record" href="/support/${ticket.id}" style="text-decoration:none"><div><strong>#${ticket.id} • ${escapeHtml(ticket.subject)}</strong><div class="muted">${escapeHtml(ticket.category)} • ${escapeHtml(new Date(ticket.updated_at).toLocaleString(en ? 'en-GB' : 'hu-HU'))}</div></div><span class="badge ${ticket.status === 'open' ? 'ultimate' : ''}">${statusText(ticket.status)}</span></a>`).join('') : `<div class="notice warn">${en ? 'You have no web support tickets yet.' : 'Még nincs webes segítségkérésed.'}</div>`;
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.0.0 • SUPPORT OPERATIONS</div><h1>${en ? 'Support Center' : 'Segítségkérés'}</h1><p class="muted">${en ? 'Your request opens a private ticket on the official NEXA Support server. Replies and status changes appear here automatically.' : 'A kérésedből privát ticket nyílik a hivatalos NEXA Support szerveren. A válaszokat és állapotváltozásokat itt automatikusan követheted.'}</p></div><a class="btn secondary" href="/dashboard">← Dashboard</a></div>${notice ? `<div class="notice">${escapeHtml(notice)}</div>` : ''}<div class="grid"><section class="card section"><h2>${en ? 'New support request' : 'Új segítségkérés'}</h2><form method="post" action="/support"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="field-grid"><div><label>${en ? 'Subject' : 'Téma'}</label><input type="text" name="subject" maxlength="100" required placeholder="${en ? 'What do you need help with?' : 'Miben kérsz segítséget?'}"></div><div><label>${en ? 'Category' : 'Kategória'}</label><select name="category"><option value="technical">${en ? 'Technical support' : 'Technikai segítség'}</option><option value="bug">${en ? 'Bug report' : 'Hibajelentés'}</option><option value="billing">${en ? 'Subscription / billing' : 'Előfizetés / számlázás'}</option><option value="partnership">${en ? 'Partnership' : 'Partnerség'}</option><option value="other">${en ? 'Other' : 'Egyéb'}</option></select></div><div><label>${en ? 'Priority' : 'Prioritás'}</label><select name="priority"><option value="low">${en ? 'Low' : 'Alacsony'}</option><option value="normal" selected>${en ? 'Normal' : 'Normál'}</option><option value="high">${en ? 'High' : 'Magas'}</option><option value="urgent">${en ? 'Urgent' : 'Sürgős'}</option></select></div></div><label>${en ? 'Message' : 'Üzenet'}</label><textarea name="content" maxlength="4000" required placeholder="${en ? 'Describe the problem in detail…' : 'Írd le pontosan a problémát…'}"></textarea><button class="btn green" type="submit">${en ? 'Open ticket' : 'Ticket megnyitása'}</button></form></section><section class="card section"><h2>${en ? 'My previous tickets' : 'Korábbi ügyeim'}</h2><div class="record-list">${rows}</div></section></div>`;
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.1.0 • SUPPORT OPERATIONS</div><h1>${en ? 'Support Center' : 'Segítségkérés'}</h1><p class="muted">${en ? 'Your request opens a private ticket on the official NEXA Support server. Replies and status changes appear here automatically.' : 'A kérésedből privát ticket nyílik a hivatalos NEXA Support szerveren. A válaszokat és állapotváltozásokat itt automatikusan követheted.'}</p></div><a class="btn secondary" href="/dashboard">← Dashboard</a></div>${notice ? `<div class="notice">${escapeHtml(notice)}</div>` : ''}<div class="grid"><section class="card section"><h2>${en ? 'New support request' : 'Új segítségkérés'}</h2><form method="post" action="/support"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="field-grid"><div><label>${en ? 'Subject' : 'Téma'}</label><input type="text" name="subject" maxlength="100" required placeholder="${en ? 'What do you need help with?' : 'Miben kérsz segítséget?'}"></div><div><label>${en ? 'Category' : 'Kategória'}</label><select name="category"><option value="technical">${en ? 'Technical support' : 'Technikai segítség'}</option><option value="bug">${en ? 'Bug report' : 'Hibajelentés'}</option><option value="billing">${en ? 'Subscription / billing' : 'Előfizetés / számlázás'}</option><option value="partnership">${en ? 'Partnership' : 'Partnerség'}</option><option value="other">${en ? 'Other' : 'Egyéb'}</option></select></div><div><label>${en ? 'Priority' : 'Prioritás'}</label><select name="priority"><option value="low">${en ? 'Low' : 'Alacsony'}</option><option value="normal" selected>${en ? 'Normal' : 'Normál'}</option><option value="high">${en ? 'High' : 'Magas'}</option><option value="urgent">${en ? 'Urgent' : 'Sürgős'}</option></select></div></div><label>${en ? 'Message' : 'Üzenet'}</label><textarea name="content" maxlength="4000" required placeholder="${en ? 'Describe the problem in detail…' : 'Írd le pontosan a problémát…'}"></textarea><button class="btn green" type="submit">${en ? 'Open ticket' : 'Ticket megnyitása'}</button></form></section><section class="card section"><h2>${en ? 'My previous tickets' : 'Korábbi ügyeim'}</h2><div class="record-list">${rows}</div></section></div>`;
   return layout(en ? 'Web Support' : 'Webes segítség', content, session, null);
 }
 
@@ -7211,7 +7213,7 @@ async function ownerSupportPage(session, url) {
   const tickets = await listAllWebTickets({ status: url.searchParams.get('status') || '', priority: url.searchParams.get('priority') || '', search: url.searchParams.get('q') || '' });
   const counts = tickets.reduce((acc, ticket) => { acc[ticket.status] = (acc[ticket.status] || 0) + 1; return acc; }, {});
   const rows = tickets.map((ticket) => `<a class="record" href="/owner/support/${ticket.id}" style="text-decoration:none"><div><strong>#${ticket.id} • ${escapeHtml(ticket.subject)}</strong><div class="muted">${escapeHtml(ticket.username)} • ${escapeHtml(ticket.category)}</div></div><div><span class="badge ${ticket.priority === 'urgent' ? 'pro' : ''}">${escapeHtml(String(ticket.priority).toUpperCase())}</span></div><div>${escapeHtml(ticket.assigned_name || 'Nincs felelős')}</div><div>${escapeHtml(new Date(ticket.updated_at).toLocaleString('hu-HU'))}</div><span class="badge ${ticket.status === 'open' ? 'ultimate' : ''}">${escapeHtml(String(ticket.status).toUpperCase())}</span></a>`).join('') || '<div class="notice warn">Nincs találat.</div>';
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.0.0 • OWNER SUPPORT OPERATIONS</div><h1>Support irányítóközpont</h1><p class="muted">Prioritás, felelős, állapot, belső jegyzet és ügyfélelégedettség egy helyen.</p></div><a class="btn secondary" href="/owner">← Owner Center</a></div><div class="stats"><div class="stat"><div class="stat-value">${tickets.length}</div><div class="stat-label">Találat</div></div><div class="stat"><div class="stat-value">${counts.open || 0}</div><div class="stat-label">Nyitott</div></div><div class="stat"><div class="stat-value">${counts.pending || 0}</div><div class="stat-label">Várakozik</div></div><div class="stat"><div class="stat-value">${counts.closed || 0}</div><div class="stat-label">Lezárt</div></div></div><form class="owner-search" method="get" action="/owner/support"><input type="search" name="q" placeholder="Ticket, felhasználó vagy téma"><select name="status"><option value="">Minden állapot</option><option value="open">Nyitott</option><option value="pending">Várakozik</option><option value="closed">Lezárt</option></select><select name="priority"><option value="">Minden prioritás</option><option value="urgent">Sürgős</option><option value="high">Magas</option><option value="normal">Normál</option><option value="low">Alacsony</option></select><button class="btn" type="submit">Szűrés</button></form><div class="record-list">${rows}</div>`;
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.1.0 • OWNER SUPPORT OPERATIONS</div><h1>Support irányítóközpont</h1><p class="muted">Prioritás, felelős, állapot, belső jegyzet és ügyfélelégedettség egy helyen.</p></div><a class="btn secondary" href="/owner">← Owner Center</a></div><div class="stats"><div class="stat"><div class="stat-value">${tickets.length}</div><div class="stat-label">Találat</div></div><div class="stat"><div class="stat-value">${counts.open || 0}</div><div class="stat-label">Nyitott</div></div><div class="stat"><div class="stat-value">${counts.pending || 0}</div><div class="stat-label">Várakozik</div></div><div class="stat"><div class="stat-value">${counts.closed || 0}</div><div class="stat-label">Lezárt</div></div></div><form class="owner-search" method="get" action="/owner/support"><input type="search" name="q" placeholder="Ticket, felhasználó vagy téma"><select name="status"><option value="">Minden állapot</option><option value="open">Nyitott</option><option value="pending">Várakozik</option><option value="closed">Lezárt</option></select><select name="priority"><option value="">Minden prioritás</option><option value="urgent">Sürgős</option><option value="high">Magas</option><option value="normal">Normál</option><option value="low">Alacsony</option></select><button class="btn" type="submit">Szűrés</button></form><div class="record-list">${rows}</div>`;
   return layout('Owner Support Operations', content, session, null);
 }
 
@@ -7580,7 +7582,7 @@ function defaultHealthSnapshot(client) {
   const startup = process.uptime() < 180;
   return {
     name: 'NexaBot',
-    version: '20.0.0',
+    version: '20.1.0',
     healthy: ready || startup,
     status: ready ? 'online' : startup ? 'starting' : 'offline',
     guilds: client.guilds?.cache?.size || 0,
@@ -10372,7 +10374,7 @@ function helpEmbed(category = null, language = 'hu') {
       .setTitle(language === 'en' ? '✨ NEXA Bot Help Center' : '✨ NEXA Bot Súgóközpont')
       .setDescription(language === 'en' ? 'Choose a category below. I will show only the commands and usage for that system.' : 'Válassz egy kategóriát az alábbi menüből. Csak az adott rendszer parancsait és használatát mutatom meg.')
       .addFields({ name: language === 'en' ? 'Tip' : 'Tipp', value: language === 'en' ? 'Most features are also available through buttons in the Discord Control Center and the web dashboard.' : 'A legtöbb funkció a Discord Control Center gombjaival és a webes dashboardon is használható.' })
-    .setFooter({ text: 'NEXA Bot 20.0.0 • AEGIS Platform' });
+    .setFooter({ text: 'NEXA Bot 20.1.0 • AEGIS Platform' });
   }
   const item = CATEGORIES[category];
   const englishTitles = { moderation: 'Moderation', utility: 'Utility', security: 'Security', tickets: 'Tickets', levels: 'Levels', giveaway: 'Giveaway', ai: 'AI', admin: 'Admin' };
@@ -10380,7 +10382,7 @@ function helpEmbed(category = null, language = 'hu') {
     .setColor(COLORS.primary)
     .setTitle(`${item.emoji} ${language === 'en' ? englishTitles[category] : item.title}`)
     .setDescription(language === 'en' ? item.en : item.text)
-    .setFooter({ text: language === 'en' ? 'NEXA Bot 20.0.0 • Choose another category from the menu' : 'NEXA Bot 20.0.0 • Válassz másik kategóriát a menüből' });
+    .setFooter({ text: language === 'en' ? 'NEXA Bot 20.1.0 • Choose another category from the menu' : 'NEXA Bot 20.1.0 • Válassz másik kategóriát a menüből' });
 }
 
 function buildHelpCommand() {
@@ -10596,7 +10598,7 @@ client.once(Events.ClientReady, async (readyClient) => {
     }
     console.log(`NexaBot elindult: ${readyClient.user.tag}`);
     await restoreGiveaways(readyClient);
-    console.log('A NEXA Bot 20.0.0 NEXA OS Studio Platform használatra kész.');
+    console.log('A NEXA Bot 20.1.0 NEXA OS Studio Platform használatra kész.');
   } catch (error) {
     console.error('A parancs regisztrálása nem sikerült:', error);
     await recordError(error, { command: 'registerCommands' });
@@ -10829,6 +10831,8 @@ const {
   auditCiaServer,
   auditSupportServer,
   isCiaInstallationComplete,
+  refreshCiaAmericanRanks,
+  repairCiaServer,
   repairSupportServer,
   setupCiaServer,
   setupSupportServer
@@ -10964,7 +10968,7 @@ async function handleCommand(interaction) {
   if (interaction.commandName === 'aegis') return handleAegisCommand(interaction);
   if (interaction.commandName === 'cia') {
     if (!isBotOwner(interaction.user.id)) {
-      return ephemeralError(interaction, 'A CIA egyszeri telepítőjét kizárólag a NEXA Bot elsődleges tulajdonosa használhatja.');
+      return ephemeralError(interaction, 'A CIA telepítését, frissítését és újratelepítését kizárólag a NEXA Bot elsődleges tulajdonosa használhatja.');
     }
     if (!interaction.guild) {
       return ephemeralError(interaction, 'A CIA rendszer kizárólag Discord-szerveren telepíthető.');
@@ -10980,20 +10984,22 @@ async function handleCommand(interaction) {
     if (action === 'ellenorzes') {
       const audit = auditCiaServer(interaction.guild);
       const lines = [
-        `**Egyszeri telepítési zár:** ${isCiaInstallationComplete(interaction.guild) ? '🔒 aktív' : '🔓 még nem aktív'}`,
+        `**Telepítve:** ${isCiaInstallationComplete(interaction.guild) ? '✅ igen' : '— még nem'}`,
+        `**Újratelepítés:** kizárólag a fő botowner: \`/cia ujratelepites\``,
         `**Struktúra:** ${audit.structureComplete ? '✅ teljes' : '⚠️ hiányos'}`,
         `**Adatbázis-jelző:** ${audit.databaseMarker ? '✅' : '—'}`,
         `**Discord-jelző:** ${audit.discordMarker ? '✅' : '—'}`
       ];
-      if (audit.missingRoles.length) lines.push(`**Hiányzó rangok:** ${audit.missingRoles.join(', ')}`);
-      if (audit.missingCategories.length) lines.push(`**Hiányzó kategóriák:** ${audit.missingCategories.join(', ')}`);
-      if (audit.missingChannels.length) lines.push(`**Hiányzó csatornák:** ${audit.missingChannels.join(', ')}`);
-      return interaction.reply({ content: `## CIA rendszerellenőrzés\n${lines.join('\n')}`, flags: EPHEMERAL });
+      for (const [label, missing] of [['rangok', audit.missingRoles], ['kategóriák', audit.missingCategories], ['csatornák', audit.missingChannels]]) {
+        if (missing.length) lines.push(`**Hiányzó ${label}:** ${missing.length} — ${missing.slice(0, 5).join(', ')}${missing.length > 5 ? '…' : ''}`);
+      }
+      lines.push(`**Struktúraverzió:** ${audit.version} → ${audit.targetVersion}`);
+      return interaction.reply({ content: `## CIA rendszerellenőrzés\n${lines.join('\n')}`.slice(0, 1950), flags: EPHEMERAL });
     }
     if (action === 'rangok-frissitese') {
       await interaction.deferReply({ flags: EPHEMERAL });
       try {
-        const result = await refreshCiaAmericanRanks(interaction.guild, interaction.client.user);
+        const result = await refreshCiaAmericanRanks(interaction.guild, interaction.client.user, interaction.member);
         await recordAudit('cia_american_ranks_refresh', {
           actorId: interaction.user.id,
           guildId: interaction.guildId,
@@ -11002,7 +11008,8 @@ async function handleCommand(interaction) {
         return interaction.editReply(
           `✅ **Az amerikai CIA ranghierarchia elkészült.**\n` +
           `• ${result.count} rang frissítve\n` +
-          `• A rangpozíciók és jogosultságok megmaradtak\n` +
+          `• A meglévő rangazonosítók és tagi hozzárendelések megmaradtak\n` +
+          `• A sorrend és a két rangtájékoztató frissült\n` +
           `• A szerver csatornái, paneljei, kérdései és botüzenetei továbbra is magyarok\n` +
           `• Hierarchiapanel: ${result.hierarchyUpdated ? 'frissítve' : 'nem található, ezért kihagyva'}`
         );
@@ -11013,10 +11020,16 @@ async function handleCommand(interaction) {
         return interaction.editReply(`❌ A rangfrissítés megszakadt: ${String(error.message || error).slice(0, 1200)}`);
       }
     }
+    if (!['telepites', 'ujratelepites'].includes(action)) {
+      return ephemeralError(interaction, 'Ismeretlen CIA művelet. Használd a /cia ellenorzes parancsot.');
+    }
     await interaction.deferReply({ flags: EPHEMERAL });
     try {
-      const result = await setupCiaServer(interaction.guild, interaction.client.user, interaction.member);
-      await recordAudit('cia_server_one_time_install', {
+      const reinstall = action === 'ujratelepites';
+      const result = reinstall
+        ? await repairCiaServer(interaction.guild, interaction.client.user, interaction.member)
+        : await setupCiaServer(interaction.guild, interaction.client.user, interaction.member);
+      await recordAudit(reinstall ? 'cia_server_owner_reinstall' : 'cia_server_one_time_install', {
         actorId: interaction.user.id,
         guildId: interaction.guildId,
         metadata: {
@@ -11028,20 +11041,22 @@ async function handleCommand(interaction) {
         }
       });
       return interaction.editReply(
-        `✅ **A teljes CIA frakciórendszer elkészült és véglegesen lezárásra került.**\n` +
+        `✅ **A teljes CIA frakciórendszer ${reinstall ? 'frissítése és újratelepítése' : 'telepítése'} elkészült.**\n` +
         `• ${result.roleCount} kezelt rang\n` +
         `• ${result.categoryCount} jogosultságkezelt kategória\n` +
         `• ${result.channelCount} szöveges és hangcsatorna\n` +
         `• ${result.published} panel, tájékoztató és dokumentumfelület\n` +
         `• Ultimate védelem, szolgálat, ticket, TGF és egyedi CIA-iratok beállítva\n\n` +
-        `🔒 A telepítő ezen a szerveren többé nem futtatható. Render-újraindításkor sem telepít újra semmit.`
+        `🔒 Újratelepítés: kizárólag a fő botowner használhatja a /cia ujratelepites parancsot.\n` +
+        `A meglévő tagi rangok, ticketek és beszélgetések megmaradnak. Render-újraindításkor nem indul telepítés.`
       );
     } catch (error) {
       await recordError(error, { command: 'cia', guildId: interaction.guildId, userId: interaction.user.id });
       if (error.code === 'CIA_ALREADY_INSTALLED') return interaction.editReply(`🔒 ${error.message}`);
+      if (error.code === 'CIA_NOT_INSTALLED') return interaction.editReply(`⚠️ ${error.message}`);
       if (error.code === 'CIA_INSTALL_RUNNING') return interaction.editReply(`⏳ ${error.message}`);
-      console.error('CIA egyszeri telepítési hiba:', error);
-      return interaction.editReply(`❌ A CIA telepítés megszakadt: ${String(error.message || error).slice(0, 1200)}\nA végleges zár csak teljes siker után aktiválódik, ezért a hiba javítása után biztonságosan folytathatod ugyanazzal a paranccsal.`);
+      console.error('CIA telepítési hiba:', error);
+      return interaction.editReply(`❌ A CIA művelet megszakadt: ${String(error.message || error).slice(0, 1200)}\nA hiba javítása után ugyanazzal a paranccsal folytathatod; a már létrehozott elemek azonosítóját megőrizzük.`);
     }
   }
   if (interaction.commandName === 'support-szerver') {
@@ -13282,7 +13297,7 @@ module.exports = {
 const { Events, Status } = require('discord.js');
 const { databaseHealth } = require('./config');
 
-const APP_VERSION = '20.0.0';
+const APP_VERSION = '20.1.0';
 
 function positiveInteger(value, fallback, minimum = 1_000, maximum = 60 * 60 * 1000) {
   const parsed = Number.parseInt(value, 10);
@@ -15305,6 +15320,83 @@ module.exports = {
 };
 
 },
+"src/cia-content.js": function(module, exports, require) {
+// Public background facts and original server rules are kept separate in the handbook.
+const CIA_ROLE_DETAILS = Object.freeze({
+  director: 'D/CIA — a szerver teljes RP vezetése, végső döntések és kinevezések. A telepítési jog külön, a BOT_OWNER_ID fiókhoz kötött.',
+  deputy: 'DD/CIA — az igazgató helyettese; összehangolja a szerver vezetőinek munkáját és kezeli az eszkalált ügyeket.',
+  chiefOfStaff: 'EXDIR — az RP szerver végrehajtási és igazgatási koordinátora, a vezetői döntések követése.',
+  directorateHead: 'DDO — a műveleti RP ág vezetője; műveleti jóváhagyás, felvételi bírálat és szakmai ellenőrzés.',
+  operationsCommander: 'COS — az adott RP állomás munkáját és szolgálatát szervezi; mentorálást és eligazítást vezet.',
+  seniorAgent: 'DCOS — az állomásvezető helyettese; feladatkövetés, átadás és szakmai koordináció.',
+  specialAgent: 'CO — Case Officer; a fiktív RP forrásokkal és ügyekkel kapcsolatos feladatok, jelentések.',
+  intelligenceOfficer: 'TO — Targeting Officer; az RP információigények és az ügyek összefüggéseinek értékelése.',
+  fieldAgent: 'SOO — Staff Operations Officer; az RP műveleti feladatok és a központ közötti koordináció.',
+  collectionOfficer: 'CMO — Collection Management Officer; információigények, gyűjtési összesítők és továbbítás nyilvántartása.',
+  specializedOfficer: 'SSO — Specialized Skills Officer; kijelölt, szakképzéshez kötött RP támogató feladatok.',
+  paramilitaryOfficer: 'PMO — Paramilitary Officer; külön engedélyezett RP gyakorlatok résztvevője, a játék szabályai szerint.',
+  analyst: 'IA — Intelligence Analyst; az RP információkat tényekre, következtetésekre és bizonytalanságokra bontja.',
+  technicalOfficer: 'TOO — Technical Operations Officer; RP technikai eszközök állapota, igénylése és hibajelentése.',
+  systemsOfficer: 'IT Engineer — a szerver kijelölt digitális folyamatainak és rendszerhibáinak dokumentálása; külön fejlesztői jogosultságot nem kap.',
+  supportOfficer: 'SIO — Support Integration Officer; RP logisztika, készletek és támogatási igények koordinálása.',
+  trainee: 'PT — Professional Trainee; betanuló állománytag, aki mentor mellett tanul és teljesíti az alapképzést.',
+  analysisDivision: 'DA — az elemzői RP terület hozzáférési csoportja; szervezeti címke, nem önálló előléptetési fokozat.',
+  scienceDivision: 'DS&T — a tudományos és technikai RP terület hozzáférési csoportja.',
+  systemsDivision: 'DMS — a Mission Systems RP terület hozzáférési csoportja.',
+  supportDivision: 'DS — a támogatási és logisztikai RP terület hozzáférési csoportja.',
+  candidate: 'Jelölt — jelentkezés alatt álló személy, belső műveleti hozzáférés nélkül.',
+  verified: 'Ellenőrzött — belépési státusz; önmagában nem jogosít műveleti vagy vezetői hozzáférésre.',
+  operationAlert: 'Műveleti értesítési rang — kizárólag értesítést kér, hozzáférést nem ad.',
+  announcements: 'Közleményértesítési rang — kizárólag a szerver közleményeinek értesítéseihez.',
+  suspended: 'Felfüggesztett státusz — a hozzáférési rangokat a vezetőségnek külön el kell venni; önmagában nem írja felül más Discord-rang engedélyét.'
+});
+
+const CIA_KNOWLEDGE_PANELS = Object.freeze({
+  ciaOverview: ['🏛️ Mi a CIA?', 'A Central Intelligence Agency az Egyesült Államok 1947-ben létrehozott külföldi hírszerző szervezete. Külföldi információt gyűjt és elemez, és a döntéshozókat tájékoztatja. A CIA saját bemutatása szerint nem rendőri szervezet.\n\n**Ezen a szerveren:** fiktív játékbeli RP frakció működik. Nem képviseljük a valódi CIA-t, és a szerver nem ad valós hatósági jogot. Valós személyek magánadatai helyett fiktív karaktereket és játékbeli ügyeket használunk.\n\nNyilvános háttér: https://www.cia.gov/about/'],
+  serverGuide: ['🧭 Kezdés a CIA RP szerveren', '1. Olvasd el a szabályzatot és a CIA-bemutatót.\n2. Végezd el az ellenőrzést.\n3. Az értesítési panelen kizárólag közlemény- és műveleti értesítést választhatsz.\n4. A jelentkezési panelen saját szavaiddal válaszolj.\n5. Elfogadás után a Professional Trainee beosztás következik, majd az alapképzés.\n6. Szakmai és igazgatósági rangot kizárólag a vezetőség oszt ki.\n7. Segítséget a privát ügyintézésen kérhetsz.\n\nA szobák láthatósága a feladathoz tartozó rangjaidtól függ. A bot telepítése külön tulajdonosi művelet.'],
+  faq: ['❓ Gyakori kérdések', '**A CIA ugyanaz, mint az FBI?** Nem. A CIA alapfeladata a külföldi hírszerzés. A játékbeli rendőrségi feladatokat a szerver saját frakciószabályai rendezik.\n**Miért nem látok minden szobát?** A belső területekhez szakmai vagy vezetői rang kell.\n**A CO magasabb rang a TO-nál?** Eltérő munkakörök; a szerver megjelenítési sorrendje nem hivatalos katonai rangsor.\n**Ki telepíthet újra?** Kizárólag a NEXA fő botowner fiókja. A CIA igazgatói rang és az Owner Center kezelői hozzáférése önmagában nem elég.\n**Újratelepítés után elvesznek a tagok rangjai?** Az azonosított, meglévő rangokat helyben frissítjük. A kézzel törölt rang korábbi kiosztásait a Discord nem állítja vissza.'],
+  directorates: ['🏢 A CIA nyilvános szervezeti területei', '**DO — Directorate of Operations:** emberi forrásból származó külföldi információ.\n**DA — Directorate of Analysis:** több forrásra támaszkodó értékelés.\n**DS&T — Directorate of Science and Technology:** tudományos és technikai támogatás.\n**DMS — Directorate of Mission Systems:** adatok, alkalmazások, infrastruktúra és digitális rendszerek.\n**DS — Directorate of Support:** például logisztika, személyzet és működési támogatás.\n\nA Mission Centerek különböző szakterületek együttműködését szervezik. A Discord-kategóriák ezekből ihletett RP munkaterületek.\nForrás: https://www.cia.gov/about/organization/'],
+  handbook: ['📘 Állományi kézikönyv', '**Szolgálat előtt:** ellenőrizd a beosztást, mentorodat, az aktuális feladatot és a játék szabályait. A szolgálati panelen csak ténylegesen játékban töltött szolgálatot indíts.\n**Szolgálat közben:** a kijelölt koordinátornak jelents; a feladat és a jogosultság határát tartsd be. A bizonytalan információt ne tüntesd fel bizonyított tényként.\n**Lezáráskor:** add át a nyitott ügyeket, készíts tényszerű jelentést, majd zárd le a szolgálatot.\n**Távollét:** a szabadságkérelemben dátumot, helyettesítést és a szükséges rövid indokot rögzítsd.\n**Konfliktus:** kérj privát vezetői felülvizsgálatot; az érintett ügyben ne te legyél a saját döntésed bírálója.'],
+  hierarchy: ['🔰 RP szolgálati út', '**Szervervezetés:** D/CIA → DD/CIA → EXDIR.\n**Műveleti RP ág:** DDO → COS → DCOS.\n**Szakmai beosztások:** CO, TO, SOO, CMO, SSO, PMO, IA, TOO, IT Engineer, SIO; ezek párhuzamos feladatok. A PT mentor mellett tanul.\n**Igazgatósági csoportok:** DA, DS&T, DMS és DS hozzáférési címkék.\n\nA CIA a valóságban nem katonai rendfokozatokat, hanem vezetői és szakmai beosztásokat használ. A fenti szolgálati út a saját RP szerver szabálya, nem a valódi CIA teljes szervezeti ábrája. Munkakör nem jelent automatikus utasítási jogot egy másik szakterület felett.'],
+  rules: ['📜 CIA RP szolgálati szabályzat', '1. Tartsd be a játék és a szerver szabályait.\n2. Tilos a metagaming, powergaming, non-RP és OOC sértegetés.\n3. OOC információt ne használj IC döntéshez.\n4. Személyes adatot, jelszót és valós személyről összeállított aktát ne küldj.\n5. A feladatot a kijelölt vezető és a jogosultság szerint végezd.\n6. Minden ügyben tény, időpont, bizonyíték és indok szerepeljen.\n7. Bizonyítékot meghamisítani, panaszt megtorolni tilos.\n8. Műveleti adat csak az engedélyezett belső területre kerülhet.\n9. Ügyhöz nem kapcsolódó rangosztás és adminjoggal visszaélés tilos.\n10. Szabályellenes utasítást jelezz a vezetőségnek, és kérj felülvizsgálatot.\n11. A saját ügyed elbírálásából lépj ki.\n12. A bot védelmét és naplózását ne kerüld meg.\n13. Értesítést csak indokoltan küldj.\n14. Felfüggesztéskor a hozzáférési rangokat külön el kell venni.\n15. A telepítő és az újratelepítő kizárólag a fő botowner művelete.'],
+  intelligenceCycle: ['🔄 Hírszerzési ciklus az RP-ben', '**1. Igény:** fogalmazd meg a fiktív ügy kérdését.\n**2. Gyűjtés:** csak a játék és a szerver által engedélyezett információt használd.\n**3. Feldolgozás:** rögzítsd a keletkezési időt, a forráskódot és az ügyazonosítót.\n**4. Elemzés:** válaszd külön a tényt, feltételezést és a hiányzó adatot.\n**5. Továbbítás:** a kijelölt címzettnek adj rövid, követhető összefoglalót.\n**6. Visszajelzés:** javítsd a pontatlanságot és zárd le az ügyet.\n\nEz a szerver számára készített RP munkamenet. A következtetés nem lesz bizonyított tény attól, hogy magasabb rangú személy írta.'],
+  rpJurisdiction: ['⚖️ Hatáskörök a játékban', 'A CIA RP beosztás kizárólag a szerver saját szerepjátékán belüli jogosultság. Nem ad valós igazoltatási, lehallgatási, letartóztatási vagy adatgyűjtési jogot.\n\nRendőrségi vagy más frakciót érintő játékbeli intézkedéshez a szerver szabályai szerinti feladatmegosztás és együttműködés kell. A CIA-szerep nem jelent automatikus utasítási jogot minden más frakció felett. Vitás esetben a frakcióvezető vagy a szerver vezetősége dönt.\n\nKizárólag a játékban létrehozott karakteradatokat kezeljük. A játékosok valós címét, igazolványát, telefonszámát vagy titkos fiókadatait nem kérjük.'],
+  classification: ['🔐 RP hozzáférési rend', '**Nyilvános:** belépés, szabályzat és általános bemutató.\n**Ellenőrzött:** tájékoztató és közösségi terület.\n**Állomány:** képzés, szolgálat és saját adminisztráció.\n**Szakmai:** műveleti vagy igazgatósági munkaterület.\n**Vezetőség:** bírálat, fegyelmi ügy és vezetői döntés.\n**Igazgatóság:** a két felső vezetői beosztás számára fenntartott rész.\n\nEzek helyi RP-hozzáférési csoportok. A szoba elérése nem jogosít a tartalom nyilvános megosztására. A Discord szervertulajdonosa és a Rendszergazda jogosultságú fiókok technikailag minden szobát elérhetnek.'],
+  ethics: ['🤝 Etikai kódex', 'Az RP-ben légy tényszerű, pártatlan és tiszteletteljes. Ne használd a beosztásodat személyes konfliktus rendezésére. A valódi játékos és a fiktív karakter külön személyiség.\n\nRögzítsd, ha valamiben bizonytalan vagy. Kérj második véleményt, ha összeférhetetlenség áll fenn. Panaszt kulturáltan, bizonyítékkal kezelj; a bejelentő ellen megtorlás tilos.\n\nA tisztességes szerepjáték, a magánszféra tisztelete és az arányos szerverintézkedés minden beosztásnál kötelező.'],
+  glossary: ['📖 Fogalomtár', '**IC:** a karakter és a játékvilág eseményei. **OOC:** a játékosok közötti, szerepen kívüli kommunikáció.\n**HUMINT:** emberi forrástól származó információ. **OSINT:** nyilvánosan hozzáférhető információ. A szerveren mindkettő csak engedélyezett RP-adatra vonatkozik.\n**Forrás:** az információ eredete. **Tény:** ellenőrizhető állítás. **Elemzés:** tények értékelése. **Feltételezés:** még nem igazolt elképzelés.\n**Need-to-know:** csak a feladathoz szükséges hozzáférés. **Audit:** egy folyamat utólagos ellenőrzése.\nA vezetői és szakmai rövidítések részletesen a beosztások szobában szerepelnek.'],
+  radioCodes: ['📻 RP rádiófegyelem és hívójel', 'Alak: **hívójel → címzett → játékbeli helyszín → rövid esemény → kért segítség**.\nPélda: „Központ, Alfa-2. A kijelölt játékbeli területen vagyunk, a feladat lezárult. Jelentést készítünk.”\n\n**Helyi státuszok:** elérhető / feladaton / segítséget kér / feladat lezárva / szolgálaton kívül. A szerver nem állítja, hogy ezek valódi CIA rádiókódok.\n\nBeszélj röviden; ne vágj más közlésébe. OOC beszélgetést a társalgóban folytass. Privát adatot és másik ügy bizalmas részletét ne mondd be közös rádión.'],
+  equipment: ['🧰 RP felszerelési rend', 'Csak a játék által biztosított és a feladatodhoz engedélyezett felszerelést használd. Átvételkor rögzítsd az eszköz játékbeli nevét, az átvevőt és az időpontot. Hibát vagy elvesztést a technikai jelentésekben jelezz.\n\nSzakmai eszköz használata a szakképzéshez és a vezetői engedélyhez kötött. A felszerelés nem ad új hatáskört. Valós fegyverekkel, lehallgató eszközökkel vagy más valós műveleti eszközzel ez a szerver nem foglalkozik.'],
+  protocols: ['📑 Egységes RP ügykezelés', '**Megnyitás:** ügyazonosító, időpont, felelős és kérdés.\n**Rögzítés:** csak a szükséges játékbeli tények és bizonyítéklinkek.\n**Ellenőrzés:** pontosság, jogosultság, OOC/IC szétválasztás.\n**Döntés:** kijelölt vezető, indoklás és jóváhagyási állapot.\n**Lezárás:** eredmény, megmaradt bizonytalanság, következő lépés.\n**Archívum:** a lezárt ügy hivatkozása, dátuma és hozzáférési csoportja.\n\nHibát javítási megjegyzéssel korrigálj. A változás okát és idejét tartsd követhetően nyilván.'],
+  recruitmentInfo: ['🕵️ Felvételi eljárás', 'A jelentkezés a felvételi panelen indul, tíz saját megfogalmazású válasszal. A kitöltő a releváns RP-tapasztalatáról írjon, személyes okmány és valós lakcím nélkül.\n\nA vezetőség vak bírálatot használ. Elfogadás után Professional Trainee beosztás és alapképzés következik. Elutasítás után a panel beállítása szerinti várakozási idő érvényes; ezt a kézikönyv alaptelepítésben 72 órára állítja. Az eredményről a bot privát értesítést próbál küldeni.'],
+  trainingMaterial: ['📚 Kiképzési program', '**Alap:** szerver- és RP szabályok, szolgálati út, IC/OOC, rádiófegyelem, ügyazonosító, jelentésírás.\n**Szakmai:** a választott munkakör feladatai, hozzáférési rend, csapatmunka és bizonytalanságok jelölése.\n**Gyakorlat:** fiktív ügy feldolgozása és saját szavakkal írt értékelés.\n**Vizsga:** rövid elméleti rész és megfigyelt RP-gyakorlat; értékelés után megfelelt vagy ismétlendő.\n\nA kiképzés szerveres RP-oktatás. A valós CIA képzéseit vagy titkos eljárásait nem másolja.'],
+  basicTraining: ['🎓 Alapképzés — PT', 'A mentor bemutatja a belépési rendet és a csatornákat. A jelölt ellenőrizhetően megkülönbözteti az IC és OOC adatot, megfogalmaz egy rövid rádióközlést, és kitölt egy fiktív műveleti jelentést.\n\nA betanuló nem kap önálló műveletvezetői jogot. A mentor rögzíti a gyakorlat idejét, témáját és eredményét. Ha hiba marad, közösen átismétlik; a következő gyakorlathoz egyértelmű fejlesztési célt jelölnek ki.'],
+  specialistTraining: ['🧩 Szakképzések', '**CO / SOO:** játékbeli ügykövetés és koordináció.\n**TO / CMO:** információigény és forrásértékelés.\n**IA / DA:** tény, következtetés és bizonytalanság elkülönítése.\n**TOO / DS&T:** játékbeli eszköznyilvántartás.\n**IT Engineer / DMS:** szerveres hibajelentés és változáskövetés.\n**SIO / DS:** készlet és támogatási igény.\n**PMO / SSO:** kizárólag a játék szabályai által engedélyezett, külön kijelölt gyakorlat.\n\nA munkakörök közötti váltás külön vezetői döntés, nem automatikus előléptetés.'],
+  examStandards: ['📝 Vizsgakövetelmények', '**Kötelező elemek:** helyes IC/OOC elkülönítés, a szerepkör megértése, rövid és követhető kommunikáció, tényszerű jelentés, bizonyítéklink és szabályos szolgálatlezárás.\n\nA kiképző minden elemnél megfelelt vagy ismétlendő értékelést ad, és rövid indokot rögzít. Megfelelt eredményhez minden kötelező elem teljesítése kell. A megismételt vizsga új dátumot és értékelést kap; az előző eredményt megőrizzük.'],
+  mentoring: ['🤝 Mentorálási napló', 'Minta: **PT beosztású karakter / mentor / dátum / gyakorlat témája / megfigyelt teljesítmény / javítandó pont / következő alkalom**.\n\nA mentor szakmai útmutatást ad, de nem oszthat magának új vezetői vagy botowner jogot. Az értékelés ne minősítse a játékos valódi személyiségét.'],
+  briefings: ['🗺️ Műveleti eligazítás', 'Az RP eligazításban legyen: ügyazonosító, cél, felelős, résztvevők, feladatmegosztás, kommunikációs szoba, hatáskör, kockázat és lezárási feltétel.\n\nA vezető ellenőrizze, hogy a feladat megfelel a játék és a frakciószabályoknak. A résztvevők kérdezhetnek és jelezhetik a bizonytalanságot. A jóváhagyás nem helyettesíti a szerver szabályait.'],
+  operationPlanning: ['📋 RP műveleti terv sablon', '**Ügyazonosító:**\n**Játékbeli cél:**\n**Felelős vezető:**\n**Résztvevő karakterek és feladatok:**\n**Időpont:**\n**Kommunikációs szoba:**\n**Szerveres hatáskör:**\n**Megszakítási feltétel:**\n**Jóváhagyás:**\n\nA tervet a kijelölt koordinátor vizsgálja felül, és a módosítást időponttal rögzíti.'],
+  riskAssessment: ['⚠️ RP kockázatértékelés', 'Csak játékbeli és szerveres kockázatot írj: hiányzó információ, eltérő szabályértelmezés, nem elérhető résztvevő, kommunikációs hiba vagy technikai probléma.\n\nMinta: **kockázat / várható játékbeli hatás / felelős / szükséges tisztázás / döntés**. Ha a szabályosság nem tisztázott, a feladatot előbb egyeztesd a vezetővel.'],
+  operationDebrief: ['🧾 Művelet utáni értékelés', '**Tervezett cél / tényleges eredmény / időrend / jól működött rész / eltérés / bizonyíték / tanulság / következő teendő**.\n\nTényszerűen írj; a karakter hibáját és a játékos viselkedését külön kezeld. A felülvizsgálat célja az RP folyamat javítása. Panaszügyet az illetékes privát ügykezelésben folytass.'],
+  sourceRegister: ['🗂️ RP forrásjegyzék', 'Csak fiktív RP-forráskódot használj. A bejegyzésben legyen ügyazonosító, keletkezési idő, játékbeli információ és hozzáférési csoport.\n\nValós játékosról ne készíts háttéraktát. A karakter adatlapja nem tartalmazhat lakcímet, telefonszámot, valódi munkahelyet vagy okmányt. Más ügy adatát csak kapcsolódó indokkal és jogosultsággal használd.'],
+  collectionRequirements: ['📥 RP információigény sablon', '**Ügyazonosító / megválaszolandó kérdés / jelenlegi tények / hiányzó RP adat / felelős munkakör / határidő / értékelés állapota**.\n\nA gyűjtést kizárólag a játékban engedélyezett módon végezd. A hiányzó információt jelöld hiányzóként; ne találj ki bizonyítékot a feladat lezárásához.'],
+  sourceReliability: ['📊 Forrásértékelés', 'A szerver helyi értékelése: **ellenőrzött / részben alátámasztott / nem ellenőrzött / ellentmondásos**.\n\nA forrás megbízhatósága és az egyes állítások bizonyítottsága külön dolog. Minden állításnál hivatkozás, időpont és bizonytalanság szerepeljen. Ezek RP értékelési címkék, nem a valódi CIA belső minősítései.'],
+  analysisMethod: ['📚 Elemzési alapelvek', 'Az RP értékelés négy része: **tények / következtetés / alternatív értelmezés / bizonytalanság**.\n\nEgy állítás ismétlése nem új bizonyíték. A cáfoló adatot is rögzítsd. A jelentésben a felhasznált játékbeli forrásokra hivatkozz, és jelezd, mi változtatná meg a következtetést.'],
+  technicalGuide: ['📖 Technikai munkarend', 'Az RP eszköznyilvántartásban rögzítsd a játékbeli eszköz nevét, állapotát, felelősét és a kért javítást. A technikai jelentésben leírás, megismétlés és hatás szerepeljen.\n\nMásik felhasználó fiókjához vagy valódi eszközéhez hozzáférést ne kérj. A szerveres technikai rang nem jogosít valós rendszerek vizsgálatára.'],
+  systemsGuide: ['🔐 Digitális szerverrend', 'Hibajelentés: érintett funkció, időpont, várt eredmény, tényleges eredmény és érzékeny adat nélküli képernyőkép.\n\nToken, jelszó és API-kulcs nem kerülhet Discord-csatornába. A változásnaplóba a módosítás célja, felelőse és eredménye kerül. A DMS csoport nem kap botowner vagy Owner Center jogot. A bot telepítési műveleteit kizárólag a fő botowner végezheti.'],
+  supportGuide: ['📖 Támogatási munkarend', 'Minden RP igényhez rendelj felelőst, státuszt és határidőt. A készletnyilvántartásban csak játékbeli erőforrás szerepeljen.\n\nStátuszok: beérkezett / egyeztetés / teljesítés / lezárt. Az átadás után az igénylő visszajelzése zárja le a tételt. Valós költséget vagy személyes pénzügyi adatot ne kezelj ezekben a szobákban.'],
+  liaisonProtocol: ['🤝 Kapcsolattartási rend', 'Másik RP frakcióval kijelölt kapcsolattartó egyeztet. A kérelemben szerepeljen frakció, RP cél, szükséges együttműködés, időpont és jóváhagyó.\n\nA külön frakciók jogköreit nem írja felül egy CIA-beosztás. Csak a jóváhagyott játékbeli összefoglalót oszd meg, és ne add át a teljes belső archívumot.'],
+  handover: ['🔁 Szolgálatátadás', '**Távozó karakter / átvevő karakter / időpont / nyitott ügyek / határidők / szükséges hivatkozások / hiányzó információk**.\n\nA szolgálati panelen a tényleges játékbeli időt zárd le. Az átadott feladatért felelős személy nevét egyértelműen rögzítsd.'],
+  documentGuide: ['📑 Dokumentumok használata', '**Műveleti jelentés:** időrend és eredmény.\n**Hírszerzési jelentés:** RP-források, tények és elemzés.\n**Kiképzési értékelés:** teljesített és ismétlendő elemek.\n**Szabadságkérelem:** dátum és átadás.\n**Fegyelmi lap:** állítás, bizonyíték, meghallgatás és indokolt döntés.\n**Előléptetési javaslat:** teljesítmény és kívánt beosztás.\n\nA szobákba telepített űrlapok végzik a dokumentumok létrehozását. A jóváhagyásra váró irat még nem vezetői döntés.'],
+  oversightGuide: ['📖 Belső ellenőrzési munkamenet', '**1.** Rögzítsd a bejelentést és az ügyazonosítót.\n**2.** Ellenőrizd az összeférhetetlenséget.\n**3.** Válaszd külön az állítást és a bizonyítékot.\n**4.** Hallgasd meg az érintetteket a kijelölt privát területen.\n**5.** Írj indokolt döntési javaslatot.\n**6.** Az illetékes vezető dönt, és a felülvizsgálati lehetőség is szerepel.\n\nA bejelentő személyét csak az ügyhöz szükséges körben oszd meg. A belső ellenőrzés a saját RP szerver ügyeit kezeli.'],
+  leadershipAgenda: ['📋 Vezetői napirend', '**Dátum / résztvevők / nyitott ügyek / felvételi döntések / kiképzési helyzet / szolgálati feladatok / felelősök / határidők**.\n\nA botowner művelete külön feladat: CIA-rang nem helyettesíti a BOT_OWNER_ID azonosítást.'],
+  leadershipMinutes: ['📝 Értekezleti jegyzőkönyv', '**Időpont / napirend / rövid tényállás / döntés / indoklás / felelős / határidő / következő ellenőrzés**.\n\nA jegyzőkönyvben a vitát röviden, személyeskedés nélkül foglald össze. Nyilvános közleményhez külön, érzékeny részleteket nem tartalmazó változat készül.'],
+  directorOffice: ['👑 CIA vezetői központ', 'A CIA-rendszer kizárólag Discordon, a botowner parancsaival kezelhető.\n\n**Első telepítés:** `/cia telepites`\n**Teljes frissítés és bővítés:** `/cia ujratelepites`\n**Csak rangok:** `/cia rangok-frissitese`\n**Állapot:** `/cia ellenorzes`\n\nA telepítő és az újratelepítő csak az elsődleges BOT_OWNER_ID fióknak engedélyezett, megfelelő szerverjoggal. A szervertulajdonos, admin, CIA vezető és hozzáadott Owner-kezelő ettől nem kap újratelepítési jogot. A NEXA kezelt elemei frissülnek; a tagi rangkiosztások és a felhasználói beszélgetések megmaradnak.'],
+  systemControl: ['⚙️ Telepítési és javítási rend', 'Az újratelepítés a kezelt rangok és szobák tárolt Discord-azonosítóit használja; a hiányzó elemeket létrehozza. A NEXA saját tájékoztatóit és kezelőpaneljeit frissíti.\n\nKézzel törölt rang új azonosítót kap, korábbi tagi kiosztását nem állítja vissza. A szerver saját többi csatornáját és beszélgetését nem törli. A CIA modulbeállítások a telepítési alapértékekre frissülnek.\n\nA sikert és a tulajdonosi újratelepítést naplózzuk. Megszakadás esetén a már mentett azonosítók alapján ugyanaz a parancs újraindítható. Render-újraindítás önmagában nem telepít.']
+});
+
+module.exports = { CIA_KNOWLEDGE_PANELS, CIA_ROLE_DETAILS };
+
+},
 "src/support-server.js": function(module, exports, require) {
 const {
   ChannelType,
@@ -15331,6 +15423,8 @@ const { shiftPanel } = require('./shifts');
 const { installApplicationPanel } = require('./applications');
 const { installDocumentPanels } = require('./documents');
 const { localizeCommandJson } = require('./command-localizations');
+const { isBotOwner } = require('./config');
+const { CIA_KNOWLEDGE_PANELS, CIA_ROLE_DETAILS } = require('./cia-content');
 
 const SETUP_REASON = 'NEXA Bot official Support Server installer';
 const MANAGED_FOOTER = 'NEXA Support Setup • automatically managed message';
@@ -15507,10 +15601,11 @@ const SUPPORT_CATEGORIES = Object.freeze([
   }
 ]);
 
-const CIA_INSTALLATION_VERSION = 1;
+const CIA_INSTALLATION_VERSION = 2;
 const CIA_INSTALL_MARKER = `NEXA_CIA_INSTALLATION_V${CIA_INSTALLATION_VERSION}`;
-const CIA_SETUP_REASON = 'NEXA Bot one-time CIA faction installer';
-const CIA_PANEL_FOOTER = 'NEXA CIA RP Setup • one-time managed message';
+const CIA_SETUP_REASON = 'NEXA Bot primary-owner CIA installer';
+const CIA_PANEL_FOOTER = 'NEXA CIA RP Setup • managed message';
+const CIA_LEGACY_PANEL_FOOTER = 'NEXA CIA RP Setup • one-time managed message';
 const ciaInstallLocks = new Set();
 
 const CIA_ROLES = Object.freeze([
@@ -15535,7 +15630,18 @@ const CIA_ROLES = Object.freeze([
   { key: 'specialAgent', name: '🕵️ Case Officer (CO)', legacyNames: ['🕵️ Különleges Ügynök', '🕵️ Senior Operations Officer'], color: 0x3498db, hoist: true, permissions: [] },
   { key: 'intelligenceOfficer', name: '🎯 Targeting Officer (TO)', legacyNames: ['🔎 Hírszerzési Tiszt', '🔎 Intelligence Officer'], color: 0x16a085, hoist: true, permissions: [] },
   { key: 'fieldAgent', name: '📡 Staff Operations Officer (SOO)', legacyNames: ['📡 Terepi Ügynök', '📡 Operations Officer'], color: 0x1abc9c, hoist: true, permissions: [] },
+  { key: 'collectionOfficer', name: '🗂️ Collection Management Officer (CMO)', color: 0x148f77, hoist: true, permissions: [] },
+  { key: 'specializedOfficer', name: '🧩 Specialized Skills Officer (SSO)', color: 0x117864, hoist: true, permissions: [] },
+  { key: 'paramilitaryOfficer', name: '🛡️ Paramilitary Officer (PMO)', color: 0x63754e, hoist: true, permissions: [] },
+  { key: 'analyst', name: '🧠 Intelligence Analyst (IA)', color: 0x5b8def, hoist: true, permissions: [] },
+  { key: 'technicalOfficer', name: '🧪 Technical Operations Officer (TOO)', color: 0x7f8cda, hoist: true, permissions: [] },
+  { key: 'systemsOfficer', name: '💻 IT Engineer', color: 0x42c9cf, hoist: true, permissions: [] },
+  { key: 'supportOfficer', name: '📦 Support Integration Officer (SIO)', color: 0xd6a756, hoist: true, permissions: [] },
   { key: 'trainee', name: '🎓 Professional Trainee (PT)', legacyNames: ['🎓 Próbaidős Ügynök', '🎓 Junior Operations Officer'], color: 0x2ecc71, hoist: true, permissions: [] },
+  { key: 'analysisDivision', name: '🧠 Directorate of Analysis (DA)', color: 0x5b8def, permissions: [] },
+  { key: 'scienceDivision', name: '🧪 Directorate of Science & Technology (DS&T)', color: 0x7f8cda, permissions: [] },
+  { key: 'systemsDivision', name: '💻 Directorate of Mission Systems (DMS)', color: 0x42c9cf, permissions: [] },
+  { key: 'supportDivision', name: '📦 Directorate of Support (DS)', color: 0xd6a756, permissions: [] },
   { key: 'candidate', name: '📋 CIA Jelölt', legacyNames: ['📋 CIA Applicant'], color: 0x95a5a6, permissions: [] },
   { key: 'verified', name: '✅ Ellenőrzött állomány', legacyNames: ['✅ Ellenőrzött Személy', '✅ Verified Personnel'], color: 0x57f287, permissions: [] },
   { key: 'operationAlert', name: '🚨 Műveleti Riasztás', legacyNames: ['🚨 Operation Alert'], color: 0xe67e22, mentionable: true, permissions: [] },
@@ -15553,17 +15659,26 @@ const CIA_CATEGORIES = Object.freeze([
       ['announcements', '📢・közlemények', 'readonly'],
       ['recruitmentInfo', '🕵️・toborzási-információk', 'readonly'],
       ['application', '📝・jelentkezés', 'readonly'],
-      ['applicationResults', '✅・jelentkezési-eredmények', 'readonly']
+      ['applicationResults', '✅・jelentkezési-eredmények', 'readonly'],
+      ['ciaOverview', '🏛️・mi-a-cia', 'readonly'],
+      ['faq', '❓・gyakori-kérdések', 'readonly'],
+      ['serverGuide', '🧭・szerver-útmutató', 'readonly']
     ]
   },
   {
     key: 'information', name: '━━━ 02 • CIA INFORMÁCIÓ ━━━', access: 'verified-readonly', channels: [
       ['handbook', '📘・állományi-kézikönyv', 'readonly'],
       ['hierarchy', '🔰・szolgálati-hierarchia', 'readonly'],
-      ['ranks', '🎖️・rendfokozatok', 'readonly'],
+      ['ranks', '🎖️・beosztások', 'readonly', ['🎖️・rendfokozatok']],
       ['radioCodes', '📻・rádiókódok', 'readonly'],
       ['equipment', '🧰・felszerelési-szabályzat', 'readonly'],
-      ['protocols', '📑・eljárásrendek', 'readonly']
+      ['protocols', '📑・eljárásrendek', 'readonly'],
+      ['directorates', '🏢・igazgatóságok', 'readonly'],
+      ['intelligenceCycle', '🔄・hírszerzési-ciklus', 'readonly'],
+      ['rpJurisdiction', '⚖️・rp-hatáskörök', 'readonly'],
+      ['classification', '🔐・hozzáférési-szintek', 'readonly'],
+      ['ethics', '🤝・etikai-kódex', 'readonly'],
+      ['glossary', '📖・fogalomtár', 'readonly']
     ]
   },
   {
@@ -15577,7 +15692,11 @@ const CIA_CATEGORIES = Object.freeze([
       ['general', '💬・állományi-társalgó', 'chat'],
       ['media', '📸・média', 'chat'],
       ['botCommands', '🤖・bot-parancsok', 'chat'],
-      ['lounge', '🔊・Társalgó', 'voice']
+      ['lounge', '🔊・Társalgó', 'voice'],
+      ['offTopic', '☕・ooc-társalgó', 'chat'],
+      ['suggestions', '💡・állományi-ötletek', 'chat'],
+      ['eventCalendar', '🗓️・eseménynaptár', 'readonly'],
+      ['communityVoice', '🔊・Közösségi terem', 'voice']
     ]
   },
   {
@@ -15586,7 +15705,12 @@ const CIA_CATEGORIES = Object.freeze([
       ['trainingMaterial', '📚・kiképzési-anyagok', 'readonly'],
       ['trainingSchedule', '📅・kiképzési-beosztás', 'readonly'],
       ['trainingReports', '📝・kiképzési-jelentések', 'chat'],
-      ['trainingVoice', '🎧・Kiképzési terem', 'voice']
+      ['trainingVoice', '🎧・Kiképzési terem', 'voice'],
+      ['basicTraining', '🎓・alapképzés', 'readonly'],
+      ['specialistTraining', '🧩・szakképzések', 'readonly'],
+      ['examStandards', '📝・vizsgakövetelmények', 'readonly'],
+      ['mentoring', '🤝・mentorálás', 'chat'],
+      ['examVoice', '🎧・Vizsgaterem', 'voice']
     ]
   },
   {
@@ -15596,7 +15720,13 @@ const CIA_CATEGORIES = Object.freeze([
       ['activeOperations', '🚨・aktív-műveletek', 'chat'],
       ['operationReports', '📄・műveleti-jelentések', 'chat'],
       ['operationRadio', '📻・műveleti-rádió', 'chat'],
-      ['operationVoice', '🔊・Műveleti rádió', 'voice']
+      ['operationVoice', '🔊・Műveleti rádió', 'voice'],
+      ['operationPlanning', '📋・műveleti-tervezés', 'chat'],
+      ['riskAssessment', '⚠️・kockázatértékelés', 'chat'],
+      ['operationDebrief', '🧾・műveleti-értékelés', 'chat'],
+      ['operationArchive', '🗄️・műveleti-archívum', 'readonly'],
+      ['operationVoiceTwo', '🔊・Műveleti rádió 2', 'voice'],
+      ['briefingVoice', '🎧・Eligazító terem', 'voice']
     ]
   },
   {
@@ -15605,7 +15735,55 @@ const CIA_CATEGORIES = Object.freeze([
       ['targets', '🎯・célpontok', 'chat'],
       ['caseFiles', '🗃️・akták', 'chat'],
       ['evidence', '📎・bizonyítékok', 'chat'],
-      ['intelligenceReports', '🔎・hírszerzési-jelentések', 'chat']
+      ['intelligenceReports', '🔎・hírszerzési-jelentések', 'chat'],
+      ['sourceRegister', '🗂️・rp-forrásjegyzék', 'chat'],
+      ['collectionRequirements', '📥・információigények', 'chat'],
+      ['sourceReliability', '📊・forrásértékelés', 'readonly'],
+      ['intelligenceVoice', '🎧・Hírszerzési tárgyaló', 'voice']
+    ]
+  },
+  {
+    key: 'analysis', name: '━━━ 31 • ELEMZÉS — DA ━━━', access: 'analysis', channels: [
+      ['analysisDesk', '🧠・elemzői-műhely', 'chat'],
+      ['analysisReports', '📑・elemzések', 'chat'],
+      ['situationBrief', '🌍・helyzetértékelés', 'chat'],
+      ['analysisMethod', '📚・elemzési-alapelvek', 'readonly'],
+      ['analysisVoice', '🎧・Elemzői tárgyaló', 'voice']
+    ]
+  },
+  {
+    key: 'science', name: '━━━ 32 • TUDOMÁNY ÉS TECHNOLÓGIA ━━━', access: 'science', channels: [
+      ['technicalDesk', '🧪・technikai-koordináció', 'chat'],
+      ['equipmentRequests', '🧰・eszközigénylések', 'chat'],
+      ['technicalReports', '🔧・technikai-jelentések', 'chat'],
+      ['technicalGuide', '📖・technikai-útmutató', 'readonly'],
+      ['technicalVoice', '🎧・Technikai tárgyaló', 'voice']
+    ]
+  },
+  {
+    key: 'systems', name: '━━━ 33 • MISSION SYSTEMS — DMS ━━━', access: 'systems', channels: [
+      ['systemsDesk', '💻・rendszer-koordináció', 'chat'],
+      ['systemsIncidents', '🚧・rendszerhibák', 'chat'],
+      ['systemsChanges', '🛠️・változásnapló', 'readonly'],
+      ['systemsGuide', '🔐・digitális-biztonság', 'readonly'],
+      ['systemsVoice', '🎧・Rendszerügyi tárgyaló', 'voice']
+    ]
+  },
+  {
+    key: 'support', name: '━━━ 34 • TÁMOGATÁS — DS ━━━', access: 'support', channels: [
+      ['logistics', '📦・logisztika', 'chat'],
+      ['resources', '🗃️・készletnyilvántartás', 'chat'],
+      ['supportRequests', '📋・támogatási-igények', 'chat'],
+      ['supportGuide', '📖・támogatási-rend', 'readonly'],
+      ['supportVoice', '🎧・Támogatási tárgyaló', 'voice']
+    ]
+  },
+  {
+    key: 'liaison', name: '━━━ 35 • KAPCSOLATTARTÁS ━━━', access: 'leadership', channels: [
+      ['liaisonDesk', '🤝・partnerkapcsolatok', 'chat'],
+      ['liaisonRequests', '📨・együttműködési-kérelmek', 'chat'],
+      ['liaisonProtocol', '📜・kapcsolattartási-rend', 'readonly'],
+      ['liaisonVoice', '🎧・Egyeztető terem', 'voice']
     ]
   },
   {
@@ -15613,7 +15791,10 @@ const CIA_CATEGORIES = Object.freeze([
       ['shiftPanel', '⏱️・szolgálati-panel', 'readonly'],
       ['serviceLogs', '📊・szolgálati-napló', 'readonly'],
       ['leaveRequests', '🏖️・szabadság-igénylés', 'chat'],
-      ['personnelRecords', '👥・állományi-nyilvántartás', 'readonly']
+      ['personnelRecords', '👥・állományi-nyilvántartás', 'readonly'],
+      ['dutySchedule', '📅・szolgálati-beosztás', 'readonly'],
+      ['handover', '🔁・szolgálatátadás', 'chat'],
+      ['documentGuide', '📑・dokumentum-útmutató', 'readonly']
     ]
   },
   {
@@ -15622,7 +15803,10 @@ const CIA_CATEGORIES = Object.freeze([
       ['internalReports', '📨・belső-jelentések', 'chat'],
       ['disciplinary', '⚖️・fegyelmi-eljárások', 'chat'],
       ['complaints', '✉️・panaszok', 'chat'],
-      ['audits', '🔍・ellenőrzési-napló', 'readonly']
+      ['audits', '🔍・ellenőrzési-napló', 'readonly'],
+      ['incidentReviews', '🧾・esemény-felülvizsgálat', 'chat'],
+      ['oversightGuide', '📖・ellenőrzési-eljárásrend', 'readonly'],
+      ['oversightVoice', '🎧・Meghallgató terem', 'voice']
     ]
   },
   {
@@ -15631,7 +15815,9 @@ const CIA_CATEGORIES = Object.freeze([
       ['decisions', '📜・vezetői-határozatok', 'readonly'],
       ['promotions', '⬆️・előléptetés-lefokozás', 'chat'],
       ['staffPanel', '🛡️・állomány-kezelés', 'readonly'],
-      ['leadershipVoice', '🔊・Vezetőségi tárgyaló', 'voice']
+      ['leadershipVoice', '🔊・Vezetőségi tárgyaló', 'voice'],
+      ['leadershipAgenda', '📋・vezetői-napirend', 'chat'],
+      ['leadershipMinutes', '📝・értekezleti-jegyzőkönyv', 'chat']
     ]
   },
   {
@@ -15641,7 +15827,9 @@ const CIA_CATEGORIES = Object.freeze([
       ['securityLogs', '🛡️・biztonsági-napló', 'readonly'],
       ['botLogs', '🤖・bot-napló', 'readonly'],
       ['memberLogs', '👤・tag-napló', 'readonly'],
-      ['systemControl', '⚙️・cia-rendszer', 'readonly']
+      ['systemControl', '⚙️・cia-rendszer', 'readonly'],
+      ['installationHistory', '🔁・telepítési-napló', 'readonly'],
+      ['executiveVoice', '🎧・Igazgatósági tárgyaló', 'voice']
     ]
   }
 ]);
@@ -15699,12 +15887,15 @@ const CIA_CHANNEL_TOPICS = Object.freeze({
 function buildCiaSetupCommand() {
   return new SlashCommandBuilder()
     .setName('cia')
-    .setDescription('Egyszer futtatható, kizárólagos bot-owner CIA frakciótelepítő.')
+    .setDescription('Kizárólagos botowner CIA telepítő, frissítő és újratelepítő.')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .setDMPermission(false)
     .addSubcommand((subcommand) => subcommand
       .setName('telepites')
       .setDescription('Egyszer létrehozza a teljes CIA rang-, csatorna-, jog- és panelrendszert.'))
+    .addSubcommand((subcommand) => subcommand
+      .setName('ujratelepites')
+      .setDescription('Csak a fő botowner: frissíti és bővíti a már telepített CIA rendszert.'))
     .addSubcommand((subcommand) => subcommand
       .setName('ellenorzes')
       .setDescription('Módosítás nélkül ellenőrzi a CIA telepítés állapotát.'))
@@ -16181,6 +16372,9 @@ async function applyRolePositions(guild, roles) {
 }
 
 function ciaRoleBySpec(guild, spec) {
+  const storedId = getGuildConfig(guild.id).installations?.cia?.roles?.[spec.key];
+  const stored = storedId ? guild.roles.cache.get(storedId) : null;
+  if (stored && !stored.managed) return stored;
   const names = new Set([spec.name, ...(spec.legacyNames || [])]);
   return guild.roles.cache.find((role) => names.has(role.name) && !role.managed);
 }
@@ -16196,8 +16390,7 @@ async function ensureCiaRole(guild, spec) {
     reason: CIA_SETUP_REASON
   };
   if (!existing) return guild.roles.create(data);
-  await existing.edit(data).catch(() => null);
-  return existing;
+  return existing.edit(data);
 }
 
 function ciaRoleAccess(roleId, options = {}) {
@@ -16217,25 +16410,35 @@ function ciaRoleAccess(roleId, options = {}) {
       PermissionFlagsBits.AddReactions
     );
   }
-  return { id: roleId, allow };
+  return {
+    id: roleId, allow,
+    ...(options.write === false ? { deny: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.SendMessagesInThreads, PermissionFlagsBits.CreatePublicThreads, PermissionFlagsBits.CreatePrivateThreads, PermissionFlagsBits.AddReactions] } : {})
+  };
 }
 
 function ciaCategoryRoleKeys(access) {
+  const leadership = ['operationsCommander', 'directorateHead', 'chiefOfStaff', 'deputy', 'director'];
+  const specialists = ['seniorAgent', 'specialAgent', 'intelligenceOfficer', 'fieldAgent', 'collectionOfficer', 'specializedOfficer', 'paramilitaryOfficer', 'analyst', 'technicalOfficer', 'systemsOfficer', 'supportOfficer'];
+  const divisions = ['analysisDivision', 'scienceDivision', 'systemsDivision', 'supportDivision'];
   if (access === 'verified' || access === 'verified-readonly') {
-    return ['verified', 'candidate', 'trainee', 'fieldAgent', 'intelligenceOfficer', 'specialAgent', 'seniorAgent', 'operationsCommander', 'directorateHead', 'chiefOfStaff', 'deputy', 'director'];
+    return ['verified', 'candidate', 'trainee', ...specialists, ...divisions, ...leadership];
   }
   if (access === 'personnel') {
-    return ['trainee', 'fieldAgent', 'intelligenceOfficer', 'specialAgent', 'seniorAgent', 'operationsCommander', 'directorateHead', 'chiefOfStaff', 'deputy', 'director'];
+    return ['trainee', ...specialists, ...divisions, ...leadership];
   }
   if (access === 'operations') {
-    return ['fieldAgent', 'intelligenceOfficer', 'specialAgent', 'seniorAgent', 'operationsCommander', 'directorateHead', 'chiefOfStaff', 'deputy', 'director'];
+    return ['fieldAgent', 'intelligenceOfficer', 'specialAgent', 'seniorAgent', 'collectionOfficer', 'specializedOfficer', 'paramilitaryOfficer', ...leadership];
   }
   if (access === 'classified') {
-    return ['intelligenceOfficer', 'seniorAgent', 'operationsCommander', 'directorateHead', 'chiefOfStaff', 'deputy', 'director'];
+    return ['fieldAgent', 'intelligenceOfficer', 'specialAgent', 'seniorAgent', 'collectionOfficer', 'analyst', ...leadership];
   }
-  if (access === 'leadership') return ['operationsCommander', 'directorateHead', 'chiefOfStaff', 'deputy', 'director'];
+  if (access === 'analysis') return ['analyst', 'analysisDivision', ...leadership];
+  if (access === 'science') return ['technicalOfficer', 'scienceDivision', ...leadership];
+  if (access === 'systems') return ['systemsOfficer', 'systemsDivision', ...leadership];
+  if (access === 'support') return ['supportOfficer', 'supportDivision', ...leadership];
+  if (access === 'leadership') return leadership;
   if (access === 'executive') return ['deputy', 'director'];
-  if (access === 'tickets') return ['operationsCommander', 'directorateHead', 'chiefOfStaff', 'deputy', 'director'];
+  if (access === 'tickets') return leadership;
   return [];
 }
 
@@ -16268,13 +16471,16 @@ function ciaCategoryPermissions(guild, roles, access) {
   const roleKeys = ciaCategoryRoleKeys(access);
   return [
     { id: everyone, deny: [PermissionFlagsBits.ViewChannel] },
-    ...roleKeys.map((key) => ciaRoleAccess(roles[key].id, { write: access !== 'verified-readonly' })),
+    ...roleKeys.map((key) => ciaRoleAccess(roles[key].id, { write: access !== 'verified-readonly' || ['operationsCommander', 'directorateHead', 'chiefOfStaff', 'deputy', 'director'].includes(key) })),
     suspended
   ];
 }
 
 async function ensureCiaCategory(guild, spec, roles) {
-  let category = guild.channels.cache.find((channel) => channel.type === ChannelType.GuildCategory && channel.name === spec.name);
+  const storedId = getGuildConfig(guild.id).installations?.cia?.categories?.[spec.key];
+  let category = storedId ? guild.channels.cache.get(storedId) : null;
+  if (category?.type !== ChannelType.GuildCategory) category = null;
+  category ||= guild.channels.cache.find((channel) => channel.type === ChannelType.GuildCategory && channel.name === spec.name);
   const permissionOverwrites = ciaCategoryPermissions(guild, roles, spec.access);
   if (!category) {
     category = await guild.channels.create({
@@ -16284,37 +16490,46 @@ async function ensureCiaCategory(guild, spec, roles) {
       reason: CIA_SETUP_REASON
     });
   } else {
+    if (category.name !== spec.name) await category.setName(spec.name, CIA_SETUP_REASON);
     await category.permissionOverwrites.set(permissionOverwrites, CIA_SETUP_REASON);
   }
   return category;
 }
 
 async function ensureCiaChannel(guild, category, categorySpec, channelSpec, roles) {
-  const [key, name, mode] = channelSpec;
+  const [key, name, mode, legacyNames = []] = channelSpec;
   const type = mode === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText;
-  let channel = guild.channels.cache.find((item) => item.type === type && item.name === name && item.parentId === category.id)
-    || guild.channels.cache.find((item) => item.type === type && item.name === name);
+  const storedId = getGuildConfig(guild.id).installations?.cia?.channels?.[key];
+  let channel = storedId ? guild.channels.cache.get(storedId) : null;
+  if (channel?.type !== type) channel = null;
+  const names = new Set([name, ...legacyNames]);
+  channel ||= guild.channels.cache.find((item) => item.type === type && names.has(item.name) && item.parentId === category.id);
+  if (!channel && key === 'systemControl') {
+    channel = guild.channels.cache.find((item) => item.type === type && names.has(item.name) && [ciaInstallationMarker(guild.id), `NEXA_CIA_INSTALLATION_V1:${guild.id}`].some((marker) => String(item.topic || '').includes(marker)));
+  }
   if (!channel) {
     channel = await guild.channels.create({ name, type, parent: category.id, reason: CIA_SETUP_REASON });
-  } else if (channel.parentId !== category.id) {
-    await channel.setParent(category.id, { lockPermissions: true, reason: CIA_SETUP_REASON });
-  }
-  await channel.lockPermissions().catch(() => null);
-  if (type === ChannelType.GuildText && CIA_CHANNEL_TOPICS[key] && channel.topic !== CIA_CHANNEL_TOPICS[key]) {
-    await channel.setTopic(CIA_CHANNEL_TOPICS[key], CIA_SETUP_REASON).catch(() => null);
+  } else {
+    if (channel.name !== name) await channel.setName(name, CIA_SETUP_REASON);
+    if (channel.parentId !== category.id) await channel.setParent(category.id, { lockPermissions: true, reason: CIA_SETUP_REASON });
   }
   if (type === ChannelType.GuildText && mode === 'readonly') {
-    const accessKeys = ciaCategoryRoleKeys(categorySpec.access)
-      .filter((roleKey) => !['operationsCommander', 'directorateHead', 'chiefOfStaff', 'deputy', 'director'].includes(roleKey));
-    for (const roleKey of accessKeys) {
-      await channel.permissionOverwrites.edit(roles[roleKey].id, {
-        SendMessages: false,
-        SendMessagesInThreads: false,
-        CreatePublicThreads: false,
-        CreatePrivateThreads: false,
-        AddReactions: false
-      }, { reason: CIA_SETUP_REASON }).catch(() => null);
-    }
+    const readonlyIds = new Set(ciaCategoryRoleKeys(categorySpec.access)
+      .filter((roleKey) => !['operationsCommander', 'directorateHead', 'chiefOfStaff', 'deputy', 'director'].includes(roleKey))
+      .map((roleKey) => roles[roleKey].id));
+    const denyWrites = [PermissionFlagsBits.SendMessages, PermissionFlagsBits.SendMessagesInThreads, PermissionFlagsBits.CreatePublicThreads, PermissionFlagsBits.CreatePrivateThreads, PermissionFlagsBits.AddReactions];
+    const overwrites = ciaCategoryPermissions(guild, roles, categorySpec.access).map((overwrite) => readonlyIds.has(overwrite.id) ? {
+      ...overwrite,
+      allow: (overwrite.allow || []).filter((permission) => !denyWrites.includes(permission)),
+      deny: [...new Set([...(overwrite.deny || []), ...denyWrites])]
+    } : overwrite);
+    await channel.permissionOverwrites.set(overwrites, CIA_SETUP_REASON);
+  } else {
+    await channel.lockPermissions();
+  }
+  const topic = CIA_CHANNEL_TOPICS[key] || CIA_KNOWLEDGE_PANELS[key]?.[0] || `${name} • CIA RP munkaterület`;
+  if (type === ChannelType.GuildText && key !== 'systemControl' && channel.topic !== topic) {
+    await channel.setTopic(topic, CIA_SETUP_REASON);
   }
   return [key, channel];
 }
@@ -16324,7 +16539,7 @@ async function applyCiaRolePositions(guild, roles) {
   const positions = CIA_ROLES
     .map((spec, index) => roles[spec.key] ? ({ role: roles[spec.key], position: Math.max(1, botTop - index - 1) }) : null)
     .filter(Boolean);
-  await guild.roles.setPositions(positions).catch(() => null);
+  await guild.roles.setPositions(positions);
 }
 
 function ciaInfoEmbed(title, description, color = COLORS.primary, fields = []) {
@@ -16338,7 +16553,7 @@ function ciaInfoEmbed(title, description, color = COLORS.primary, fields = []) {
 }
 
 function ciaStaticPanels() {
-  return {
+  const panels = {
     welcome: [ciaInfoEmbed('🕵️ CIA Frakcióközpont', 'Üdvözlünk a CIA RP frakció hivatalos Discord-központjában. Olvasd el a szabályzatot, végezd el az ellenőrzést, majd használd a számodra engedélyezett szolgálati területeket.')],
     rules: [ciaInfoEmbed('📜 CIA szolgálati szabályzat', '**1.** A szolgálati utat és a rangsort minden helyzetben be kell tartani.\n**2.** Minősített információ illetéktelen személynek nem adható át.\n**3.** Minden intézkedéshez tényszerű indoklás és ellenőrizhető dokumentáció szükséges.\n**4.** A jogkörrel való visszaélés, bizonyítékhamisítás és metagaming tilos.\n**5.** Műveleti információt kizárólag a kijelölt csatornákban lehet megosztani.\n**6.** A NEXA biztonsági és naplórendszerének kijátszása azonnali felfüggesztést eredményezhet.', COLORS.warning)],
     announcements: [ciaInfoEmbed('📢 Hivatalos CIA-közlemények', 'A vezetőség jóváhagyott közleményei és szolgálati értesítései jelennek meg itt. Az értesítéshez válaszd ki a megfelelő rangot az értesítési panelen.')],
@@ -16351,16 +16566,35 @@ function ciaStaticPanels() {
     protocols: [ciaInfoEmbed('📑 Általános eljárásrend', 'Minden ügyet a legkisebb szükséges jogosultsággal kezelj. Rögzítsd az időpontot, résztvevőket, tényeket, bizonyítékokat, döntést és a további teendőt.')],
     trainingMaterial: [ciaInfoEmbed('📚 Kiképzési központ', 'A képzés részei: szolgálati rend, rádiózás, bizonyítékkezelés, jelentésírás, műveleti biztonság és gyakorlati vizsga.')],
     briefings: [ciaInfoEmbed('🗺️ Műveleti eligazítás', 'Az eligazítás tartalmazza a célt, hatáskört, felelős vezetőt, egységeket, kommunikációs tervet, kockázatokat és a megszakítás feltételeit.', COLORS.warning)],
-    directorOffice: [ciaInfoEmbed('👑 CIA vezetői vezérlőközpont', 'A teljes frakcióstruktúrát a NEXA egyszeri CIA-telepítője hozta létre. A CIA-rendszer kizárólag Discordon, a botowner parancsaival kezelhető; a webes felületen nem jelenik meg. A telepítő sikeres lezárása után ugyanazon a szerveren nem futtatható újra.', COLORS.warning)]
+    directorOffice: [ciaInfoEmbed('👑 CIA vezetői vezérlőközpont', 'A CIA-rendszer kizárólag Discordon, a botowner parancsaival kezelhető. Az újratelepítés kizárólag a fő botowner művelete.', COLORS.warning)]
   };
+  for (const [key, [title, description]] of Object.entries(CIA_KNOWLEDGE_PANELS)) {
+    panels[key] = [ciaInfoEmbed(title, description)];
+  }
+  panels.ranks = [];
+  for (let offset = 0; offset < CIA_ROLES.length; offset += 8) {
+    panels.ranks.push(ciaInfoEmbed(
+      `🎖️ CIA beosztások és hozzáférési rangok — ${Math.floor(offset / 8) + 1}`,
+      'A vezetői, szakmai és szervezeti címkék eltérő szerepet töltenek be. Az alábbi hatáskörök a saját RP szerver szabályai.',
+      COLORS.primary,
+      CIA_ROLES.slice(offset, offset + 8).map((spec) => ({ name: spec.name, value: CIA_ROLE_DETAILS[spec.key] || 'Kijelölt RP munkakör.', inline: false }))
+    ));
+  }
+  for (const category of CIA_CATEGORIES) {
+    for (const [key, name, mode] of category.channels) {
+      if (mode !== 'voice' && !panels[key]) {
+        panels[key] = [ciaInfoEmbed(name, `${CIA_CHANNEL_TOPICS[key] || 'A kijelölt CIA RP terület feladatai és bejegyzései.'}\n\n${mode === 'readonly' ? 'A szobát a bot vagy az illetékes vezetőség frissíti. A kapcsolódó kérdést az ügyintézésben jelezd.' : 'Használj ügyazonosítót, időpontot és tényszerű, játékbeli leírást. A témához kapcsolódó bejegyzéseket ide küldd.'}`)];
+      }
+    }
+  }
+  return panels;
 }
 
 async function clearCiaManagedMessages(channel, botId) {
   if (!channel?.isTextBased()) return;
-  const messages = await channel.messages.fetch({ limit: 50 }).catch(() => null);
-  if (!messages) return;
-  const managed = messages.filter((message) => message.author.id === botId && message.embeds.some((embed) => embed.footer?.text === CIA_PANEL_FOOTER));
-  for (const message of managed.values()) await message.delete().catch(() => null);
+  const messages = await channel.messages.fetch({ limit: 50 });
+  const managed = messages.filter((message) => message.author.id === botId && message.embeds.some((embed) => [CIA_PANEL_FOOTER, CIA_LEGACY_PANEL_FOOTER].includes(embed.footer?.text)));
+  for (const message of managed.values()) await message.delete();
 }
 
 async function sendCiaStaticPanel(channel, embeds, botId) {
@@ -16445,7 +16679,11 @@ function ciaDocumentTypes(channels, roles) {
 
 async function publishCiaPanels(guild, channels, roles, botUser, template) {
   let published = 0;
-  for (const [key, embeds] of Object.entries(ciaStaticPanels())) {
+  const panels = ciaStaticPanels();
+  const acceptedRole = guild.roles.cache.get(template.acceptedRoleId);
+  panels.recruitmentInfo = [ciaInfoEmbed('🕵️ Aktuális felvételi eljárás',
+    `**Jelentkezés:** ${template.title}\n**Kérdések:** ${template.questions.length}\n**Bírálat:** ${template.blindReview ? 'vak bírálat' : 'a beállított bírálati rend'}\n**Új jelentkezés várakozási ideje:** ${template.cooldownHours} óra\n**Elfogadás után:** ${acceptedRole?.name || 'a beállított beosztás'}\n\nIndítsd a jelentkezést a 📝・jelentkezés szobában. Saját megfogalmazású válaszokat írj; a bot privát értesítést próbál küldeni az eredményről.`)];
+  for (const [key, embeds] of Object.entries(panels)) {
     if (channels[key]) published += await sendCiaStaticPanel(channels[key], embeds, botUser.id);
   }
   published += await replaceInteractivePanel(
@@ -16492,8 +16730,9 @@ function ciaInstallationMarker(guildId) {
 }
 
 function ciaDiscordMarkerPresent(guild) {
-  const marker = ciaInstallationMarker(guild.id);
-  return guild.channels.cache.some((channel) => channel.type === ChannelType.GuildText && channel.name === '⚙️・cia-rendszer' && String(channel.topic || '').includes(marker));
+  const storedId = getGuildConfig(guild.id).installations?.cia?.channels?.systemControl;
+  const markers = [ciaInstallationMarker(guild.id), `NEXA_CIA_INSTALLATION_V1:${guild.id}`];
+  return guild.channels.cache.some((channel) => channel.type === ChannelType.GuildText && (channel.id === storedId || channel.name === '⚙️・cia-rendszer') && markers.some((marker) => String(channel.topic || '').includes(marker)));
 }
 
 function isCiaInstallationComplete(guild) {
@@ -16509,6 +16748,8 @@ function auditCiaServer(guild) {
   const databaseMarker = Boolean(getGuildConfig(guild.id).installations?.cia?.completed);
   const discordMarker = ciaDiscordMarkerPresent(guild);
   return {
+    version: Number(getGuildConfig(guild.id).installations?.cia?.version || (discordMarker ? 1 : 0)),
+    targetVersion: CIA_INSTALLATION_VERSION,
     missingRoles,
     missingCategories,
     missingChannels,
@@ -16519,7 +16760,20 @@ function auditCiaServer(guild) {
   };
 }
 
-async function refreshCiaAmericanRanks(guild, botUser) {
+function assertCiaOwner(guild, botUser, ownerMember) {
+  if (!guild?.id || !botUser?.id || !ownerMember?.id) throw new Error('A CIA művelethez szerver, bot és fő botowner szükséges.');
+  if (!isBotOwner(ownerMember.id)) {
+    const error = new Error('A CIA rendszert kizárólag az elsődleges BOT_OWNER_ID fiók telepítheti vagy frissítheti.');
+    error.code = 'CIA_OWNER_REQUIRED';
+    throw error;
+  }
+  if (!ownerMember.permissions?.has(PermissionFlagsBits.Administrator)) throw new Error('A fő botownernek ezen a szerveren Rendszergazda jogosultság szükséges.');
+  if (!guild.members.me?.permissions.has(PermissionFlagsBits.Administrator)) throw new Error('A NEXA Botnak ezen a szerveren Rendszergazda jogosultság szükséges.');
+}
+
+async function refreshCiaAmericanRanks(guild, botUser, ownerMember) {
+  assertCiaOwner(guild, botUser, ownerMember);
+  await Promise.all([guild.roles.fetch(), guild.channels.fetch()]);
   if (!isCiaInstallationComplete(guild)) {
     const error = new Error('Előbb telepítsd a CIA rendszert a /cia telepites paranccsal.');
     error.code = 'CIA_NOT_INSTALLED';
@@ -16565,12 +16819,18 @@ async function refreshCiaAmericanRanks(guild, botUser) {
 
     await applyCiaRolePositions(guild, roles);
 
-    const storedHierarchyId = config.installations?.cia?.channels?.hierarchy;
-    let hierarchyChannel = storedHierarchyId ? guild.channels.cache.get(storedHierarchyId) : null;
-    if (!hierarchyChannel && storedHierarchyId) hierarchyChannel = await guild.channels.fetch(storedHierarchyId).catch(() => null);
-    if (!hierarchyChannel) hierarchyChannel = guild.channels.cache.find((channel) => channel.type === ChannelType.GuildText && channel.name === '🔰・szolgálati-hierarchia');
-    const hierarchyUpdated = Boolean(hierarchyChannel?.isTextBased?.() && botUser?.id);
-    if (hierarchyUpdated) await sendCiaStaticPanel(hierarchyChannel, ciaStaticPanels().hierarchy, botUser.id);
+    const panels = ciaStaticPanels();
+    let hierarchyUpdated = false;
+    for (const key of ['hierarchy', 'ranks']) {
+      const storedId = config.installations?.cia?.channels?.[key];
+      const spec = CIA_CATEGORIES.flatMap((category) => category.channels).find(([channelKey]) => channelKey === key);
+      const names = new Set([spec[1], ...(spec[3] || [])]);
+      const channel = (storedId ? guild.channels.cache.get(storedId) : null) || guild.channels.cache.find((item) => item.type === ChannelType.GuildText && names.has(item.name));
+      if (channel?.isTextBased?.()) {
+        await sendCiaStaticPanel(channel, panels[key], botUser.id);
+        if (key === 'hierarchy') hierarchyUpdated = true;
+      }
+    }
 
     config.installations = config.installations || {};
     config.installations.cia = {
@@ -16589,10 +16849,12 @@ async function refreshCiaAmericanRanks(guild, botUser) {
 }
 
 async function setupCiaServer(guild, botUser, ownerMember, options = {}) {
+  assertCiaOwner(guild, botUser, ownerMember);
+  await Promise.all([guild.roles.fetch(), guild.channels.fetch()]);
   const repair = options.repair === true;
   if (!guild?.id || !ownerMember?.id) throw new Error('A CIA telepítéshez szerver és tulajdonos szükséges.');
   if (isCiaInstallationComplete(guild) && !repair) {
-    const error = new Error('A CIA rendszer ezen a szerveren már egyszer sikeresen telepítve lett. Biztonsági okból nem futtatható újra.');
+    const error = new Error('A CIA rendszer már telepítve van. A fő botowner a /cia ujratelepites paranccsal frissítheti és bővítheti.');
     error.code = 'CIA_ALREADY_INSTALLED';
     throw error;
   }
@@ -16608,25 +16870,50 @@ async function setupCiaServer(guild, botUser, ownerMember, options = {}) {
   }
   ciaInstallLocks.add(guild.id);
   try {
+    const config = JSON.parse(JSON.stringify(getGuildConfig(guild.id)));
+    const previousInstallation = config.installations?.cia || {};
     const roles = {};
-    for (const spec of CIA_ROLES) roles[spec.key] = await ensureCiaRole(guild, spec);
+    const categories = {};
+    const channels = {};
+    const checkpoint = async () => {
+      config.installations = config.installations || {};
+      config.installations.cia = {
+        ...previousInstallation,
+        completed: previousInstallation.completed === true,
+        version: previousInstallation.version || CIA_INSTALLATION_VERSION,
+        installedAt: previousInstallation.installedAt || new Date().toISOString(),
+        installedBy: previousInstallation.installedBy || ownerMember.id,
+        roles: { ...previousInstallation.roles, ...Object.fromEntries(Object.entries(roles).map(([key, item]) => [key, item.id])) },
+        categories: { ...previousInstallation.categories, ...Object.fromEntries(Object.entries(categories).map(([key, item]) => [key, item.id])) },
+        channels: { ...previousInstallation.channels, ...Object.fromEntries(Object.entries(channels).map(([key, item]) => [key, item.id])) }
+      };
+      await setGuildConfig(guild.id, config);
+    };
+    for (const spec of CIA_ROLES) {
+      const existing = ciaRoleBySpec(guild, spec);
+      if (existing?.editable === false) throw new Error(`A NEXA rangja legyen a kezelt CIA rang fölött: ${existing.name}`);
+    }
+    for (const spec of CIA_ROLES) {
+      roles[spec.key] = await ensureCiaRole(guild, spec);
+      await checkpoint();
+    }
     await applyCiaRolePositions(guild, roles);
     if (!ownerMember.roles.cache.has(roles.director.id)) await ownerMember.roles.add(roles.director, CIA_SETUP_REASON);
 
-    const categories = {};
-    const channels = {};
     for (const categorySpec of CIA_CATEGORIES) {
       const category = await ensureCiaCategory(guild, categorySpec, roles);
       categories[categorySpec.key] = category;
+      await checkpoint();
       for (const channelSpec of categorySpec.channels) {
         const [key, channel] = await ensureCiaChannel(guild, category, categorySpec, channelSpec, roles);
         channels[key] = channel;
       }
+      await checkpoint();
       const positions = categorySpec.channels.map(([key], position) => channels[key] ? ({ channel: channels[key].id, position }) : null).filter(Boolean);
-      if (positions.length) await guild.channels.setPositions(positions).catch(() => null);
+      if (positions.length) await guild.channels.setPositions(positions);
     }
     const categoryPositions = CIA_CATEGORIES.map((spec, position) => categories[spec.key] ? ({ channel: categories[spec.key].id, position }) : null).filter(Boolean);
-    if (categoryPositions.length) await guild.channels.setPositions(categoryPositions).catch(() => null);
+    if (categoryPositions.length) await guild.channels.setPositions(categoryPositions);
 
     await grantGuildPlan(guild.id, 'ultimate', {
       days: null,
@@ -16639,7 +16926,6 @@ async function setupCiaServer(guild, botUser, ownerMember, options = {}) {
       await setOwnerSettings(ownerSettings);
     }
 
-    const config = JSON.parse(JSON.stringify(getGuildConfig(guild.id)));
     config.language = 'hu';
     config.commandLanguage = 'hu';
     Object.assign(config.modules, {
@@ -16699,16 +16985,28 @@ async function setupCiaServer(guild, botUser, ownerMember, options = {}) {
     config.protection.whitelistRoles = [roles.director.id, roles.deputy.id, roles.chiefOfStaff.id];
     config.protection.whitelistChannels = [channels.directorOffice.id, channels.systemControl.id];
     config.documents.defaultAccessRoleId = roles.trainee.id;
-    config.documents.customTypes = ciaDocumentTypes(channels, roles);
-    const template = ciaApplicationTemplate(channels, roles);
-    config.applications.templates = [template];
+    const existingTypes = config.documents.customTypes || [];
+    const definitions = ciaDocumentTypes(channels, roles);
+    config.documents.customTypes = [
+      ...definitions.map((definition) => ({ ...definition, ...existingTypes.find((type) => type.key === definition.key), channelId: definition.channelId })),
+      ...existingTypes.filter((type) => !definitions.some((definition) => definition.key === type.key))
+    ];
+    const defaultTemplate = ciaApplicationTemplate(channels, roles);
+    const existingTemplates = config.applications.templates || [];
+    const template = {
+      ...defaultTemplate,
+      ...existingTemplates.find((item) => item.key === defaultTemplate.key),
+      openChannelId: channels.application.id,
+      reviewChannelId: channels.reviewFiles.id,
+      resultChannelId: channels.applicationResults.id
+    };
+    config.applications.templates = [template, ...existingTemplates.filter((item) => item.key !== template.key)];
     await setGuildConfig(guild.id, config);
 
     const panelResult = await publishCiaPanels(guild, channels, roles, botUser, template);
     const marker = ciaInstallationMarker(guild.id);
     await channels.systemControl.setTopic(`NEXA CIA rendszervezérlés • ${marker}`, CIA_SETUP_REASON);
 
-    const previousInstallation = config.installations?.cia || {};
     config.installations = config.installations || {};
     config.installations.cia = {
       completed: true,
@@ -16716,7 +17014,7 @@ async function setupCiaServer(guild, botUser, ownerMember, options = {}) {
       installedAt: previousInstallation.installedAt || new Date().toISOString(),
       installedBy: previousInstallation.installedBy || ownerMember.id,
       rankStyle: 'american',
-      ranksUpdatedAt: previousInstallation.ranksUpdatedAt || null,
+      ranksUpdatedAt: new Date().toISOString(),
       lastRepairedAt: repair ? new Date().toISOString() : previousInstallation.lastRepairedAt || null,
       repairCount: repair ? Number(previousInstallation.repairCount || 0) + 1 : Number(previousInstallation.repairCount || 0),
       roles: Object.fromEntries(Object.entries(roles).map(([key, role]) => [key, role.id])),
@@ -16724,6 +17022,10 @@ async function setupCiaServer(guild, botUser, ownerMember, options = {}) {
       channels: Object.fromEntries(Object.entries(channels).map(([key, channel]) => [key, channel.id]))
     };
     await setGuildConfig(guild.id, config);
+    await channels.installationHistory.send({
+      content: `✅ CIA v${CIA_INSTALLATION_VERSION} ${repair ? 'újratelepítés / frissítés' : 'telepítés'} • végrehajtó: ${ownerMember.id} • ${Object.keys(roles).length} rang, ${Object.keys(categories).length} kategória, ${Object.keys(channels).length} csatorna • ${new Date().toISOString()}`,
+      allowedMentions: { parse: [] }
+    });
     return {
       roles,
       categories,
@@ -17012,6 +17314,8 @@ module.exports = {
   CIA_CATEGORIES,
   CIA_INSTALL_MARKER,
   CIA_ROLES,
+  CIA_INSTALLATION_VERSION,
+  ciaStaticPanels,
   MANAGED_FOOTER,
   SUPPORT_GUILD_ID,
   SUPPORT_CATEGORIES,
@@ -17421,8 +17725,8 @@ async function ensureSupportDestination(guild) {
   await guild.roles.fetch().catch(() => null);
   let parent = guild.channels.cache.find((channel) => channel.type === ChannelType.GuildCategory && /TICKETS|TICKETEK/i.test(channel.name));
   let supportRole = guild.roles.cache.find((role) => !role.managed && /support|ügyf[eé]l|staff/i.test(role.name));
-  if (!supportRole) supportRole = await guild.roles.create({ name: 'NEXA Support Team', permissions: [], reason: 'NEXA 20.0.0 Support Center öngyógyítás' });
-  if (!parent) parent = await guild.channels.create({ name: '━━━ 04 • TICKETS ━━━', type: ChannelType.GuildCategory, reason: 'NEXA 20.0.0 Support Center öngyógyítás' });
+  if (!supportRole) supportRole = await guild.roles.create({ name: 'NEXA Support Team', permissions: [], reason: 'NEXA 20.1.0 Support Center öngyógyítás' });
+  if (!parent) parent = await guild.channels.create({ name: '━━━ 04 • TICKETS ━━━', type: ChannelType.GuildCategory, reason: 'NEXA 20.1.0 Support Center öngyógyítás' });
   return { parent, supportRole };
 }
 
