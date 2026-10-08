@@ -11,4 +11,4 @@
 - Újraindítás önmagában nem telepít; CIA-kezelés továbbra is kizárólag Discordon.
 - Ellenőrzés: 45/45 automatikus teszt, köztük 7 CIA futási próba, valamint Node szintaxisellenőrzés. Éles Discordon nem futott telepítés ebben a beszélgetésben.
 
-Használat: [CIA-UTMUTATO-20.1.0.md](CIA-UTMUTATO-20.1.0.md).
+Használat: [CIA-UTMUTATO-20.1.1.md](CIA-UTMUTATO-20.1.1.md).

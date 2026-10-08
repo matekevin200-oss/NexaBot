@@ -37,7 +37,7 @@ class Command {
 
 const permissions = [...new Set([...source.matchAll(/PermissionFlagsBits\.([A-Za-z]+)/g)].map((m) => m[1]))];
 const bits = Object.fromEntries(permissions.map((name, i) => [name, 1n << BigInt(i)]));
-const discord = { ChannelType: { GuildText: 0, GuildVoice: 2, GuildCategory: 4 }, PermissionFlagsBits: bits, EmbedBuilder: Embed, SlashCommandBuilder: Command, MessageFlags: { Ephemeral: 64 } };
+const discord = { ChannelType: { GuildText: 0, GuildVoice: 2, GuildCategory: 4 }, PermissionFlagsBits: bits, EmbedBuilder: Embed, SlashCommandBuilder: Command, MessageFlags: { Ephemeral: 64 }, Routes: { applicationGuildCommands: (appId, guildId) => `${appId}/${guildId}` } };
 
 function load(name, dependencies = {}) {
   const marker = `"src/${name}.js": function(module, exports, require) {`;
@@ -61,7 +61,7 @@ const content = load('cia-content');
 function fixture() {
   const realConfig = load('config', { pg: { Pool: class Pool {} }, './constants': { NAMES: {} } });
   const guildId = '100000000000000099';
-  const state = { config: realConfig.defaultConfig(guildId), created: 0, deleted: 0, failChannel: '', audits: [], errors: [] };
+  const state = { config: realConfig.defaultConfig(guildId), created: 0, deleted: 0, failChannel: '', audits: [], errors: [], failCommandDelete: false };
   const config = {
     ...realConfig,
     getGuildConfig: () => state.config,
@@ -89,8 +89,13 @@ function fixture() {
   const roles = new Collection();
   const channels = new Collection();
   const memberRoles = new Collection();
+  const commands = new Collection([['cia-command', { id: 'cia-command', name: 'cia' }], ['help-command', { id: 'help-command', name: 'help' }]]);
   const guild = {
     id: guildId, ownerId: '100000000000000088', name: 'CIA Test',
+    commands: {
+      fetch: async () => commands,
+      delete: async (commandId) => { if (state.failCommandDelete) throw new Error('Injected delete failure'); commands.delete(commandId); }
+    },
     members: { me: { permissions: { has: () => true }, roles: { highest: { position: 80 } } } },
     roles: {
       everyone: { id: guildId }, cache: roles,
@@ -131,8 +136,30 @@ function fixture() {
     }
   };
   const owner = { id: ownerId, permissions: { has: () => true }, roles: { cache: memberRoles, add: async (role) => memberRoles.set(role.id, role) } };
+  guild.members.cache = new Collection([[ownerId, owner]]);
+  guild.members.fetch = async (memberId) => guild.members.cache.get(memberId);
   const bot = { id: botId };
-  return { cia, config, guild, owner, bot, state, channels, roles };
+  return { cia, config, realConfig, guild, owner, bot, state, channels, roles, commands };
+}
+
+async function seedLegacyInstallation(f) {
+  const roles = {}, categories = {}, channels = {};
+  for (const spec of f.cia.CIA_ROLES) roles[spec.key] = await f.guild.roles.create(spec);
+  for (const spec of f.cia.CIA_CATEGORIES) {
+    const category = await f.guild.channels.create({ name: spec.name, type: discord.ChannelType.GuildCategory });
+    categories[spec.key] = category;
+    for (const [key, name, mode] of spec.channels) channels[key] = await f.guild.channels.create({ name, parent: category.id, type: mode === 'voice' ? discord.ChannelType.GuildVoice : discord.ChannelType.GuildText });
+  }
+  await channels.systemControl.setTopic(`NEXA_CIA_INSTALLATION_V2:${f.guild.id}`);
+  f.state.config.installations.cia = {
+    completed: true, version: 2,
+    roles: Object.fromEntries(Object.entries(roles).map(([key, value]) => [key, value.id])),
+    categories: Object.fromEntries(Object.entries(categories).map(([key, value]) => [key, value.id])),
+    channels: Object.fromEntries(Object.entries(channels).map(([key, value]) => [key, value.id]))
+  };
+  f.state.config.applications.templates = [{ key: 'tgf_cia_felvetel', title: 'CIA felvétel', emoji: '🕵️', description: 'CIA jelentkezés', openChannelId: channels.application.id, reviewChannelId: channels.reviewFiles.id, resultChannelId: channels.applicationResults.id, acceptedRoleId: roles.trainee.id, reviewerRoleId: roles.directorateHead.id, blindReview: true, active: true, cooldownHours: 72, questions: [{ id: 'question_1', label: 'Miért szeretnél jelentkezni?', required: true, maxLength: 1000 }] }];
+  await f.config.setGuildConfig(f.guild.id, f.state.config);
+  return { roles, categories, channels };
 }
 
 test('all CIA mutators reject admins, server owners and delegated owners before changes', async () => {
@@ -146,12 +173,9 @@ test('all CIA mutators reject admins, server owners and delegated owners before 
   assert.equal(f.state.created, 0);
 });
 
-test('primary owner can install and reinstall without duplicate resources or lost assignments', async () => {
+test('primary owner can upgrade once without duplicate resources, then the CIA command is removed', async () => {
   const f = fixture();
-  const first = await f.cia.setupCiaServer(f.guild, f.bot, f.owner);
-  assert.equal(first.roleCount, 26);
-  assert.ok(first.categoryCount >= 17);
-  assert.ok(first.channelCount > 100);
+  const first = await seedLegacyInstallation(f);
   const roleId = first.roles.specialAgent.id;
   const message = await first.channels.general.send({ content: 'User conversation survives' });
   message.author.id = '100000000000000007';
@@ -159,8 +183,10 @@ test('primary owner can install and reinstall without duplicate resources or los
   await first.channels.ranks.setName('renamed-reference');
   await first.categories.operations.setName('renamed-category');
   const before = f.state.created;
-  await assert.rejects(f.cia.setupCiaServer(f.guild, f.bot, f.owner), { code: 'CIA_ALREADY_INSTALLED' });
   const result = await f.cia.repairCiaServer(f.guild, f.bot, f.owner);
+  assert.equal(result.roleCount, 26);
+  assert.equal(result.categoryCount, 17);
+  assert.equal(result.channelCount, 117);
   assert.equal(f.state.created, before);
   assert.equal(result.roles.specialAgent.id, roleId);
   assert.equal(result.channels.ranks.id, first.channels.ranks.id);
@@ -169,11 +195,17 @@ test('primary owner can install and reinstall without duplicate resources or los
   assert.ok((await result.channels.general.messages.fetch()).has(message.id));
   assert.equal(f.state.config.installations.cia.roles.chiefOfStaff, first.roles.chiefOfStaff.id);
   assert.equal(f.state.config.installations.cia.channels.operationVoiceTwo, first.channels.operationVoiceTwo.id);
+  assert.equal(f.state.config.installations.cia.finalized, true);
+  assert.equal(f.commands.has('cia-command'), false);
+  assert.equal(f.commands.has('help-command'), true);
+  await assert.rejects(f.cia.repairCiaServer(f.guild, f.bot, f.owner), { code: 'CIA_INSTALLER_FINALIZED' });
+  await assert.rejects(f.cia.setupCiaServer(f.guild, f.bot, f.owner), { code: 'CIA_INSTALLER_FINALIZED' });
+  await assert.rejects(f.cia.refreshCiaAmericanRanks(f.guild, f.bot, f.owner), { code: 'CIA_INSTALLER_FINALIZED' });
 });
 
 test('reinstall repairs missing rooms and retains customized application questions', async () => {
   const f = fixture();
-  const first = await f.cia.setupCiaServer(f.guild, f.bot, f.owner);
+  const first = await seedLegacyInstallation(f);
   f.state.config.applications.templates[0].title = 'Custom CIA application';
   f.state.config.applications.templates[0].cooldownHours = 24;
   f.state.config.applications.templates[0].questions[0].label = 'Custom question';
@@ -185,14 +217,14 @@ test('reinstall repairs missing rooms and retains customized application questio
   assert.equal(f.state.config.applications.templates[0].questions[0].label, 'Custom question');
 });
 
-test('old Discord-only V1 marker permits explicit migration but blocks first install', async () => {
+test('old Discord-only V1 marker permits one final migration and then blocks all installations', async () => {
   const f = fixture();
   const oldControl = await f.guild.channels.create({ name: '⚙️・cia-rendszer', type: discord.ChannelType.GuildText, topic: `NEXA_CIA_INSTALLATION_V1:${f.guild.id}` });
   assert.equal(f.cia.isCiaInstallationComplete(f.guild), true);
-  await assert.rejects(f.cia.setupCiaServer(f.guild, f.bot, f.owner), { code: 'CIA_ALREADY_INSTALLED' });
   const upgraded = await f.cia.repairCiaServer(f.guild, f.bot, f.owner);
   assert.equal(upgraded.channels.systemControl.id, oldControl.id);
-  assert.equal(f.state.config.installations.cia.version, 2);
+  assert.equal(f.state.config.installations.cia.version, 3);
+  await assert.rejects(f.cia.setupCiaServer(f.guild, f.bot, f.owner), { code: 'CIA_INSTALLER_FINALIZED' });
 });
 
 test('interrupted first install keeps resource IDs and can continue after the failure is fixed', async () => {
@@ -232,7 +264,7 @@ test('all information messages fit Discord embed limits and department access st
 
 test('rank-only refresh runs through the real slash-command handler', async () => {
   const f = fixture();
-  await f.cia.setupCiaServer(f.guild, f.bot, f.owner);
+  await seedLegacyInstallation(f);
   const interactionModule = load('interactions', {
     './config': f.config, './support-server': f.cia,
     './command-localizations': { canonicalCommandName: (name) => name },
@@ -258,4 +290,51 @@ test('rank-only refresh runs through the real slash-command handler', async () =
   assert.equal(f.state.audits[1][0], 'cia_server_owner_reinstall');
   assert.equal(f.state.config.installations.cia.repairCount, 1);
   assert.equal(f.state.errors.length, 0);
+});
+
+test('startup does not register CIA again and retries command cleanup for a finalized server', async () => {
+  const f = fixture();
+  await seedLegacyInstallation(f);
+  f.state.failCommandDelete = true;
+  const previousError = console.error;
+  console.error = () => {};
+  let result;
+  try { result = await f.cia.repairCiaServer(f.guild, f.bot, f.owner); }
+  finally { console.error = previousError; }
+  assert.equal(result.finalized, true);
+  assert.equal(result.commandRemoved, false);
+  await assert.rejects(f.cia.repairCiaServer(f.guild, f.bot, f.owner), { code: 'CIA_INSTALLER_FINALIZED' });
+  f.state.failCommandDelete = false;
+  // Simulate lost database metadata: the Discord topic still holds the final lock.
+  f.state.config.installations.cia = null;
+  let registered = 0;
+  const registration = await f.cia.registerCiaCommandInOwnerGuilds({
+    rest: { post: async () => { registered++; } },
+    guilds: [f.guild], applicationId: botId, ownerId
+  });
+  assert.equal(registered, 0);
+  assert.deepEqual(registration.removed, [f.guild.id]);
+  assert.equal(registration.failed.length, 0);
+  assert.equal(f.commands.has('cia-command'), false);
+  assert.equal(f.commands.has('help-command'), true);
+  await assert.rejects(f.cia.setupCiaServer(f.guild, f.bot, f.owner), { code: 'CIA_INSTALLER_FINALIZED' });
+});
+
+test('normal configuration saves cannot clear an existing final installation lock', async () => {
+  const f = fixture();
+  const config = f.realConfig.defaultConfig(f.guild.id);
+  config.installations.cia = { completed: true, finalized: true, finalizedAt: new Date().toISOString(), finalizedBy: ownerId };
+  await f.realConfig.setGuildConfig(f.guild.id, config);
+  await f.realConfig.setGuildConfig(f.guild.id, { modules: {} });
+  assert.equal(f.realConfig.getGuildConfig(f.guild.id).installations.cia.finalized, true);
+  assert.equal(f.realConfig.getGuildConfig(f.guild.id).installations.cia.finalizedBy, ownerId);
+});
+
+test('the legacy install entry also allows the primary owner one final upgrade', async () => {
+  const f = fixture();
+  const old = await seedLegacyInstallation(f);
+  const result = await f.cia.setupCiaServer(f.guild, f.bot, f.owner);
+  assert.equal(result.roles.director.id, old.roles.director.id);
+  assert.equal(result.finalized, true);
+  await assert.rejects(f.cia.setupCiaServer(f.guild, f.bot, f.owner), { code: 'CIA_INSTALLER_FINALIZED' });
 });

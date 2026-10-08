@@ -1,6 +1,18 @@
-# NEXA Bot 20.1.0 — CIA Expanded / NEXA OS Studio
+# NEXA Bot 20.1.1 — CIA Final Install / NEXA OS Studio
 
-## 20.1.0 CIA-bővítés
+- A fő BOT_OWNER_ID fiók még egyszer frissítheti a korábban telepített CIA-rendszert.
+- A V1/V2 telepítési jelző felismerhető; a korábbi telepítési zár nem tiltja az utolsó futást.
+- Siker után a telepítő tartósan lezár, és a teljes `/cia` parancsot eltávolítja az érintett Discord-szerverről.
+- Újraindításkor nem regisztrálja vissza. Elmaradt parancstörlést induláskor újra megpróbálja.
+- A beállításmentés nem oldja fel a végleges lezárást; más admin vagy hozzáadott Owner-kezelő nem indíthat telepítést.
+- Megszakadt telepítés folytatható; a végső engedélyt csak teljes siker után használja fel.
+- Megtartja a 26 kezelt rangot, 17 kategóriát, 117 szobát, magyar kézikönyvet és az egyedi TGF-megőrzést.
+- Ellenőrzés: 48/48 automatikus teszt, ebből 10 CIA futási próba; Node szintaxisellenőrzés. Éles Discordon nem történt telepítés ebben a beszélgetésben.
+
+A friss projekt indítása után futtasd egyszer: `/cia ujratelepites`.
+Részletes útmutató: [CIA-UTMUTATO-20.1.1.md](CIA-UTMUTATO-20.1.1.md).
+
+## A 20.1.0-ból megtartott CIA-bővítés
 
 - 26 kezelt rang és beosztás, 17 kategória, 117 csatorna (101 szöveges, 16 hangszoba).
 - `/cia ujratelepites`: kizárólag az elsődleges BOT_OWNER_ID fiók frissítheti / javíthatja a CIA rendszert.
@@ -13,7 +25,7 @@
 - Újraindítás önmagában nem telepít; CIA-kezelés továbbra is kizárólag Discordon.
 - Ellenőrzés: 45/45 automatikus teszt, köztük 7 CIA futási próba, valamint Node szintaxisellenőrzés. Éles Discordon nem futott telepítés ebben a beszélgetésben.
 
-Használat: [CIA-UTMUTATO-20.1.0.md](CIA-UTMUTATO-20.1.0.md).
+Használat: [CIA-UTMUTATO-20.1.1.md](CIA-UTMUTATO-20.1.1.md).
 
 Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Az opcionális RP- és dokumentumrendszert kizárólag a bot tulajdonosa vagy az általa kijelölt Owner-kezelő kapcsolhatja be egy kiválasztott szerveren.
 
@@ -42,7 +54,7 @@ Használat: [CIA-UTMUTATO-20.1.0.md](CIA-UTMUTATO-20.1.0.md).
 - Visszatért az egységes, egyoldalas szerver-kezelőközpont: az Anti-Nuke, Ticket, Automod és a többi modul nem külön bal oldali menüpontokban van szétszórva.
 - Új Azure Command arculat: nyugodt sötétkék, égkék és türkiz színvilág, nagyobb asztali munkaterület, üveghatású kártyák és egyértelmű aktív állapotok.
 - Új, kizárólag a fő bot-owner által használható `/cia telepites` rendszer. Egy futással létrehozza a teljes CIA RP rang-, kategória-, csatorna-, jogosultság-, ticket-, szolgálat-, TGF-, dokumentum- és védelmi struktúrát. Nem kell a szerver tulajdonosának lenned: a saját `BOT_OWNER_ID` fiókodnak Rendszergazda jog szükséges.
-- A CIA első telepítését adatbázis- és Discord-jelző védi. A fő botowner a `/cia ujratelepites` paranccsal bármikor frissítheti és bővítheti; Render-újraindításkor nem fut újra.
+- A CIA első telepítését adatbázis- és Discord-jelző védi. A fő botowner a `/cia ujratelepites` paranccsal még egyszer frissítheti és bővítheti, majd a teljes CIA-parancs eltávolításra kerül; Render-újraindításkor nem fut újra.
 - A `/cia ellenorzes` módosítás nélkül megmutatja a telepítési zárat, a szerkezet teljességét és az esetleges hiányzó elemeket.
 - A CIA szerver magyar marad, miközben a vezetői és műveleti szerepkörök a valódi amerikai CIA nyilvános elnevezéseihez igazodnak (D/CIA, DD/CIA, EXDIR, DDO, COS, DCOS, Case Officer, Targeting Officer, Staff Operations Officer és Professional Trainee). Ezek valós vezetői vagy szakmai beosztások, nem kitalált katonai rendfokozatok.
 - Már telepített CIA szerveren a fő bot-owner a `/cia rangok-frissitese` paranccsal frissítheti a beosztásneveket, a `/cia ujratelepites` paranccsal pedig a teljes struktúrát; a csatornák, jogosultságok, panelek és magyar tartalmak megmaradnak.
@@ -310,7 +322,7 @@ Az állapotvégpontok:
 A sikeres logban ez jelenik meg:
 
 ```text
-A NEXA Bot 20.1.0 CIA Expanded / NEXA OS Studio Platform használatra kész.
+A NEXA Bot 20.1.1 CIA Final Install / NEXA OS Studio Platform használatra kész.
 ```
 
 ## Használat

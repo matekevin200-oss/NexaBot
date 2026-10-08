@@ -8,11 +8,11 @@ const source = fs.readFileSync(path.join(root, 'index.js'), 'utf8');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 
-test('release metadata is 20.1.0', () => {
-  assert.equal(pkg.version, '20.1.0');
-  assert.equal(lock.version, '20.1.0');
-  assert.equal(lock.packages[''].version, '20.1.0');
-  assert.match(source, /const APP_VERSION = '20\.1\.0'/);
+test('release metadata is 20.1.1', () => {
+  assert.equal(pkg.version, '20.1.1');
+  assert.equal(lock.version, '20.1.1');
+  assert.equal(lock.packages[''].version, '20.1.1');
+  assert.match(source, /const APP_VERSION = '20\.1\.1'/);
 });
 
 test('subscriptions replaces public pricing while preserving redirect', () => {
@@ -142,7 +142,7 @@ test('Stripe checkout gives visible feedback and a direct browser navigation', (
 
 test('Azure Command UI provides a calm professional unified workspace', () => {
   assert.match(source, /class="nexa-v153/);
-  assert.match(source, /NEXA Bot 20\.1\.0 • NEXA OS Studio/);
+  assert.match(source, /NEXA Bot 20\.1\.1 • NEXA OS Studio/);
   assert.match(source, /NEXA Azure Command — calm, desktop-first operations theme/);
   assert.match(source, /--primary:#4b9dff;--accent:#5ed8c4/);
   assert.match(source, /guild-settings\.view-control \.settings/);
@@ -162,8 +162,8 @@ test('Platform 20 uses a responsive system architecture instead of oversized leg
   assert.match(source, /@media\(max-width:850px\).*\.platform-system,.platform-system\.system-featured\{grid-column:span 12/s);
 });
 
-test('CIA first install is locked and only the primary owner can reinstall', () => {
-  assert.match(source, /const CIA_INSTALLATION_VERSION = 2/);
+test('CIA final upgrade is primary-owner-only and permanently disables the installer', () => {
+  assert.match(source, /const CIA_INSTALLATION_VERSION = 3/);
   assert.match(source, /const CIA_INSTALL_MARKER = `NEXA_CIA_INSTALLATION_V\$\{CIA_INSTALLATION_VERSION\}`/);
   assert.match(source, /function buildCiaSetupCommand\(\)/);
   assert.match(source, /\.setName\('cia'\)/);
@@ -176,7 +176,7 @@ test('CIA first install is locked and only the primary owner can reinstall', () 
   assert.match(source, /ownerMember\?\.permissions\?\.has\(PermissionFlagsBits\.Administrator\)/);
   assert.match(source, /function isCiaInstallationComplete\(guild\)/);
   assert.match(source, /installations\?\.cia\?\.completed \|\| ciaDiscordMarkerPresent\(guild\)/);
-  assert.match(source, /error\.code = 'CIA_ALREADY_INSTALLED'/);
+  assert.match(source, /error\.code = 'CIA_INSTALLER_FINALIZED'/);
   assert.match(source, /config\.installations\.cia = \{/);
   assert.match(source, /await channels\.systemControl\.setTopic\(`/);
 });

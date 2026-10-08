@@ -1,8 +1,8 @@
 {
   "name": "nexabot",
-  "version": "20.1.0",
+  "version": "20.1.1",
   "private": true,
-  "description": "NEXA Bot 20.1.0 CIA Expanded – primary-owner CIA updates, expanded roleplay server and NEXA OS Studio",
+  "description": "NEXA Bot 20.1.1 – one final owner-only CIA upgrade, persistent installer lock and command removal",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
