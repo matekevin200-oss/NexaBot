@@ -195,6 +195,13 @@ test('CIA setup never auto-runs after a Render restart', () => {
   assert.doesNotMatch(globalCommands[0], /buildCiaSetupCommand\(\)/);
 });
 
+test('CIA management stays Discord-only and is absent from the web dashboard', () => {
+  const dashboardModule = source.match(/"src\/dashboard\.js": function[\s\S]+?\n\},\n"src\/interactions\.js"/);
+  assert.ok(dashboardModule, 'Dashboard module missing');
+  assert.doesNotMatch(dashboardModule[0], /CIA frakciórendszer|cia-repair|repairCiaServer|isCiaInstallationComplete/);
+  assert.match(source, /A CIA-rendszer kizárólag Discordon, a botowner parancsaival kezelhető/);
+});
+
 test('Server Architect is primary-owner-only and uses signed expiring previews', () => {
   assert.match(source, /"src\/server-architect\.js"/);
   assert.match(source, /function signBlueprintToken\(plan, guildId, ownerId\)/);
@@ -214,7 +221,6 @@ test('Server Architect is repeatable, audited and non-destructive', () => {
   assert.match(source, /architect-preflight/);
   assert.match(source, /latestArchitectDeployment/);
   assert.match(source, /Terv javítása \/ újrafuttatása/);
-  assert.match(source, /repairCiaServer/);
   const architectModule = source.match(/"src\/server-architect\.js": function[\s\S]+?\n\},\n"src\/dashboard\.js"/);
   assert.ok(architectModule, 'Server Architect module missing');
   assert.doesNotMatch(architectModule[0], /Administrator:\s*PermissionFlagsBits\.Administrator/);

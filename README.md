@@ -11,8 +11,9 @@
 - A Server Architect nem kér és nem fogad el tokent vagy API-kulcsot, nem ad `Administrator` jogosultságot, nem hajt végre törlést és nem küld tömeges megjelölést.
 - Telepítés előtt ChronoGuard-pillanatképet próbál készíteni, minden futás Owner auditbejegyzést kap, és a kezelt erőforrások Discord-ID-i PostgreSQL-be kerülnek.
 - A korábbi terv bármikor biztonságosan újrafuttatható: a rendszer a saját rangjait, kategóriáit és csatornáit javítja/frissíti, a hiányzókat pedig újra létrehozza.
-- Új **Owner Recovery Center** szinkronizálja a NEXA-paneleket, javítja a már telepített CIA-rendszert, illetve a hivatalos Support szervert.
-- A javítás és újratelepítés a weben és a Discord telepítőparancsoknál is az elsődleges botownerre van korlátozva; a külön felvett Owner-kezelők sem futtathatják.
+- Új **Owner Recovery Center** szinkronizálja a NEXA-paneleket, illetve javítja a hivatalos Support szervert.
+- A CIA-rendszer nem jelenik meg a webes dashboardon vagy az Owner Centerben; telepítése és ellenőrzése kizárólag a botowner Discord-parancsaival érhető el.
+- A webes javítás, valamint a Discord telepítőparancsok az elsődleges botownerre vannak korlátozva; a külön felvett Owner-kezelők sem futtathatják.
 - Render-újraindítás továbbra sem indít automatikus Discord-telepítést vagy javítást.
 - Ha az OpenAI-kulcs nem érhető el, a NEXA ellenőrzött helyi szervertervező sablonnal készít használható tervet, így a funkció nem áll le.
 - Új adatbázis-migráció tárolja a tervek hashét, a kezelt erőforrásokat, a végrehajtót és a telepítési összesítést.

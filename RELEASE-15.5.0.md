@@ -29,8 +29,9 @@ Az Owner Center új **Server Architect** modulja természetes nyelvű leírásb�
 A legutóbbi mentett terv újra alkalmazható. A NEXA a korábban mentett Discord-ID-k alapján frissíti a saját erőforrásait, és újra létrehozza a hiányzó elemeket. A Recovery Center ezen felül:
 
 - szinkronizálja a normál NEXA-paneleket;
-- javítja a már telepített CIA-rendszert;
 - javítja vagy hiány esetén újraépíti a hivatalos Support szervert.
+
+A CIA-rendszer nem része a webes dashboardnak vagy az Owner Centernek. A telepítés és az ellenőrzés kizárólag az elsődleges botowner Discord-parancsaival érhető el.
 
 A helyreállításhoz pontosan ezt kell beírni: `OWNER JAVÍTÁS`.
 
@@ -40,4 +41,4 @@ Az új `nexabot_architect_deployments` tábla tárolja a terv hashét, a prompto
 
 ## Render
 
-Render-újraindításkor sem a Server Architect, sem a CIA-, sem a Support-helyreállítás nem indul el automatikusan. Minden Discord-struktúrát módosító művelethez kézi owner-jóváhagyás szükséges.
+Render-újraindításkor sem a Server Architect, sem a CIA-telepítés, sem a Support-helyreállítás nem indul el automatikusan. Minden Discord-struktúrát módosító művelethez kézi owner-jóváhagyás szükséges.
