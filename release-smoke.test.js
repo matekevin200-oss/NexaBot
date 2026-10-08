@@ -8,11 +8,11 @@ const source = fs.readFileSync(path.join(root, 'index.js'), 'utf8');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 
-test('release metadata is 15.4.0', () => {
-  assert.equal(pkg.version, '15.4.0');
-  assert.equal(lock.version, '15.4.0');
-  assert.equal(lock.packages[''].version, '15.4.0');
-  assert.match(source, /const APP_VERSION = '15\.4\.0'/);
+test('release metadata is 15.5.0', () => {
+  assert.equal(pkg.version, '15.5.0');
+  assert.equal(lock.version, '15.5.0');
+  assert.equal(lock.packages[''].version, '15.5.0');
+  assert.match(source, /const APP_VERSION = '15\.5\.0'/);
 });
 
 test('subscriptions replaces public pricing while preserving redirect', () => {
@@ -138,7 +138,7 @@ test('Stripe checkout gives visible feedback and a direct browser navigation', (
 
 test('Azure Command UI provides a calm professional unified workspace', () => {
   assert.match(source, /class="nexa-v153/);
-  assert.match(source, /NEXA Bot 15\.4\.0 • Azure Command/);
+  assert.match(source, /NEXA Bot 15\.5\.0 • Server Architect/);
   assert.match(source, /NEXA Azure Command — calm, desktop-first operations theme/);
   assert.match(source, /--primary:#4b9dff;--accent:#5ed8c4/);
   assert.match(source, /guild-settings\.view-control \.settings/);
@@ -193,4 +193,35 @@ test('CIA setup never auto-runs after a Render restart', () => {
   const globalCommands = source.match(/Routes\.applicationCommands\(process\.env\.CLIENT_ID\)[\s\S]+?\.map\(\(item\) => localizeCommandJson/);
   assert.ok(globalCommands, 'global command registration block missing');
   assert.doesNotMatch(globalCommands[0], /buildCiaSetupCommand\(\)/);
+});
+
+test('Server Architect is primary-owner-only and uses signed expiring previews', () => {
+  assert.match(source, /"src\/server-architect\.js"/);
+  assert.match(source, /function signBlueprintToken\(plan, guildId, ownerId\)/);
+  assert.match(source, /expiresAt: Date\.now\(\) \+ 30 \* 60 \* 1000/);
+  assert.match(source, /crypto\.timingSafeEqual/);
+  assert.match(source, /ownerArchitectMatch/);
+  assert.match(source, /if \(!isBotOwner\(session\.user\.id\)\)/);
+  assert.match(source, /A hozzáadott Owner-kezelők sem kapnak hozzáférést/);
+  assert.match(source, /A hozzáadott Owner-kezelők ezt a részt nem látják/);
+});
+
+test('Server Architect is repeatable, audited and non-destructive', () => {
+  assert.match(source, /CREATE TABLE IF NOT EXISTS nexabot_architect_deployments/);
+  assert.match(source, /owner_architect_plan/);
+  assert.match(source, /owner_architect_apply/);
+  assert.match(source, /owner_architect_repair/);
+  assert.match(source, /architect-preflight/);
+  assert.match(source, /latestArchitectDeployment/);
+  assert.match(source, /Terv javítása \/ újrafuttatása/);
+  assert.match(source, /repairCiaServer/);
+  const architectModule = source.match(/"src\/server-architect\.js": function[\s\S]+?\n\},\n"src\/dashboard\.js"/);
+  assert.ok(architectModule, 'Server Architect module missing');
+  assert.doesNotMatch(architectModule[0], /Administrator:\s*PermissionFlagsBits\.Administrator/);
+  assert.doesNotMatch(architectModule[0], /guild\.channels\.delete|guild\.roles\.delete/);
+});
+
+test('Discord reinstall commands are also restricted to the primary bot owner', () => {
+  assert.match(source, /\['telepites', 'dokumentum-panelek'\]\.includes\(interaction\.commandName\) && !isBotOwner\(interaction\.user\.id\)/);
+  assert.match(source, /Telepítést és újratelepítést kizárólag a NEXA Bot elsődleges tulajdonosa/);
 });

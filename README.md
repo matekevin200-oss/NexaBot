@@ -1,8 +1,23 @@
-# NEXA Bot 15.4.0 Azure Command Platform
+# NEXA Bot 15.5.0 Server Architect Platform
 
 Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Az opcionális RP- és dokumentumrendszert kizárólag a bot tulajdonosa vagy az általa kijelölt Owner-kezelő kapcsolhatja be egy kiválasztott szerveren.
 
-## 15.4.0 újdonságok röviden
+## 15.5.0 újdonságok röviden
+
+- Új, kizárólag az elsődleges `BOT_OWNER_ID` által használható **Server Architect** az Owner Centerben.
+- Természetes nyelven leírhatod, milyen Discord-szervert szeretnél; a rendszer rang-, kategória-, csatorna-, jogosultság-, panel- és modul-tervet készít.
+- A terv alkalmazás előtt részletes webes előnézetet, darabszámokat és rövid tervazonosítót mutat.
+- Az előnézet HMAC-aláírt, a kiválasztott szerverhez és ownerhez kötött, 30 perc után lejár, ezért nem lehet másik szerverre áttenni vagy észrevétlenül módosítani.
+- A Server Architect nem kér és nem fogad el tokent vagy API-kulcsot, nem ad `Administrator` jogosultságot, nem hajt végre törlést és nem küld tömeges megjelölést.
+- Telepítés előtt ChronoGuard-pillanatképet próbál készíteni, minden futás Owner auditbejegyzést kap, és a kezelt erőforrások Discord-ID-i PostgreSQL-be kerülnek.
+- A korábbi terv bármikor biztonságosan újrafuttatható: a rendszer a saját rangjait, kategóriáit és csatornáit javítja/frissíti, a hiányzókat pedig újra létrehozza.
+- Új **Owner Recovery Center** szinkronizálja a NEXA-paneleket, javítja a már telepített CIA-rendszert, illetve a hivatalos Support szervert.
+- A javítás és újratelepítés a weben és a Discord telepítőparancsoknál is az elsődleges botownerre van korlátozva; a külön felvett Owner-kezelők sem futtathatják.
+- Render-újraindítás továbbra sem indít automatikus Discord-telepítést vagy javítást.
+- Ha az OpenAI-kulcs nem érhető el, a NEXA ellenőrzött helyi szervertervező sablonnal készít használható tervet, így a funkció nem áll le.
+- Új adatbázis-migráció tárolja a tervek hashét, a kezelt erőforrásokat, a végrehajtót és a telepítési összesítést.
+
+## A 15.4.0-ból megtartott fejlesztések
 
 - Visszatért az egységes, egyoldalas szerver-kezelőközpont: az Anti-Nuke, Ticket, Automod és a többi modul nem külön bal oldali menüpontokban van szétszórva.
 - Új Azure Command arculat: nyugodt sötétkék, égkék és türkiz színvilág, nagyobb asztali munkaterület, üveghatású kártyák és egyértelmű aktív állapotok.
@@ -14,7 +29,7 @@
 - A CIA rendszer automatikusan Ultimate hozzáférést, szigorú Anti-Raid/Anti-Nuke védelmet, vak bírálatú 10 kérdéses felvételt és hat részletes CIA iratsablont állít be.
 - A vezetői dokumentumjóváhagyást a szerverhez kijelölt dashboard-kezelői rang is használhatja.
 
-## A 15.3.0-ból megtartott fejlesztések
+### A 15.3.0-ból megtartott fejlesztések
 
 - A 15.3 fizetési, Support Bridge-, nyelvi és adatmegőrzési fejlesztései változatlanul megmaradtak; a korábbi Calm Horizon vizuális réteget az Azure Command arculat váltja fel.
 - Az Előfizetés oldal új, háromlépcsős munkafolyamatot, külön szerverválasztót, nagyobb csomagkártyákat, szolgáltatáslistát és lenyitható Stripe-diagnosztikát kapott.
@@ -135,6 +150,7 @@ src/
   config.js            PostgreSQL, migrációk, szerver- és owner-beállítás
   dashboard.js         OAuth2 Command Deck, Owner Center, publikus oldalak
   dashboard-theme.js   NEXA Operations felület és reszponzív megjelenés
+  server-architect.js  owner-only tervkészítés, aláírt előnézet és ismételhető szerverépítés
   payments.js          Stripe Checkout, Customer Portal, aláírt webhook és előfizetés-szinkron
   applications.js      TGF Forge, vak bírálat, időkapszula és Integrity Pulse
   chronoguard.js        digitális szerveriker, Shadow Scan, incidenskapszula és helyreállítás
@@ -274,7 +290,7 @@ Az állapotvégpontok:
 A sikeres logban ez jelenik meg:
 
 ```text
-A NEXA Bot 15.4.0 Azure Command Platform használatra kész.
+A NEXA Bot 15.5.0 Server Architect Platform használatra kész.
 ```
 
 ## Használat
@@ -291,6 +307,7 @@ A NEXA Bot 15.4.0 Azure Command Platform használatra kész.
 - a bot mentéskor frissíti a Discord-paneleket;
 - Custom Commands: nyisd meg a szerver **Custom Command kezelő** oldalát;
 - Owner Center: a `BOT_OWNER_ID` fiókkal belépve automatikusan megnyílik.
+- Server Architect: **Owner Center → Szerverek → Server Architect**. Írd le legalább 15 karakterben a kívánt szervert, készíts előnézetet, ellenőrizd a rangokat és csatornákat, majd a `NEXA OWNER` megerősítéssel indítsd el. Javításhoz vagy újrafuttatáshoz ugyanitt használd az utolsó mentett tervet vagy az Owner Recovery Centert.
 - Előfizetés: a szerver dashboardján nyisd meg a **Csomag és számlázás** oldalt, válassz csomagot és havi/éves ciklust, majd fejezd be a Stripe Checkoutot. Lemondás vagy kártyamódosítás a **Számlázás és lemondás kezelése** gombbal történik.
 - Ingyenes csomag kiosztása: az Owner Centerben válaszd ki a Pro vagy Ultimate csomagot és a lejáratot; az eltávolítás csak az Owner-ajándékot veszi el, a külön Stripe-előfizetést nem.
 - RP-rendszer: az Owner Center szerverlistáján nyomd meg az **RP bekapcsolása** gombot. Ezután Discordon a `/telepites` a teljes alap RP-rendszert, a `/dokumentum-panelek` pedig a már meglévő dokumentumcsatornák paneljeit telepíti.

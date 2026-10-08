@@ -1,8 +1,8 @@
 {
   "name": "nexabot",
-  "version": "15.4.0",
+  "version": "15.5.0",
   "private": true,
-  "description": "NEXA Bot 15.4.0 Azure Command – unified Discord management, one-time CIA deployment, Owner Operations and Subscription platform",
+  "description": "NEXA Bot 15.5.0 Server Architect – owner-only AI-assisted Discord server builder, recovery center and management platform",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
