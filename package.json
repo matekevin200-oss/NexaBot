@@ -1,8 +1,8 @@
 {
   "name": "nexabot",
-  "version": "15.5.0",
+  "version": "20.0.0",
   "private": true,
-  "description": "NEXA Bot 15.5.0 Server Architect – owner-only AI-assisted Discord server builder, recovery center and management platform",
+  "description": "NEXA Bot 20.0.0 NEXA OS Studio – owner-only local Discord server operating studio, recovery center and management platform",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {

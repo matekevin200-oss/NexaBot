@@ -1,5 +1,19 @@
 # NEXA Bot változásnapló
 
+## 20.0.0 – NEXA OS Studio
+
+- Elkészült az elsődleges botownerhez kötött NEXA OS Studio nyolc szervertípussal és tizenhárom kapcsolható modullal.
+- Az új helyi tervezőmotor nem használ OpenAI API-t vagy AI-kreditet, és nem fogad el tokent vagy más titkos kulcsot.
+- Digital Twin előnézet mutatja a létrehozandó és frissítendő rangokat, kategóriákat, csatornákat, paneleket és a szükséges botjogosultságokat.
+- A terv HMAC-aláírt, ownerhez és szerverhez kötött, időkorlátos, auditált és ismételten biztonságosan futtatható.
+- A telepítés hozzáadó és javító jellegű; nem ütemez törlést, nem oszt Administrator jogot és Render-újraindításkor nem indul el magától.
+- Új Owner Recovery Center, telepítési előzmény és kezelt Discord-erőforrás-nyilvántartás készült.
+- A normál webes felület angol alapnyelvű és tartósan magyarra váltható; az Owner Center kizárólag magyar marad.
+- A slash parancsok nyelve szerverenként Automatikus, Magyar vagy English módra kapcsolható, közös kanonikus parancskezeléssel.
+- A régi túlméretezett Platform-kártyákat új, reszponzív rendszerarchitektúra, élő magtérkép, kompakt modulmátrix és ellenőrzött működési folyamat váltotta fel.
+- A CIA-rendszer továbbra is kizárólag Discordon kezelhető, és nem került vissza a webes dashboardba.
+- A teljes kiadást 38 automatikus teszt ellenőrzi, beleértve a Studio, Platform UI, Stripe, nyelv, Support, CIA és újraindítási védelmet.
+
 ## 15.4.0 – Azure Command & CIA One-Time Factory
 
 - Visszatért az egységes szerver-kezelőközpont: az Anti-Nuke, Ticket, Automod és a többi modul nem külön bal oldali menüpontként jelenik meg.

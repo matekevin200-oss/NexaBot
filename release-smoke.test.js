@@ -8,11 +8,11 @@ const source = fs.readFileSync(path.join(root, 'index.js'), 'utf8');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 
-test('release metadata is 15.5.0', () => {
-  assert.equal(pkg.version, '15.5.0');
-  assert.equal(lock.version, '15.5.0');
-  assert.equal(lock.packages[''].version, '15.5.0');
-  assert.match(source, /const APP_VERSION = '15\.5\.0'/);
+test('release metadata is 20.0.0', () => {
+  assert.equal(pkg.version, '20.0.0');
+  assert.equal(lock.version, '20.0.0');
+  assert.equal(lock.packages[''].version, '20.0.0');
+  assert.match(source, /const APP_VERSION = '20\.0\.0'/);
 });
 
 test('subscriptions replaces public pricing while preserving redirect', () => {
@@ -49,6 +49,10 @@ test('English is the new default while HU remains selectable', () => {
   assert.match(source, /href="\$\{huUrl\}">HU<\/a>/);
   assert.match(source, /language: input\.language === 'hu' \? 'hu' : defaults\.language/);
   assert.match(source, /Use English by default unless the user asks for another language/);
+  assert.match(source, /const pageLanguage = ownerView \? 'hu'/);
+  assert.match(source, /function localizeControlCenterHtml\(html, language = 'en'\)/);
+  assert.match(source, /await syncGuildCommandLanguage\(guild, config\.commandLanguage\)/);
+  assert.match(source, /function canonicalCommandName\(name\)/);
 });
 
 test('Owner Center remains restricted to bot owner or explicit owner users', () => {
@@ -138,7 +142,7 @@ test('Stripe checkout gives visible feedback and a direct browser navigation', (
 
 test('Azure Command UI provides a calm professional unified workspace', () => {
   assert.match(source, /class="nexa-v153/);
-  assert.match(source, /NEXA Bot 15\.5\.0 • Server Architect/);
+  assert.match(source, /NEXA Bot 20\.0\.0 • NEXA OS Studio/);
   assert.match(source, /NEXA Azure Command — calm, desktop-first operations theme/);
   assert.match(source, /--primary:#4b9dff;--accent:#5ed8c4/);
   assert.match(source, /guild-settings\.view-control \.settings/);
@@ -146,6 +150,16 @@ test('Azure Command UI provides a calm professional unified workspace', () => {
   assert.match(source, /class="billing-steps"/);
   assert.match(source, /class="billing-selector card"/);
   assert.match(source, /class="card section billing-diagnostics"/);
+});
+
+test('Platform 20 uses a responsive system architecture instead of oversized legacy cards', () => {
+  assert.match(source, /function platformShowcasePage\(session, language = 'hu'\)/);
+  assert.match(source, /class="platform-hero-v20"/);
+  assert.match(source, /class="platform-system-grid"/);
+  assert.match(source, /class="platform-flow-grid"/);
+  assert.match(source, /if \(kind === 'platform'\) return platformShowcasePage\(session, language\)/);
+  assert.match(source, /NEXA OS Studio/);
+  assert.match(source, /@media\(max-width:850px\).*\.platform-system,.platform-system\.system-featured\{grid-column:span 12/s);
 });
 
 test('CIA faction installer is owner-only, complete and permanently one-time', () => {
@@ -202,7 +216,7 @@ test('CIA management stays Discord-only and is absent from the web dashboard', (
   assert.match(source, /A CIA-rendszer kizárólag Discordon, a botowner parancsaival kezelhető/);
 });
 
-test('Server Architect is primary-owner-only and uses signed expiring previews', () => {
+test('NEXA OS Studio is primary-owner-only and uses signed expiring previews', () => {
   assert.match(source, /"src\/server-architect\.js"/);
   assert.match(source, /function signBlueprintToken\(plan, guildId, ownerId\)/);
   assert.match(source, /expiresAt: Date\.now\(\) \+ 30 \* 60 \* 1000/);
@@ -213,7 +227,7 @@ test('Server Architect is primary-owner-only and uses signed expiring previews',
   assert.match(source, /A hozzáadott Owner-kezelők ezt a részt nem látják/);
 });
 
-test('Server Architect is repeatable, audited and non-destructive', () => {
+test('NEXA OS Studio is repeatable, audited and non-destructive', () => {
   assert.match(source, /CREATE TABLE IF NOT EXISTS nexabot_architect_deployments/);
   assert.match(source, /owner_architect_plan/);
   assert.match(source, /owner_architect_apply/);
@@ -222,7 +236,7 @@ test('Server Architect is repeatable, audited and non-destructive', () => {
   assert.match(source, /latestArchitectDeployment/);
   assert.match(source, /Terv javítása \/ újrafuttatása/);
   const architectModule = source.match(/"src\/server-architect\.js": function[\s\S]+?\n\},\n"src\/dashboard\.js"/);
-  assert.ok(architectModule, 'Server Architect module missing');
+  assert.ok(architectModule, 'NEXA OS Studio module missing');
   assert.doesNotMatch(architectModule[0], /Administrator:\s*PermissionFlagsBits\.Administrator/);
   assert.doesNotMatch(architectModule[0], /guild\.channels\.delete|guild\.roles\.delete/);
 });

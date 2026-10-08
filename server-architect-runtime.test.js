@@ -8,8 +8,8 @@ function loadArchitectModule() {
   const marker = '"src/server-architect.js": function(module, exports, require) {';
   const start = source.indexOf(marker);
   const end = source.indexOf('\n\n},\n"src/dashboard.js"', start);
-  assert.notEqual(start, -1, 'Server Architect bundle entry missing');
-  assert.notEqual(end, -1, 'Server Architect bundle boundary missing');
+  assert.notEqual(start, -1, 'NEXA OS Studio bundle entry missing');
+  assert.notEqual(end, -1, 'NEXA OS Studio bundle boundary missing');
   const body = source.slice(start + marker.length, end);
   const module = { exports: {} };
   const config = {
@@ -40,15 +40,20 @@ function loadArchitectModule() {
 
 function fakeGuild() {
   const everyone = { id: '100000000000000001' };
+  const roles = new Map([[everyone.id, everyone]]);
+  const channels = new Map();
+  roles.find = (predicate) => [...roles.values()].find(predicate);
+  channels.find = (predicate) => [...channels.values()].find(predicate);
   return {
     id: '100000000000000099',
     name: 'NEXA Architect Test',
-    roles: { everyone, cache: new Map([[everyone.id, everyone]]) },
-    channels: { cache: new Map() }
+    roles: { everyone, cache: roles },
+    channels: { cache: channels },
+    members: { me: { permissions: { has: () => true } } }
   };
 }
 
-test('local Server Architect creates a usable plan without an AI key', async () => {
+test('local NEXA OS Studio creates a usable plan without an AI key', async () => {
   const previous = process.env.OPENAI_API_KEY;
   delete process.env.OPENAI_API_KEY;
   try {
@@ -60,7 +65,9 @@ test('local Server Architect creates a usable plan without an AI key', async () 
       scale: 'professional'
     });
     const stats = architect.blueprintStats(result.plan);
-    assert.equal(result.source, 'nexa-template');
+    assert.equal(result.source, 'nexa-os-local-v20');
+    assert.equal(result.warning, '');
+    assert.equal(result.plan.studio.engine, 'nexa-os-local-v20');
     assert.ok(stats.roles >= 2);
     assert.ok(stats.categories >= 3);
     assert.ok(stats.channels >= 8);
@@ -70,6 +77,46 @@ test('local Server Architect creates a usable plan without an AI key', async () 
     if (previous === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = previous;
   }
+});
+
+test('NEXA OS Studio uses templates and selected modules without any OpenAI planner call', async () => {
+  const architect = loadArchitectModule();
+  const result = await architect.generateServerBlueprint({
+    guild: fakeGuild(),
+    prompt: 'Create a professional creator community with events and secure moderation.',
+    language: 'en',
+    scale: 'enterprise',
+    template: 'creator',
+    features: ['security', 'moderation', 'events', 'voice']
+  });
+  assert.equal(result.source, 'nexa-os-local-v20');
+  assert.equal(result.plan.studio.template, 'creator');
+  assert.equal(result.plan.studio.scale, 'enterprise');
+  assert.deepEqual(result.plan.studio.features.sort(), ['events', 'moderation', 'security', 'voice']);
+  assert.ok(result.plan.modules.includes('protection'));
+  assert.ok(result.plan.modules.includes('moderation'));
+  assert.ok(result.plan.categories.some((category) => category.key === 'content'));
+  const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
+  const architectModule = source.match(/"src\/server-architect\.js": function[\s\S]+?\n\},\n"src\/dashboard\.js"/)[0];
+  assert.doesNotMatch(architectModule, /api\.openai\.com|OPENAI_API_KEY|\/v1\/responses/);
+});
+
+test('Digital Twin reports exact additive changes and never schedules deletion', async () => {
+  const architect = loadArchitectModule();
+  const guild = fakeGuild();
+  const { plan } = await architect.generateServerBlueprint({
+    guild,
+    prompt: 'Készíts biztonságos gaming közösségi szervert ticket és esemény modullal.',
+    template: 'gaming',
+    features: ['security', 'tickets', 'events']
+  });
+  const simulation = architect.blueprintSimulation(guild, plan);
+  assert.equal(simulation.status, 'ready');
+  assert.equal(simulation.destructiveChanges, 0);
+  assert.equal(simulation.roles.create, plan.roles.length);
+  assert.equal(simulation.categories.create, plan.categories.length);
+  assert.equal(simulation.channels.create, plan.categories.flatMap((category) => category.channels).length);
+  assert.ok(simulation.operations > 0);
 });
 
 test('signed Architect previews are server- and owner-bound', () => {

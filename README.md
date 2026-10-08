@@ -1,21 +1,25 @@
-# NEXA Bot 15.5.0 Server Architect Platform
+# NEXA Bot 20.0.0 NEXA OS Studio Platform
 
 Általános, több szerveren használható Discord management platform. A projekt egy Discord botot, mobilbarát webes dashboardot, külön Owner Centert, PostgreSQL adattárolást, Nexa AI-t, moderációt, Automod/Anti-Nuke védelmet, ticketeket és közösségi rendszereket tartalmaz. Az opcionális RP- és dokumentumrendszert kizárólag a bot tulajdonosa vagy az általa kijelölt Owner-kezelő kapcsolhatja be egy kiválasztott szerveren.
 
-## 15.5.0 újdonságok röviden
+## 20.0.0 újdonságok röviden
 
-- Új, kizárólag az elsődleges `BOT_OWNER_ID` által használható **Server Architect** az Owner Centerben.
-- Természetes nyelven leírhatod, milyen Discord-szervert szeretnél; a rendszer rang-, kategória-, csatorna-, jogosultság-, panel- és modul-tervet készít.
-- A terv alkalmazás előtt részletes webes előnézetet, darabszámokat és rövid tervazonosítót mutat.
+- Új, kizárólag az elsődleges `BOT_OWNER_ID` által használható **NEXA OS Studio** az Owner Centerben.
+- Természetes nyelven leírhatod, milyen Discord-szervert szeretnél; a helyi 20.0 tervezőmotor rang-, kategória-, csatorna-, jogosultság-, panel- és modul-tervet készít.
+- Nyolc szervertípus és tizenhárom külön kapcsolható modul kombinálható: közösség, gaming, creator, support, clan, business, agency és Smart Detect.
+- A terv alkalmazása előtt a **Digital Twin** pontosan megmutatja a létrehozandó és frissítendő elemeket, a szükséges jogosultságokat, a készenléti pontszámot és azt is, hogy törlés nem történik.
 - Az előnézet HMAC-aláírt, a kiválasztott szerverhez és ownerhez kötött, 30 perc után lejár, ezért nem lehet másik szerverre áttenni vagy észrevétlenül módosítani.
-- A Server Architect nem kér és nem fogad el tokent vagy API-kulcsot, nem ad `Administrator` jogosultságot, nem hajt végre törlést és nem küld tömeges megjelölést.
+- A NEXA OS Studio nem kér és nem fogad el tokent vagy API-kulcsot, nem ad `Administrator` jogosultságot, nem hajt végre törlést és nem küld tömeges megjelölést.
 - Telepítés előtt ChronoGuard-pillanatképet próbál készíteni, minden futás Owner auditbejegyzést kap, és a kezelt erőforrások Discord-ID-i PostgreSQL-be kerülnek.
 - A korábbi terv bármikor biztonságosan újrafuttatható: a rendszer a saját rangjait, kategóriáit és csatornáit javítja/frissíti, a hiányzókat pedig újra létrehozza.
 - Új **Owner Recovery Center** szinkronizálja a NEXA-paneleket, illetve javítja a hivatalos Support szervert.
 - A CIA-rendszer nem jelenik meg a webes dashboardon vagy az Owner Centerben; telepítése és ellenőrzése kizárólag a botowner Discord-parancsaival érhető el.
 - A webes javítás, valamint a Discord telepítőparancsok az elsődleges botownerre vannak korlátozva; a külön felvett Owner-kezelők sem futtathatják.
 - Render-újraindítás továbbra sem indít automatikus Discord-telepítést vagy javítást.
-- Ha az OpenAI-kulcs nem érhető el, a NEXA ellenőrzött helyi szervertervező sablonnal készít használható tervet, így a funkció nem áll le.
+- A NEXA OS Studio mindig helyben dolgozik: nem használ OpenAI-hívást, nem igényel AI-kreditet, és OpenAI-kulcs nélkül is teljesen működik. A külön NEXA AI chat továbbra is opcionális `OPENAI_API_KEY` változót használ.
+- A normál webes kezelőfelület alapértelmezetten angol, tartósan magyarra váltható; az Owner Center szándékosan kizárólag magyar nyelvű.
+- A Discord slash parancsok nyelve szerverenként `Automatikus`, `Magyar` vagy `English` módra állítható, miközben mindkét nyelv ugyanazokat a biztonságos parancskezelőket használja.
+- A nyilvános Platform oldal teljesen új 20.0-s rendszerbemutatót kapott élő rendszertérképpel, kompakt modulmátrixszal és minden képernyőméreten törésmentes elrendezéssel.
 - Új adatbázis-migráció tárolja a tervek hashét, a kezelt erőforrásokat, a végrehajtót és a telepítési összesítést.
 
 ## A 15.4.0-ból megtartott fejlesztések
@@ -105,7 +109,7 @@
 - központi error handler, audit-, command-, dashboard- és AI használati napló.
 - kétlépcsős Discord interakciós rate limit felhasználó és szerver szerint, automatikus telemetria- és AI-előzménytisztítással;
 - External App/Webhook Shield: a felhasználói alkalmazások, webhookok, embedek és linkgombok tartalmában is felismeri a meghívókat, az `@everyone` visszaélést és az együzenetes Unicode-/Markdown-szövegáradatot;
-- teljes magyar–angol Discord slash-command lokalizáció: a parancsok, alparancsok, mezők, leírások és választási lehetőségek a felhasználó Discord-nyelvén jelennek meg;
+- teljes magyar–angol Discord slash-command lokalizáció: szerverenként választható automatikus, mindig magyar vagy mindig angol parancsnézet; a két nyelvi név ugyanahhoz az ellenőrzött parancskezelőhöz fut be;
 - Owner-only NEXA Support Server Factory: egyetlen parancsból idempotensen létrehozza vagy frissíti a hivatalos támogatási szerver 13 rangját, 7 kategóriáját, teljes csatornaszerkezetét, pontos jogosultságait, ellenőrző-, nyelv- és ticketpaneljeit, valamint kész magyar–angol tájékoztatóit;
 
 ## Hivatalos Support szerver kézi telepítése és biztonságos indítása
@@ -291,7 +295,7 @@ Az állapotvégpontok:
 A sikeres logban ez jelenik meg:
 
 ```text
-A NEXA Bot 15.5.0 Server Architect Platform használatra kész.
+A NEXA Bot 20.0.0 NEXA OS Studio Platform használatra kész.
 ```
 
 ## Használat
@@ -304,11 +308,11 @@ A NEXA Bot 15.5.0 Server Architect Platform használatra kész.
 - `/emlekezteto letrehozas`: személyes emlékeztetőt készít (`10m`, `2h`, `3d`, `1w` formátum);
 - `/emlekezteto lista` és `/emlekezteto torles`: kezeli a saját aktív emlékeztetőket;
 - válaszd ki a fő Discord Control Center csatornát, majd ments;
-- a szerver nyelve ugyanott állítható `Magyar` vagy `English` értékre;
+- a szerver válasznyelve és a slash-command nyelve ugyanott, egymástól függetlenül állítható; a parancsnyelv lehet `Automatikus`, `Magyar` vagy `English`;
 - a bot mentéskor frissíti a Discord-paneleket;
 - Custom Commands: nyisd meg a szerver **Custom Command kezelő** oldalát;
 - Owner Center: a `BOT_OWNER_ID` fiókkal belépve automatikusan megnyílik.
-- Server Architect: **Owner Center → Szerverek → Server Architect**. Írd le legalább 15 karakterben a kívánt szervert, készíts előnézetet, ellenőrizd a rangokat és csatornákat, majd a `NEXA OWNER` megerősítéssel indítsd el. Javításhoz vagy újrafuttatáshoz ugyanitt használd az utolsó mentett tervet vagy az Owner Recovery Centert.
+- NEXA OS Studio: **Owner Center → Szerverek → NEXA OS Studio**. Írd le legalább 15 karakterben a kívánt szervert, készíts előnézetet, ellenőrizd a rangokat és csatornákat, majd a `NEXA OWNER` megerősítéssel indítsd el. Javításhoz vagy újrafuttatáshoz ugyanitt használd az utolsó mentett tervet vagy az Owner Recovery Centert.
 - Előfizetés: a szerver dashboardján nyisd meg a **Csomag és számlázás** oldalt, válassz csomagot és havi/éves ciklust, majd fejezd be a Stripe Checkoutot. Lemondás vagy kártyamódosítás a **Számlázás és lemondás kezelése** gombbal történik.
 - Ingyenes csomag kiosztása: az Owner Centerben válaszd ki a Pro vagy Ultimate csomagot és a lejáratot; az eltávolítás csak az Owner-ajándékot veszi el, a külön Stripe-előfizetést nem.
 - RP-rendszer: az Owner Center szerverlistáján nyomd meg az **RP bekapcsolása** gombot. Ezután Discordon a `/telepites` a teljes alap RP-rendszert, a `/dokumentum-panelek` pedig a már meglévő dokumentumcsatornák paneljeit telepíti.
