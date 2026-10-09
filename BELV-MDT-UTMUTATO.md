@@ -1,137 +1,117 @@
-# Belv MDT • NEXA Bot 20.2.2
+# Belv MDT • NEXA Bot 20.3.0
 
-Magyar, személyes MDT-panel az Emergency Hamburg RP-hez. A bot csak a hiányzó MDT-csatornákat hozza létre a kiválasztott Belv-szerveren. A panelben játékost kereshetsz, a saját MDT-iratokat lekérheted és bővítheted, valamint a megnyitott játékbeli rendőrségi telefonlista körözési színjelzését olvashatod. Az MDT kizárólag a **fő botowner Discord-fiókjával** és az **Owner Centerben felvett Roblox-ID-kkel** használható.
+A Belv MDT-t a fő owner és az általa felvett **Discord-ID + Roblox-ID párok** használhatják. Minden felvett tag a saját Discord-belépőkódját kéri, és saját ügyintézőként rögzít. A Belv állomány kiválasztott rangja a közzétett iratokat Discordon olvashatja. A jóváhagyás és a hozzáférések kezelése a fő ownernél marad.
 
-## Indítás
+## Első indítás vagy frissítés
 
 1. A ZIP projektfájljait frissítsd a NEXA GitHub/Render projektjében, majd indíts új deployt. A meglévő környezeti változókat tartsd meg.
-2. A `BOT_OWNER_ID` a saját fő Discord-fiókod ID-je legyen. Működő `DATABASE_URL` és HTTPS NEXA-webcím kell: `PUBLIC_URL` vagy Renderen `RENDER_EXTERNAL_URL`. Új token vagy webhook nem szükséges.
-3. A NEXA weben lépj be a fő owner fiókoddal: **Owner Center → Belv-szerver → Belv MDT**. Közvetlenül a saját NEXA-webcímed után `/owner/mdt` is megnyitható.
-4. Add hozzá a saját **Roblox User ID-det**. A profilcímben a `/users/` és `/profile` közötti szám: `https://www.roblox.com/users/123456789/profile` → `123456789`. Legfeljebb 10 saját fiók vehető fel, külön sorokban.
-5. Kattints a **Hiányzó csatornák létrehozása és MDT indítása** gombra. A bot menti a megadott ID-ket, létrehozza a hiányzó szobákat, hozzárendeli a célcsatornákat és bekapcsolja az MDT-t. Ha meglévő szobát szeretnél célként használni, előtte válaszd ki a megfelelő listából.
-6. Az **Egysoros MDT-betöltő** mezőből másold le az egyetlen `loadstring(game:HttpGet("…"))()` sort. Discordon a **`/mdt script`** is privát válaszban adja meg ugyanezt a kész sort. Az **Egysoros betöltő letöltése** gomb ezt `.lua` fájlként adja. A **Betöltő és teljes script megnyitása** oldalon a teljes panelkód is megmaradt, ha azt szeretnéd másolni.
-7. A Belv Discord-szerveren kérj személyes, privát belépőkódot: `/mdt belepes`. A zárolt Discord-parancs láthatóságához adminjog vagy külön parancsengedély szükséges; a bot ezen felül a fő `BOT_OWNER_ID` fiókot is ellenőrzi.
-8. Az Emergency Hamburg kliensében másold az egysoros betöltőt Xeno-ba, majd futtasd. Ehhez `loadstring`, `game:HttpGet` és a panel botkapcsolatához `request` HTTP-funkció kell. A panelben add meg a személyes Discord-kódot. Nyitás és elrejtés: **F6** vagy **BELV MDT**. Az egysoros indítást emulált Roblox-környezetben ellenőriztük; élő Xeno-próba nem történt.
+2. A `BOT_OWNER_ID` a saját fő Discord-fiókod ID-je legyen. Működő `DATABASE_URL` és HTTPS NEXA-webcím kell: `PUBLIC_URL` vagy `RENDER_EXTERNAL_URL`.
+3. A Belv-szerver rögzítéséhez megadhatod Renderen a **`BELV_MDT_GUILD_ID`** változót, a Belv Discord-szerver ID-jével. Ha nem adod meg, az egyetlen korábban bekapcsolt MDT-szervert veszi át; új rendszerben a fő owner első beállítása köti egy szerverhez. Másik Discord-szerveren nem lehet MDT-t beállítani vagy belépőkódot kérni.
+4. A NEXA weben a fő owner fiókkal nyisd meg: **Owner Center → Belv MDT**. Válaszd a saját Belv-szervert. A szerverhez kötés után csak a Belv jelenik meg ezen az oldalon.
+5. Add meg a **fő owner saját Roblox-ID-jét**. A Roblox-profil címében a `/users/` és `/profile` közötti szám az ID. Legfeljebb 10 saját fiók vehető fel, külön sorban.
+6. Válaszd ki a **Belv állomány rangját**. A meglévő ranghoz tartozó állomány látja a közzétett iratokat, a központot és az útmutatót. A bot a rang nevét, sorrendjét vagy tagi kiosztását nem módosítja.
+7. Kattints: **MDT-központ létrehozása és frissítése**. Bekapcsolja az MDT-t, pótolja a hiányzó szobákat, elhelyezi a központ és az útmutató üzenetét, majd frissíti az állomány olvasási hozzáférését.
+8. Az **MDT-tagok • Discord-ID + Roblox-ID** részen add meg a tag Discord-ID-jét és saját Roblox-ID-jét, majd kattints a **Tag hozzáadása / saját fiókok frissítése** gombra. A tag legyen a Belv Discord-szerver tagja. Egy Roblox-ID egy Discord-fiókhoz tartozhat; egy taghoz legfeljebb öt saját fiók, összesen legfeljebb ötven MDT-tag vehető fel.
 
-A külön átadott `Belv-MDT-Emergency-Hamburg.lua` és a ZIP azonos nevű `roblox/` forrásfájlja üres konfigurációval indul, ezért senkinek sem hoz létre panelt. **A saját, használatra beállított kód az Owner Centerben vagy a `/mdt script` paranccsal készül.** A teljes kód kézi másolása esetén Roblox-ID módosítása után újra kell másolni. Az egysoros betöltő minden indításkor az aktuális ID-listával tölti le a panelt; ugyanaz a sor botújraindítás után is használható.
+A **Beállítások és állományi hozzáférés mentése** megőrzi a felvett tagokat. A **Discord-nézet és MDT-gombok frissítése** megismételhető: a bot saját korábbi központját frissíti, nem készít újabb üzenetet minden alkalommal.
 
-## Egysoros betöltő és visszavonás
+## A felvett tag használata
 
-A bot a saját HTTPS-webcímére mutató, egyedi betöltőlinket készít. Nem kell más scriptoldal címét, bot-tokent vagy belépőkódot beleírnod. A kész sor a saját szerveredhez tartozó panelt tölti be.
+1. A tag a Belv Discordon kattintson a `#mdt-kozpont` **Saját betöltő** gombjára, vagy használja: **`/mdt script`**. Privát választ kap a kész `loadstring(game:HttpGet("…"))()` sorral.
+2. A **Belépőkód** gomb vagy **`/mdt belepes`** a saját egyszeri kódját adja meg. A kód tíz percig érvényes, és a kérő Discord-fiókhoz felvett Roblox-ID-khez tartozik. Más tag vagy a fő owner Roblox-ID-jével nem lehet felhasználni.
+3. Emergency Hamburgban futtassa az egysoros betöltőt a megfelelő klienskörnyezetben. `loadstring`, `game:HttpGet` és a botkapcsolathoz `request` HTTP-funkció szükséges.
+4. A panelen adja meg saját Discord-kódját. A betöltőképernyő mutatja a fiókpár ellenőrzését, a nyilvántartás betöltését és a belépés eredményét. A fejlécben a saját ügyintéző neve látszik.
+5. **F6** vagy **BELV MDT**: panel nyitása / elrejtése. A panel az adott játékos saját képernyőjén jelenik meg.
 
-Az Owner Centerben a **Régi betöltőlink visszavonása és új készítése** gomb érvényteleníti a korábbi sort. Ezután másold az új sort, vagy kérd le újra: `/mdt script`. A betöltőlink visszavonása a már bejelentkezett panelt nem zárja be; a személyes hozzáférés visszavonásához a **Minden saját MDT-belépés visszavonása** gomb vagy `/mdt kijelentkezes` szükséges.
+A külön átadott `Belv-MDT-Emergency-Hamburg.lua` és a ZIP `roblox/` forrása üres konfigurációval indul. **A kész, saját betöltőt az Owner Center vagy a `/mdt script` adja.** A teljes forrás az Owner Centerben külön is megnyitható. A betöltő minden indításkor az aktuális ID-listával tölt be.
 
-A betöltőlink csak a felület kódját és a beállított Roblox-ID-ket szolgálja ki. Önmagában nem ad hozzáférést az MDT-adatokhoz. Az MDT kikapcsolása, az ID-lista kiürítése, a fő owner cseréje vagy a Discord-tagság elvesztése után a régi link nem tölti be a panelt. A linket tartsd magadnál, és visszavonhatod, ha máshoz kerül.
+## Jogosultságok
 
-## A hiányzó Discord-szobák
+| Személy | Roblox MDT | Iratkezelés | Beállítás és jóváhagyás |
+| --- | --- | --- | --- |
+| Fő owner, saját Roblox-ID-vel | Saját személyes kóddal | Az összes elérhető irat | Igen |
+| Felvett Discord–Roblox fiókpár | Saját személyes kóddal | Közzétett iratok és saját beküldések; rögzítés és saját módosítás | Nem |
+| Belv állományi rang, külön ID-pár nélkül | Nem | Közzétett iratok olvasása Discordon | Nem |
+| Más admin vagy delegált Owner Center-kezelő | Csak ha külön felvetted a fiókpárját | A felvett tag joga szerint | Nem |
+| Más Discord-szerver | Nem | Nem | Nem |
 
-A kategória neve **BELV • MDT**. Legfeljebb nyolc szöveges csatorna készül:
+A felvett tag a másik ügyintéző jóváhagyásra váró vagy elutasított iratát nem olvashatja. A saját iratát és a közzétett közös nyilvántartást láthatja. A fő owner minden elérhető iratot kezelhet. A Discord szervertulajdonosa és Administrator-jogú tagjai a Discord saját szabályai miatt a privát ellenőrzési csatornát is láthatják; ettől nem kapnak MDT-jóváhagyási jogot.
+
+## Discord MDT-központ
+
+Kategória: **BELV • MDT**. Legfeljebb tíz szöveges csatorna készül.
 
 | Csatorna | Feladat |
 | --- | --- |
+| `mdt-kozpont` | Állományi központ: személyes betöltő, kód, állapot és kijelentkezés gombjai |
+| `mdt-utmutato` | Használati rend és jogosultságok |
 | `mdt-iratok` | Alapértelmezett nyilvántartás |
-| `mdt-ellenorzes` | A fő owner jóváhagyására váró iratok |
-| `mdt-szemelyek` | Saját RP-személyadatok |
-| `mdt-jarmuvek` | Saját RP-járműadatok |
+| `mdt-ellenorzes` | Privát vezetői ellenőrzés |
+| `mdt-szemelyek` | RP-személyadatok |
+| `mdt-jarmuvek` | RP-járműadatok |
 | `mdt-ugyiratok` | Jóváhagyott ügyiratok |
-| `mdt-korozesek` | Saját, jóváhagyott RP-körözések |
+| `mdt-korozesek` | Jóváhagyott saját RP-körözések |
 | `mdt-szolgalati-naplo` | Szolgálati bejegyzések |
-| `mdt-feljegyzesek` | Belső feljegyzések |
+| `mdt-feljegyzesek` | Belső RP-feljegyzések |
 
-A már kiválasztott, létező célcsatorna megmarad. Ha nincs ilyen, a bot az azonos nevű meglévő szobát használja, és csak ennek hiányában készít újat. **Meglévő csatornát nem nevez át, nem mozgat, nem töröl, nem módosítja a témáját vagy jogosultságait, és a telepítés során nem küld vagy szerkeszt üzenetet.** Meglévő ranghoz sem nyúl. Ha az azonos nevű csatorna nem megfelelő típusú vagy több is van belőle, megáll és egyértelmű célcsatorna kiválasztását kéri.
+A hiányzó szobák telepítése a meglévő szobát újra használja. Nem nevez át, nem mozgat és nem töröl csatornát, nem változtat rangot. Az új állományi kérésnek megfelelő **Discord-hozzáférésfrissítés** az MDT célcsatornáiban a felvett tagoknak és a kiválasztott rangnak látási és előzményolvasási jogot ad. Meglévő egyéb csatornajogot nem ír felül. A Belv-iratsablonok célcsatornáira is alkalmazza az olvasási jogot.
 
-Az új kategória és az új szobák külön jogosultságot kapnak: `@everyone` nem láthatja, a fő owner és a bot láthatja. A Discord szervertulajdonosa és Administrator-jogosultságú tagjai a Discord szabályai szerint hozzáférhetnek privát szobákhoz; ez nem ad nekik MDT-paneljogot. A már meglévő szoba jogosultságát a bot nem változtatja meg.
+A vezetői ellenőrzésnek külön csatornában kell lennie. Az állományi és tagi olvasási jogot nem adja hozzá ehhez a csatornához. Más, már meglévő Discord-jogosultságot nem töröl.
 
-Létrehozáshoz a botnak **Csatornák kezelése** jog kell. A célcsatornákban szükséges a látás, üzenetküldés, embedküldés és előzményolvasás is. Hiányzó jogosultságnál a telepítő hibát jelez; nem állít át meglévő csatornajogot.
+A bot saját központ- és útmutatóüzenetét frissíti. Mások üzeneteit érintetlenül hagyja. Az iratkezelés a bot saját iratüzenetét szerkesztheti. Ehhez a botnak **Csatornák kezelése**, valamint a célokban látási, küldési, embedküldési és előzményolvasási jog kell.
 
-A telepítés kézzel újrafuttatható az Owner Center gombjával vagy a mentett Roblox-ID-k megadása után `/mdt telepites` paranccsal. Teljes készültségnél nem készít új másolatot. Félbeszakadt futás után a már létrejött szobákat újra használja. Adatbázis-zárolás védi két botfolyamat egyidejű telepítését. Bot- vagy Render-újraindítás nem hoz létre Discord-csatornát automatikusan.
+Ismételt vagy megszakadt telepítés folytatható. Adatbázis-zárolás védi az egyidejű futást. Botújraindítás nem telepít szobát vagy üzenetet; a `/mdt` parancsot a Belvhez regisztrálja, más szerverekről eltávolítja a régi szerveres példányát. A globális `/mdt` regisztrációt megszünteti. Discordon a parancslista frissülése eltarthat egy ideig.
 
-## Játékoskereső és adatfelvitel
+## Játékoskereső és nyilvántartás
 
-A **Játékoskereső** az aktuális Roblox-szerver játékosait listázza. Kereshetsz felhasználónévvel, megjelenített névvel vagy Roblox-ID-vel. Pontos felhasználónév vagy ID megadásával a **Profil lekérése** gomb olyan nyilvános Roblox-profilt is feloldhat, aki nincs a jelenlegi szerverben. A megjelenített név nem egyedi azonosító; az iratok összekapcsolásának alapja a Roblox-ID.
+Név vagy Roblox-ID alapján nyithatsz játékosadatlapot. Látszik a felhasználónév, ID, Roblox-profil, a jelenlegi szerverben a csapat, és a felismert játékbeli körözésjelzés. Az aktuális szerveren kívüli nyilvános Roblox-profilt pontos felhasználónévvel vagy ID-vel is keresheted.
 
-Az adatlapon látszik a felhasználónév, ID, Roblox-profil linkje, jelenlegi szerverben a csapat és az elérhető játékbeli körözésjelzés. A saját MDT személy-, körözés- és ügyiratai külön listában jelennek meg.
+- **+ Személyadat:** a név és ID előre kitöltve; RP-név, státusz és megjegyzés rögzíthető.
+- **+ MDT-körözés:** saját RP-körözési irat, kézi indokkal, prioritással és érvényességgel. Fő owner-jóváhagyásra kerül.
+- **+ Ügyirat:** saját ügyirat a személy nevével és ID-jével. Fő owner-jóváhagyásra kerül.
 
-- **+ Személyadat:** új RP-adatlap; a felhasználónév és Roblox-ID előre kitöltve. Az RP-név, státusz és megjegyzés szerkeszthető.
-- **+ MDT-körözés:** saját RP-körözési irat; az érintett neve és ID-je kitöltve. Indokot, prioritást és érvényességet neked kell megadnod. Vezetői jóváhagyásra kerül.
-- **+ Ügyirat:** saját RP-ügyirat az érintett nevével és ID-jével. Beküldés után jóváhagyásra kerül.
+A személy-, ügy- és körözési iratok azonos Roblox-ID alapján kapcsolódnak. Régi ID nélküli adatnál pontos felhasználónév alapján jelenhet meg **csak névegyezés** jelöléssel. Más ID-jű személy irata nem kerül az adatlaphoz névegyezés miatt. Ötven találat után lapozható.
 
-A lekérdezés pontos Roblox-ID alapján kapcsolja össze a bejegyzéseket. Régi, ID nélküli személyadatot vagy körözést pontos felhasználónév alapján is megmutathat, **[csak névegyezés]** jelöléssel. Egy másik Roblox-ID-hez rögzített irat nem kerül a személyhez puszta névegyezés miatt. Csak a jelenlegi Belv Discord-szerverhez és elérhető célcsatornákhoz tartozó MDT-iratok jelennek meg. Ötven találat után a **További iratok** gomb lapoz.
-
-Az MDT-n kívüli régi Discord-üzeneteket nem importálja automatikusan. Az új adatok a saját MDT-adatbázisba és a kiválasztott Discord-csatornába kerülnek. Személyadat vagy MDT-körözés felvitele nem állítja át a játék valódi körözési rendszerét.
+Járművek, szolgálati napló, feljegyzések és a meglévő Belv-iratsablonok is kitölthetők. A NEXA elmenti az iratot és a hozzá tartozó Discord-bejegyzést. A jóváhagyott ügyirat vagy körözés tartalma nem írható át; javításhoz új irat készül. A tag saját, közvetlenül közzétett személyadata vagy feljegyzése szerkeszthető. Lezáráskor az irat megmarad, archiválódik. Sikertelen Discord-küldés az adatlap **Újraküldés** gombjával folytatható.
 
 ## A játék szerinti körözésjelzés
 
-Az Emergency Hamburg leírása szerint a rendőrségi telefonalkalmazás az aktuális szerver játékosait mutatja: piros név jelzi a körözött játékost, fehér név a körözés nélküli játékost. A panel ezt a megjelenített jelzést olvassa.
+Rendőrként nyisd meg az Emergency Hamburg telefonjának rendőrségi játékoslistáját. Az MDT **Játék körözései → Lista kapcsolása** menüjében válaszd ki a megjelenített rendőrségi névlistát. A panel a felismert piros és fehér névjelzést olvassa, körülbelül ötmásodpercenként.
 
-1. A játékban rendőrként nyisd meg a telefon **rendőrségi alkalmazásának játékoslistáját**.
-2. Az MDT-ben nyisd meg a **Játék körözései** oldalt.
-3. Kattints a **Lista kapcsolása** gombra.
-4. A listából válaszd ki a rendőrségi névlista felületét. A felületútvonal és a felismert nevek segítenek. Olyan sort válassz, amelynek nevei egyeznek a játék telefonjának listájával. A chat vagy Roblox játékoslista színe nem körözési jelzés.
-5. A panel külön számolja a piros jelzésűeket, a fehér jelzésűeket és az ismeretlen állapotúakat. A körözési oldalon a piros jelzésű és az ismeretlen állapotú játékosok szerepelnek; a játékoskeresőben minden csatlakozott játékos.
+Hiányzó, bezárt, rejtett vagy ellentmondó jelzésnél **ismeretlen** az állapot. Az ismeretlen nem jelent körözésmentességet. A játék belső felületét élőben nem ellenőriztük; a kiválasztást a saját kliensedben kell elvégezni. Körözési szint, bűncselekmények vagy EH-járműadatok nem következnek a színjelzésből; ezeket a játékban ellenőrizheted és kézzel feljegyezheted.
 
-A játékforrás olvasása körülbelül ötmásodpercenként frissül, amikor a panel látható; az owner-hozzáférés harminc másodpercenként újra ellenőrződik. A forrás és az olvasás ideje szerepel a panelben. Telefonbezárás, eltűnt felület, nem felismert név/szín, offline játékos vagy ellentmondó piros/fehér jelzés esetén az állapot **ismeretlen**. Az ismeretlen nem jelent körözésmentességet. A játékban ellenőrizhető rendőrségi adatlap marad az elsődleges forrás.
+Saját MDT-körözés felvitele nem változtatja meg a játék valódi körözési rendszerét. A korábbi, MDT-n kívüli Discord-üzenetek nem importálódnak automatikusan.
 
-A játék felületének belső neveit és elrendezését nem sikerült élő játékban ellenőrizni, ezért a kapcsolatot a saját kliensedben kell kiválasztani. A panel csak a rendőrségi felületen elérhető nevekből és alap szövegszínből olvas; egyedi RichText-színezést nem találgat. Más felületszerkezetnél vagy megjelenített név helyett nem felismerhető címkénél ismeretlen állapotot jelez. Nem kérdez le elrejtett szerveradatot, és nem hív játékbeli RemoteEventet.
+## Hozzáférés visszavonása
 
-A körözés szintjét, a bűncselekmények felsorolását és az EH járműadatait ez a színjelzés nem tartalmazza; ezeket a játék saját rendőrségi adatlapján ellenőrizheted, majd szükség esetén saját RP-iratba feljegyezheted.
+Az Owner Center taglistájában a **Visszavonás** törli a tag személyes kódjait és munkameneteit. A következő API-kérés elutasítja a tagot, a panel pedig kiüríti a privát adatokat. Új felvétel nem éleszti újra a régi tokent.
 
-A **MDT-körözések** menüpont a saját RP-nyilvántartásod. Az **Összes / jóváhagyott** gomb vált a teljes lista és a jóváhagyott, le nem zárt iratok között. Az érvényesség szöveges RP-mező; a lejáratot és a lezárást neked kell kezelni.
+A Discord-frissítés a bot által hozzáadott látási és olvasási jogot állítja vissza a korábbi állapotra. Más rangból eredő jogot nem töröl; ha a tag továbbra is az állományi rangban van, Discordon a közzétett iratokat az állomány tagjaként láthatja. Ez nem ad vissza Roblox MDT-belépést. Ha a Discord-jogfrissítés hibával megáll, a tag panelhozzáférése már visszavont, a Discord-frissítést újra kell indítani.
 
-## Iratok és jóváhagyás
+Saját kijelentkezés: `/mdt kijelentkezes`, a központ **Belépések visszavonása** gombja vagy a panel **Kijelentkezés** gombja. Ez csak a kérő saját munkameneteit vonja vissza.
 
-| Oldal | Tartalom | Közzététel |
-| --- | --- | --- |
-| Ügyiratok | Tárgy, érintettek, Roblox-ID, helyszín, tényállás, bizonyíték | Owner jóváhagyás után |
-| MDT-körözések | Érintett, Roblox-ID, indok, prioritás, érvényesség | Owner jóváhagyás után |
-| Személyek | Felhasználónév, Roblox-ID, RP-név, státusz, megjegyzés | Közvetlen |
-| Járművek | Rendszám, típus, RP-tulajdonos, státusz, megjegyzés | Közvetlen |
-| Szolgálati napló | Időtartam, egység, résztvevők, tevékenység | Közvetlen |
-| Belv-iratsablonok | A NEXA meglévő alap- és saját dokumentuműrlapjai | A sablon szabálya szerint |
-| Feljegyzések | Cím, tartalom, kapcsolódó ügy/hivatkozás | Közvetlen |
-
-Az **Új irat** gomb kitölthető űrlapot nyit. A csillagos mezők kötelezők. Beküldés után megjelenik az irat azonosítója és Discord-linkje. A Belv-iratsablonok saját, korábban beállított NEXA-célcsatornájukat használják; a telepítő ezek meglévő csatornáját nem módosítja, és új egyedi sabloncsatornát nem készít.
-
-A jóváhagyásra váró irat az ellenőrzési csatornában marad, amíg a fő owner a panelben vagy Discordon a **Jóváhagyás / Elutasítás** gombbal nem dönt. A jóváhagyott irat tartalma nem írható át; javításhoz új irat készíthető. Közvetlenül közzétett személy- és más nyilvántartás szerkeszthető, a bot ugyanazt a hozzá tartozó MDT-üzenetet frissíti. Ez rendes iratkezelés; a csatornatelepítő maga meglévő üzenetet nem módosít.
-
-A **Lezárás** archivál, az irat és Discord-bejegyzése megmarad. Verzióellenőrzés védi a párhuzamos módosításokat. Hálózati újrapróbálás azonos, változatlan űrlapnál ugyanazt a beküldésazonosítót használja. Sikertelen Discord-küldés után az adatlap **Újraküldés** gombja külön próbálja a közzétételt.
-
-## Személyes hozzáférés
-
-- Csak a fő `BOT_OWNER_ID` használhatja a teljes MDT-t, a konfigurációt, telepítést és a scriptoldalt. Más admin, szervertulaj vagy delegált owner nem kap MDT-jogot.
-- A script a felület létrehozása előtt ellenőrzi a `LocalPlayer.UserId` értékét. A panel a saját `PlayerGui` felületeden jelenik meg, más játékosok képernyőjére nem kerül.
-- A bot minden API-kérésben frissen ellenőrzi a fő owner Discord-fiókját, az engedélyezett Roblox-ID-t és a szerverhez tartozó munkamenetet. ID-törlés vagy belépésvisszavonás után a következő kérés lezárja és kiüríti az MDT-t.
-- A kliens által küldött Roblox-ID nem hiteles Roblox OAuth-bejelentkezés. A tényleges hozzáférést a fő owner Discordon kapott személyes kódja is védi. Egy ID hozzáadása önmagában nem ad MDT-belépést. Ha más felvett fióknak átadod a személyes kódot, a te fő owner-jogoddal használhatja az MDT-t. Ha csak te használhatod, kizárólag a saját ID-idet add hozzá, és a személyes kódot tartsd magadnál.
-- A személyes kód tíz percig, egyszer használható; a munkamenet legfeljebb hatórás. Új bejelentkezés a korábbi saját munkamenetet visszavonja. A titkos token csak a kliens memóriájában van, az adatbázis lenyomatot tárol.
-
-Kijelentkezés: `/mdt kijelentkezes`, a panel **Kijelentkezés** gombja vagy az Owner Center **Minden saját MDT-belépés visszavonása** gombja.
+A **Régi betöltőlink visszavonása és új készítése** érvényteleníti a korábbi betöltősort. A link visszavonása a már belépett tagot önmagában nem jelentkezteti ki. A link csak klienskódot szolgál ki, bot-token, belépőkód és munkamenettoken nincs benne.
 
 ## Hiba esetén
 
 | Helyzet | Teendő |
 | --- | --- |
-| Roblox-ID nincs felvéve / nincs panel | Owner Centerben add hozzá a saját ID-t, mentsd, majd futtasd újra a betöltőt. Teljes kód kézi másolásakor másold le újra a saját scriptet. |
-| Nincs `/mdt script` vagy egysoros betöltő | Ellenőrizd, hogy a 20.2.2 botverzió fut és a fő owner fiókkal léptél be. |
-| Régi vagy érvénytelen betöltőlink | Kérj új saját sort: `/mdt script`. Ellenőrizd, hogy a linket nem vontad vissza és az MDT be van kapcsolva. |
-| A betöltő HTTP-hibát jelez | Ellenőrizd a bot HTTPS-webcímét, működő adatbázisát és a fő owner Discord-tagságát. Ismételt letöltések után várj egy percet. |
-| Hiányzik a csatornalétrehozási jog | A botnak Csatornák kezelése jog kell. A meglévő csatornákat a telepítő nem javítja át. |
-| Már folyamatban van a telepítés | A futó telepítés végét várd meg. Megszakadt botfolyamat zárolása legfeljebb öt perc után lejár. |
-| Több azonos nevű MDT-szoba van | A megfelelő célcsatornát válaszd ki az Owner Centerben, majd futtasd újra. |
-| Játék körözése ismeretlen | A játék rendőrségi telefonlistája legyen megnyitva és kiválasztva. A hiányzó adatot az MDT nem találgatja. |
-| Nem található egy személy irata | Ellenőrizd az irat Roblox-ID-jét. Régi, MDT-n kívüli Discord-üzenet nincs automatikusan importálva. |
-| Hibás vagy lejárt személyes kód | Új kód: `/mdt belepes`, a panelhez kiválasztott Belv-szerveren. |
-| PostgreSQL / NEXA nem érhető el | Ellenőrizd a Render naplót, HTTPS-webcímet és `DATABASE_URL` beállítást. |
-| Nincs HTTP request funkció | Ebben a futtatókörnyezetben nem indítható botkapcsolat. |
-| Discord-küldés sikertelen | A bot célcsatornajogának javítása után az iratnál kattints az Újraküldés gombra. |
+| A tag nem kérhet kódot | A fő owner vegye fel a tag Discord-ID-jét és saját Roblox-ID-jét; a tag legyen a Belv Discordon. |
+| A Roblox-ID másik fiókhoz tartozik | Ellenőrizd a Discord–Roblox párosítást. A saját Discord-fiókoddal kérj új kódot. |
+| Másik szerveren tiltott | Az MDT csak a beállított Belv Discord-szerverhez tartozik. Ellenőrizd a `BELV_MDT_GUILD_ID` értéket. |
+| Az állomány nem látja az iratokat | Válaszd ki a helyes állományi rangot, majd frissítsd a Discord-nézetet. |
+| A vezetői csatorna nem különálló | A review-csatornát válaszd külön, vagy futtasd a hiányzó MDT-szobák telepítését. |
+| Betöltés vagy belépés hibával leáll | Ellenőrizd a NEXA HTTPS-címét, adatbázisát, a saját fiókpárt és a bot naplóját. A személyes kód egyszer használható; kérj újat. |
+| Nem látszik `/mdt` | Ellenőrizd a 20.3.0 verziót és a Belv-kötést, majd frissítsd a Discord-nézetet. A központ gombjai is használhatók. |
+| Nincs HTTP-funkció a kliensben | A futtatókörnyezetnek `request`, `http_request`, `Xeno.request` vagy `http.request` HTTP-funkciót kell biztosítania. |
+| A Discord-frissítés félbeszakadt | Javítsd a bot célcsatornajogát, majd ismételd meg a frissítést; a mentett lista és a korábbi állapot megmarad. |
 
-## Ellenőrzés és technikai részletek
+## Ellenőrzés és technikai korlátok
 
-**89 Node-teszt sikeres**, köztük 41 MDT-futási teszt; **18 emulált Roblox-kliensfolyamat sikeres**, valamint JavaScript- és Lua-szintaxisellenőrzés. A tesztek a meglévő csatornák nulla módosítását, részleges és párhuzamos telepítést, owner/ID-korlátozást, keresést, űrlapbeküldést, jóváhagyást, körözésszűrést, látható/hiányzó/ellentmondó játékforrást és hozzáférés-visszavonást is vizsgálják. A betöltőlink érvénytelenítését, tulajdonoshoz és szerverhez kötését, a titkos belépési adatok hiányát, valamint a bot által ténylegesen generált egysoros kód futtatását is ellenőriztük. A CIA végső telepítési zárát a kiadás megtartja.
+**102 Node-teszt sikeres, ebből 54 MDT-teszt; 22 emulált Roblox-kliensfolyamat sikeres.** Ellenőrizve a saját tagi belépés, más fiók kódjának tiltása, szerverzár, tagi iratkezelés, vezetői jóváhagyás, visszavonás, a Discord-jogok helyreállítása és a részleges frissítés folytatása. Az emuláció a bot által generált egysoros kódot és tényleges személyes Lua-forrást futtatja, beleértve a tagi nézetet, a betöltőképernyőt és a hibás belépést.
 
-Élő Discord/Roblox/Xeno integrációs próba és Render-deploy ebben a beszélgetésben nem történt. A kliens a rendelkezésre álló `request`, `http_request`, `Xeno.request` vagy `http.request` funkcióval kapcsolódik a saját NEXA API-hoz. A kompatibilitás feltétele a Roblox GUI- és HTTP-funkciók rendelkezésre állása.
+Élő Discord/Roblox/Xeno-próba és Render-deploy nem történt. A kompatibilitást emulált GUI- és HTTP-funkciókkal ellenőriztük. A szerverzár a **Belv Discord-szervert** ellenőrzi; egy konkrét Roblox privát szerverhez tartozást nem hitelesít. A kliens által jelentett Roblox-ID nem Roblox OAuth-bejelentkezés. A szerver minden API-kérésnél a friss Discord-tagságot, a regisztrált fiókpárt, az aktív jogosultságot és a munkamenetet ellenőrzi. A személyes kód egyszer használható, tízperces; a munkamenet legfeljebb hatórás.
 
-Node: `npm test`, szintaxis: `node --check index.js`. A fej nélküli klienspróba valódi Roblox helyett emulált UI-val és HTTP-val fut: `lua test/roblox-mdt-headless.test.lua roblox/Belv-MDT-Emergency-Hamburg.lua` (Lua 5.4). Ez a 16 alapfolyamatot ellenőrzi. A további két betöltőpróbához az emuláció a Node-teszt által előállított egysoros kódot és személyes Lua-forrást kapta meg.
+Indításkor a meglévő adatokat megőrző migráció előkészíti az MDT beállítás-, kód-, munkamenet-, irat-, telepítési zár-, betöltőlink-, Belv-szerverkötés- és Discord-állapottábláit. Nincs új npm-függőség. A CIA végső telepítési zárának működése megmarad.
 
-Adattáblák: `nexabot_mdt_settings`, `nexabot_mdt_codes`, `nexabot_mdt_sessions`, `nexabot_mdt_records`, `nexabot_mdt_provision_locks`, `nexabot_mdt_loader_links`. A bot induláskor előkészíti ezeket; a csatornalétrehozás külön kézi művelet. API: `/api/mdt/v1/...`; személylekérdezés: `GET /people/lookup?robloxId=...&username=...` a fő owner személyes munkamenetével. A saját, aláírt klienslink a `/mdt/client/...` útvonalon kizárólag Lua-kódot szolgál ki.
-
-A játékjelzés leírásának forrása: [Emergency Hamburg – Police Department](https://wiki.emergency-hamburg.com/en/jobs/police). A nyilvános játékos- és névlekérdezés API-ja: [Roblox Creator Hub – Players](https://create.roblox.com/docs/reference/engine/classes/Players).
+Ellenőrzés: `npm test`, `node --check index.js`. A 19 alap klienspróba: `lua test/roblox-mdt-headless.test.lua roblox/Belv-MDT-Emergency-Hamburg.lua` Lua 5.4 alatt. A további három próba a generált betöltőből futtatott klienshez tartozik.

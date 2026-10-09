@@ -14,9 +14,10 @@ class Builder {
   setName(v) { this.data.name=v; return this; } setDMPermission(v) { this.data.dm_permission=v; return this; }
   setDefaultMemberPermissions(v) { this.data.default_member_permissions=v; return this; }
   addSubcommand(fn) { const sub=fn(new Builder()); this.data.subcommands=[...(this.data.subcommands||[]),sub.data]; return this; }
+  toJSON() { return this.data; }
 }
 const bits = { Administrator: 1n, ViewChannel: 2n, SendMessages: 4n, EmbedLinks: 8n, ReadMessageHistory: 16n, ManageChannels: 32n };
-const discord = { EmbedBuilder: Builder, ActionRowBuilder: Builder, ButtonBuilder: Builder, SlashCommandBuilder: Builder, ButtonStyle: { Success: 3, Danger: 4, Secondary: 2 }, ChannelType: { GuildText: 0, GuildCategory: 4 }, MessageFlags: { Ephemeral: 64 }, PermissionFlagsBits: bits };
+const discord = { EmbedBuilder: Builder, ActionRowBuilder: Builder, ButtonBuilder: Builder, SlashCommandBuilder: Builder, ButtonStyle: { Primary: 1, Success: 3, Danger: 4, Secondary: 2 }, ChannelType: { GuildText: 0, GuildCategory: 4 }, MessageFlags: { Ephemeral: 64 }, PermissionFlagsBits: bits };
 function load(deps, name='belv-mdt') {
   const marker=`"src/${name}.js": function(module, exports, require) {\n`;
   const start=source.indexOf(marker); const end=source.indexOf('\n},\n"',start);
@@ -26,8 +27,8 @@ function load(deps, name='belv-mdt') {
 }
 function fixture() {
   const gid='100000000000000001', user='100000000000000002', managerId='100000000000000003', access='100000000000000010', managerRole='100000000000000011', docRole='100000000000000012';
-  const database={records:new Map(),codes:new Map(),sessions:new Map(),locks:new Map(),loaderLinks:new Map(),ownerId:user,settings:{enabled:true,robloxIds:['123456789'],accessRoleId:access,managerRoleId:managerRole,defaultChannelId:'100000000000000020',reviewChannelId:'100000000000000021',channelIds:{}},next:1,persistent:true};
-  const state={failSend:false,memberFetches:0,sends:[],audits:[],errors:[],ownerSettings:{blacklistedUsers:[],blacklistedGuilds:[]},noView:new Set(),noWrite:false,noManage:false,creations:[],mutations:[],nextChannel:100,failCreateAt:0,failFetch:false};
+  const database={records:new Map(),codes:new Map(),sessions:new Map(),locks:new Map(),loaderLinks:new Map(),discordStates:new Map(),scopeGuildId:gid,ownerId:user,settings:{enabled:true,scopeGuildId:gid,members:[],discordChannelIds:{},robloxIds:['123456789'],accessRoleId:access,managerRoleId:managerRole,defaultChannelId:'100000000000000020',reviewChannelId:'100000000000000021',channelIds:{}},next:1,persistent:true};
+  const state={failSend:false,memberFetches:0,sends:[],messageEdits:[],permissionChanges:[],failPermission:false,audits:[],errors:[],ownerSettings:{blacklistedUsers:[],blacklistedGuilds:[]},noView:new Set(),noWrite:false,noManage:false,creations:[],mutations:[],nextChannel:100,failCreateAt:0,failFetch:false};
   const members=new Map();
   const member=(id,roles=[])=>({id,displayName:'Officer '+id.slice(-2),user:{id,username:'Test'},roles:{cache:new Map(roles.map(x=>[x,{}]))},permissions:{has:()=>false}});
   members.set(user,member(user,[access,docRole])); members.set(managerId,member(managerId,[access,managerRole,docRole]));
@@ -36,11 +37,11 @@ function fixture() {
   const guild={id:gid,name:'Belv test',members:{me:bot,fetch:async({user})=>{state.memberFetches++;return members.get(user)||null;}},channels:{cache:channels}};
   const touch=(...args)=>{state.mutations.push(args);throw new Error('Existing resource must not be modified');};
   function addChannel(id,name='existing-'+id,type=0,payload={}) {
-    const messages=new Map(); const channel={id,guild,name,type,topic:'Original topic',parentId:null,position:7,...payload,isTextBased:()=>type===0,isThread:()=>false,
-      edit:touch,delete:touch,setName:touch,setTopic:touch,setParent:touch,setPosition:touch,lockPermissions:touch,permissionOverwrites:{edit:touch,set:touch,delete:touch},
+    const messages=new Map(),overwrites=new Map(); const channel={id,guild,name,type,topic:'Original topic',parentId:null,position:7,...payload,isTextBased:()=>type===0,isThread:()=>false,
+      edit:touch,delete:touch,setName:touch,setTopic:touch,setParent:touch,setPosition:touch,lockPermissions:touch,permissionOverwrites:{cache:overwrites,set:touch,delete:touch,edit:async(target,values,options)=>{if(state.failPermission)throw new Error('permission interrupted');state.permissionChanges.push({channel:id,target,values:{...values}});const old=overwrites.get(target),allow=new Set(old?.allow.values||[]),deny=new Set(old?.deny.values||[]);for(const [key,value]of Object.entries(values)){allow.delete(bits[key]);deny.delete(bits[key]);if(value===true)allow.add(bits[key]);else if(value===false)deny.add(bits[key]);}overwrites.set(target,{type:options.type,allow:{values:[...allow],has:(bit)=>allow.has(bit)},deny:{values:[...deny],has:(bit)=>deny.has(bit)}});return channel;}},
       permissionsFor:(holder)=>({has:(bit)=>holder===bot?!state.noWrite:!state.noView.has(`${holder.id}:${id}`)}),
       messages:{fetch:async(id)=>{if(!messages.has(id)){const e=new Error('Unknown Message');e.code=10008;throw e;}return messages.get(id);}},
-      send:async(payload)=>{if(state.failSend)throw new Error('Missing Permissions'); const message={id:String(1000+state.sends.length),payload,edit:async(data)=>{message.payload=data;return message;}};messages.set(message.id,message);state.sends.push({channel:id,message});return message;}};
+      send:async(payload)=>{if(state.failSend)throw new Error('Missing Permissions'); const message={id:String(1000+state.sends.length),author:{id:bot.id},payload,get embeds(){return this.payload.embeds.map(e=>e.data||e);},edit:async(data)=>{state.messageEdits.push(message.id);message.payload=data;return message;}};messages.set(message.id,message);state.sends.push({channel:id,message});return message;}};
     channels.set(id,channel);return channel;
   }
   for(const id of [database.settings.defaultChannelId,database.settings.reviewChannelId,'100000000000000022']) addChannel(id);
@@ -51,10 +52,14 @@ function fixture() {
     const id=String(100000000000000000n+BigInt(state.nextChannel++));
     const channel=addChannel(id,payload.name,payload.type,{topic:payload.topic||null,parentId:payload.parent||null});state.creations.push({channel,payload});return channel;
   };
-  guild.roles={create:touch,setPositions:touch};
+  guild.roles={cache:new Map([access,managerRole,docRole].map(id=>[id,{id,name:'Belv role '+id.slice(-2)}])),create:touch,setPositions:touch};
   async function dbQuery(sql, v) {
     if(!database.persistent)return null;
     const rows=(r)=>({rows:r,rowCount:r.length});
+    if(sql.startsWith('SELECT guild_id FROM nexabot_mdt_scope'))return rows(database.scopeGuildId?[{guild_id:database.scopeGuildId}]:[]);
+    if(sql.startsWith('INSERT INTO nexabot_mdt_scope')){database.scopeGuildId ||= v[0];return rows([]);}
+    if(sql.startsWith('SELECT state FROM nexabot_mdt_discord')){const row=database.discordStates.get(v[0]);return rows(row?[{state:structuredClone(row)}]:[]);}
+    if(sql.startsWith('INSERT INTO nexabot_mdt_discord')){database.discordStates.set(v[0],structuredClone(v[1]));return rows([]);}
     if(sql.startsWith('INSERT INTO nexabot_mdt_loader_links')){const existing=database.loaderLinks.get(v[0]);if(existing?.owner_id===v[1])return rows([]);const row={guild_id:v[0],owner_id:v[1],nonce:v[2]};database.loaderLinks.set(v[0],row);return rows([{...row}]);}
     if(sql.startsWith('SELECT * FROM nexabot_mdt_loader_links')){const row=database.loaderLinks.get(v[0]);return rows(row?[{...row}]:[]);}
     if(sql.startsWith('DELETE FROM nexabot_mdt_loader_links')){if(database.loaderLinks.get(v[0])?.owner_id===v[1])database.loaderLinks.delete(v[0]);return rows([]);}
@@ -82,6 +87,7 @@ function fixture() {
       let result=[...database.records.values()].filter(r=>r.guild_id===v[0]&&v[1].includes(r.template_key));
       if(personLookup)result=result.filter(r=>r.fields.robloxId===v[2]||!r.fields.robloxId&&v[3]&&((r.template_key==='person'&&(r.fields.username||'').toLowerCase()===v[3].toLowerCase())||(r.template_key==='warrant'&&(r.fields.target||'').toLowerCase()===v[3].toLowerCase()))).filter(r=>!v[4]||BigInt(r.id)<BigInt(v[4]));
       else result=result.filter(r=>(!v[2]||(r.title+' '+JSON.stringify(r.fields)).toLowerCase().includes(v[2].toLowerCase()))&&(!v[3]||BigInt(r.id)<BigInt(v[3]))&&(!v[4]||r.status===v[4]));
+      if(v[5])result=result.filter(r=>r.created_by===v[5]||r.status==='published'||r.status==='archived'&&(!r.approval_required||r.discord_message_id));
       return rows(result.sort((a,b)=>Number(b.id)-Number(a.id)).slice(0,51).map(r=>({...r})));
     }
     if(sql.startsWith('UPDATE nexabot_mdt_records SET fields=')) {
@@ -96,13 +102,14 @@ function fixture() {
     throw new Error('Unhandled SQL: '+sql);
   }
   const dependencies={
-    './config':{dashboardUrl:()=> 'https://test.example/dashboard',dbQuery,getOwnerSettings:()=>state.ownerSettings,isBotOwner:(id)=>id===database.ownerId,isPersistentStore:()=>database.persistent},
+    './config':{dashboardUrl:()=> 'https://test.example/dashboard',dbQuery,getOwnerSettings:()=>state.ownerSettings,isBotOwner:(id)=>id===database.ownerId,getBotOwnerId:()=>database.ownerId,isPersistentStore:()=>database.persistent},
     './documents':{allDocumentTypes:()=>[{key:'service_report',title:'Belv jelentés',approval:true,fields:[{id:'subject',label:'Tárgy',required:true,maxLength:100}]}],documentRule:()=>({accessRoleId:docRole}),findDocumentChannel:()=>channels.get('100000000000000022')},
     './telemetry':{recordAudit:async(...x)=>state.audits.push(x),recordError:async(...x)=>state.errors.push(x)}
   };
   const mdt=load(dependencies), ctx={guild,member:members.get(user),settings:database.settings}, managerCtx={...ctx,member:members.get(managerId)};
   dependencies['./belv-mdt']=mdt;
   const loader=load(dependencies,'mdt-loader');dependencies['./mdt-loader']=loader;
+  const discordModule=load(dependencies,'mdt-discord');dependencies['./mdt-discord']=discordModule;
   dependencies['./mdt-client']=fs.readFileSync(path.join(__dirname,'../roblox/Belv-MDT-Emergency-Hamburg.lua'),'utf8');
   const owner=load(dependencies,'mdt-owner');
   const client={guilds:{cache:new Map([[gid,guild]])}};
@@ -118,7 +125,7 @@ function fixture() {
     const response={writeHead:(code,headers)=>{response.status=code;response.headers=headers;},end:(body)=>{response.body=body;}};
     await loader.serveMdtLoader(client,request,response,new URL(url),'https://test.example/dashboard',buildClient);return response;
   }
-  return{mdt,loader,owner,state,database,ctx,managerCtx,members,user,managerId,guild,client,draft,http,loaderHttp,addChannel,load:()=>load(dependencies),loadLoader:()=>load(dependencies,'mdt-loader')};
+  return{mdt,loader,owner,discordModule,state,database,ctx,managerCtx,members,user,managerId,guild,client,draft,http,loaderHttp,addChannel,addMember:(id,roles=[])=>{const m=member(id,roles);members.set(id,m);return m;},load:()=>load(dependencies),loadLoader:()=>load(dependencies,'mdt-loader')};
 }
 test('MDT uses hashed, single-use codes and hashed expiring sessions',async()=>{
   const f=fixture(),code=await f.mdt.issueCode(f.guild,f.ctx.member);assert.equal(code.length,24);assert.ok(!f.database.codes.has(code));
@@ -161,7 +168,7 @@ test('a delegated owner cannot edit, and stale primary-owner updates are rejecte
   await assert.rejects(f.mdt.mutateRecord(f.managerCtx,result.row.id,{revision:1,fields:f.draft().fields},'edit'),e=>e.status===403);
   await f.mdt.mutateRecord(f.ctx,result.row.id,{revision:1,fields:{title:'Módosítva',content:'Új adat'}},'edit');
   await assert.rejects(f.mdt.mutateRecord(f.ctx,result.row.id,{revision:1,fields:f.draft().fields},'edit'),e=>e.status===409);
-  assert.equal(f.state.sends.length,1);assert.equal(f.state.sends[0].message.payload.embeds[0].data.description,'Módosítva');
+  assert.equal(f.state.sends.length,1);assert.equal(f.state.sends[0].message.payload.embeds[0].data.description,'**Módosítva**');
 });
 test('records are scoped to the exact Discord guild and template visibility',async()=>{
   const f=fixture(),result=await f.mdt.createRecord(f.ctx,f.draft());await assert.rejects(f.mdt.getRecord({...f.ctx,guild:{...f.guild,id:'100000000000000099'}},result.row.id),e=>e.status===404);
@@ -215,7 +222,7 @@ test('session cannot follow a changed primary owner and explicit revoke removes 
 test('Owner Center page and personalized client downloads reject delegated owners',async()=>{
   const f=fixture(),marker='"src/mdt-owner.js": function(module, exports, require) {\n',start=source.indexOf(marker),end=source.indexOf('\n},\n"',start);assert.ok(start>=0&&end>start);
   const raw=fs.readFileSync(path.join(__dirname,'../roblox/Belv-MDT-Emergency-Hamburg.lua'),'utf8');const module={exports:{}};
-  const deps={'./config':{isBotOwner:(id)=>id===f.user,dashboardUrl:()=> 'https://test.example/dashboard'},'./belv-mdt':f.mdt,'./mdt-client':raw,'./mdt-loader':f.loader};
+  const deps={'./config':{isBotOwner:(id)=>id===f.user,dashboardUrl:()=> 'https://test.example/dashboard'},'./belv-mdt':f.mdt,'./mdt-client':raw,'./mdt-loader':f.loader,'./mdt-discord':f.discordModule};
   new Function('module','exports','require',source.slice(start+marker.length,end))(module,module.exports,(name)=>deps[name]);
   await assert.rejects(module.exports.buildMdtClientScript(f.guild.id,f.managerId,'https://test.example'),e=>e.status===403);
   await assert.rejects(module.exports.mdtOwnerPage(f.client,{user:{id:f.managerId}},f.guild.id,{}),e=>e.status===403);
@@ -225,26 +232,26 @@ test('Owner Center page and personalized client downloads reject delegated owner
 test('MDT installer creates only missing private rooms and never mutates existing resources',async()=>{
   const f=fixture();const original=[...f.guild.channels.cache.values()].map(c=>({id:c.id,name:c.name,topic:c.topic,parentId:c.parentId,position:c.position}));
   const result=await f.mdt.provisionMdtOwnerChannels(f.guild,f.user);
-  assert.equal(result.created.length,7);assert.equal(f.state.creations.length,7);assert.equal(result.settings.defaultChannelId,f.ctx.settings.defaultChannelId);assert.equal(result.settings.reviewChannelId,f.ctx.settings.reviewChannelId);
+  assert.equal(result.created.length,9);assert.equal(f.state.creations.length,9);assert.equal(result.settings.defaultChannelId,f.ctx.settings.defaultChannelId);assert.equal(result.settings.reviewChannelId,f.ctx.settings.reviewChannelId);
   assert.equal(f.state.mutations.length,0);assert.equal(f.state.sends.length,0);assert.equal(f.database.locks.size,0);
   for(const before of original){const c=f.guild.channels.cache.get(before.id);assert.deepEqual({id:c.id,name:c.name,topic:c.topic,parentId:c.parentId,position:c.position},before);}
   for(const {payload} of f.state.creations){assert.deepEqual(payload.permissionOverwrites[0],{id:f.guild.id,type:0,deny:[bits.ViewChannel]});assert.deepEqual(payload.permissionOverwrites.slice(1).map(x=>x.id),[f.user,f.guild.members.me.id]);}
   assert.deepEqual(Object.keys(result.settings.channelIds).sort(),f.mdt.TYPES.map(t=>t.key).sort());
-  await f.mdt.provisionMdtOwnerChannels(f.guild,f.user);assert.equal(f.state.creations.length,7);assert.equal(f.state.mutations.length,0);
+  await f.mdt.provisionMdtOwnerChannels(f.guild,f.user);assert.equal(f.state.creations.length,9);assert.equal(f.state.mutations.length,0);
 });
-test('first setup needs an Owner Center Roblox ID and provisions eight rooms plus a category',async()=>{
+test('first setup needs an Owner Center Roblox ID and provisions ten rooms plus a category',async()=>{
   const f=fixture();f.database.settings={enabled:false,channelIds:{}};
   await assert.rejects(f.mdt.provisionMdtOwnerChannels(f.guild,f.user),e=>e.status===400);assert.equal(f.state.creations.length,0);
-  const result=await f.mdt.provisionMdtOwnerChannels(f.guild,f.user,{robloxIds:'123456789'});assert.equal(result.created.length,9);assert.equal(result.settings.enabled,true);assert.deepEqual(result.settings.robloxIds,['123456789']);
+  const result=await f.mdt.provisionMdtOwnerChannels(f.guild,f.user,{robloxIds:'123456789'});assert.equal(result.created.length,11);assert.equal(result.settings.enabled,true);assert.deepEqual(result.settings.robloxIds,['123456789']);
 });
 test('an existing matching room is reused without permission or parent edits',async()=>{
   const f=fixture(),existing=f.addChannel('100000000000000044','mdt-szemelyek');
-  const result=await f.mdt.provisionMdtOwnerChannels(f.guild,f.user);assert.equal(result.settings.channelIds.person,existing.id);assert.equal(result.created.length,6);assert.equal(existing.parentId,null);assert.equal(existing.topic,'Original topic');assert.equal(f.state.mutations.length,0);
+  const result=await f.mdt.provisionMdtOwnerChannels(f.guild,f.user);assert.equal(result.settings.channelIds.person,existing.id);assert.equal(result.created.length,8);assert.equal(existing.parentId,null);assert.equal(existing.topic,'Original topic');assert.equal(f.state.mutations.length,0);
 });
 test('interrupted channel creation can be resumed without duplicates',async()=>{
   const f=fixture();f.state.failCreateAt=4;
   await assert.rejects(f.mdt.provisionMdtOwnerChannels(f.guild,f.user),e=>e.status===503&&e.message.includes('3 új elem'));assert.equal(f.database.locks.size,0);assert.equal(f.state.creations.length,3);
-  f.state.failCreateAt=0;await f.mdt.provisionMdtOwnerChannels(f.guild,f.user);assert.equal(f.state.creations.length,7);
+  f.state.failCreateAt=0;await f.mdt.provisionMdtOwnerChannels(f.guild,f.user);assert.equal(f.state.creations.length,9);
   const names=f.state.creations.map(x=>x.channel.name);assert.equal(new Set(names).size,names.length);assert.equal(f.state.mutations.length,0);
 });
 test('nonprimary owners, unavailable channels and missing manage permission cannot provision',async()=>{
@@ -265,14 +272,14 @@ test('ambiguous existing room names stop setup before any creation or edit',asyn
 });
 test('concurrent setup requests cannot create duplicate rooms, and repeat setup needs no manage permission',async()=>{
   const f=fixture();const results=await Promise.allSettled([f.mdt.provisionMdtOwnerChannels(f.guild,f.user),f.load().provisionMdtOwnerChannels(f.guild,f.user)]);
-  assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal(results.find(r=>r.status==='rejected').reason.status,409);assert.equal(f.state.creations.length,7);
+  assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal(results.find(r=>r.status==='rejected').reason.status,409);assert.equal(f.state.creations.length,9);
   f.state.noManage=true;const repeat=await f.mdt.provisionMdtOwnerChannels(f.guild,f.user);assert.equal(repeat.created.length,0);assert.equal(f.state.mutations.length,0);
 });
 test('Owner Center install form saves IDs, creates missing rooms and exposes escaped personal script code',async()=>{
   const f=fixture(),marker='"src/mdt-owner.js": function(module, exports, require) {\n',start=source.indexOf(marker),end=source.indexOf('\n},\n"',start),module={exports:{}};
-  const raw=fs.readFileSync(path.join(__dirname,'../roblox/Belv-MDT-Emergency-Hamburg.lua'),'utf8');const deps={'./config':{isBotOwner:(id)=>id===f.user,dashboardUrl:()=> 'https://test.example/dashboard'},'./belv-mdt':f.mdt,'./mdt-client':raw,'./mdt-loader':f.loader};
+  const raw=fs.readFileSync(path.join(__dirname,'../roblox/Belv-MDT-Emergency-Hamburg.lua'),'utf8');const deps={'./config':{isBotOwner:(id)=>id===f.user,dashboardUrl:()=> 'https://test.example/dashboard'},'./belv-mdt':f.mdt,'./mdt-client':raw,'./mdt-loader':f.loader,'./mdt-discord':f.discordModule};
   new Function('module','exports','require',source.slice(start+marker.length,end))(module,module.exports,(name)=>deps[name]);
-  const form=new URLSearchParams({operation:'provision',roblox_ids:'123456789',default_channel:'',review_channel:''});const saved=await module.exports.saveMdtOwnerForm(f.guild,f.user,form);assert.equal(saved.created.length,9);assert.equal(saved.settings.enabled,true);
+  const form=new URLSearchParams({operation:'provision',roblox_ids:'123456789',default_channel:'',review_channel:''});const saved=await module.exports.saveMdtOwnerForm(f.guild,f.user,form);assert.equal(saved.created.length,11);assert.equal(saved.settings.enabled,true);
   const helpers={layout:(title,body)=>body,escapeHtml:(s)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))};
   const page=await module.exports.mdtOwnerPage(f.client,{user:{id:f.user},csrf:'owner-csrf'},f.guild.id,helpers);assert.ok(page.includes('name="operation" value="provision"'));assert.ok(page.includes('/script'));assert.ok(page.includes('name="csrf" value="owner-csrf"'));
   const codePage=await module.exports.mdtClientCodePage(f.guild.id,f.user,'https://test.example',{user:{id:f.user}},helpers);assert.ok(codePage.includes('readonly'));assert.ok(codePage.includes('AllowedRobloxIds = { &quot;123456789&quot; }'));
@@ -314,7 +321,7 @@ test('loader generation denies delegated owners, missing setup and non-HTTPS URL
   await assert.rejects(f.loader.rotateMdtLoaderLink(f.guild.id,f.managerId),e=>e.status===403);
   await assert.rejects(f.loader.getMdtLoaderCommand('invalid',f.user,'https://test.example'),e=>e.status===400);
   await assert.rejects(f.loader.getMdtLoaderCommand(f.guild.id,f.user,'http://test.example'),e=>e.status===409);
-  f.database.settings.enabled=false;await assert.rejects(f.loader.getMdtLoaderCommand(f.guild.id,f.user,'https://test.example'),e=>e.status===409);
+  f.database.settings.enabled=false;await assert.rejects(f.loader.getMdtLoaderCommand(f.guild.id,f.user,'https://test.example'),e=>e.status===403);
   f.database.settings.enabled=true;f.database.settings.robloxIds=[];await assert.rejects(f.loader.getMdtLoaderCommand(f.guild.id,f.user,'https://test.example'),e=>e.status===409);
   assert.equal(f.database.loaderLinks.size,0);
 });
@@ -375,9 +382,9 @@ test('loader accepts GET and HEAD only and limits repeated downloads',async()=>{
 test('/mdt script returns an ephemeral one-line loader only to the primary owner',async()=>{
   const f=fixture(),replies=[],deferrals=[];
   const interaction={guild:f.guild,guildId:f.guild.id,user:{id:f.user},options:{getSubcommand:()=> 'script'},deferReply:async(x)=>deferrals.push(x),editReply:async(x)=>replies.push(x)};
-  const command=f.mdt.buildMdtCommand();assert.ok(command.data.subcommands.some(sub=>sub.name==='script'));assert.equal(command.data.default_member_permissions,0);
+  const command=f.mdt.buildMdtCommand();assert.ok(command.data.subcommands.some(sub=>sub.name==='script'));assert.equal(command.data.default_member_permissions,null);
   await f.mdt.handleMdtCommand(interaction);assert.deepEqual(deferrals,[{flags:64}]);const link=await f.loader.getMdtLoaderCommand(f.guild.id,f.user,'https://test.example');assert.ok(replies[0].includes(link.code));assert.ok(replies[0].includes('/mdt belepes'));assert.equal(f.database.codes.size,0);assert.equal(f.database.sessions.size,0);
-  await f.mdt.handleMdtCommand({...interaction,user:{id:f.managerId}});assert.ok(replies[1].includes('kizárólag a fő botowner'));assert.ok(!replies[1].includes('loadstring('));assert.equal(f.database.loaderLinks.size,1);
+  await f.mdt.handleMdtCommand({...interaction,user:{id:f.managerId}});assert.ok(replies[1].includes('Nincs MDT-hozzáférésed'));assert.ok(!replies[1].includes('loadstring('));assert.equal(f.database.loaderLinks.size,1);
 });
 test('Owner Center provides escaped one-line code, full source and a CSRF-protected rotation form',async()=>{
   const f=fixture(),session={user:{id:f.user},csrf:'owner-csrf'},helpers={layout:(_title,body)=>body,escapeHtml:(s)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))};
@@ -393,4 +400,99 @@ test('a listed Roblox ID alone cannot log in, and a shared primary-owner code ac
   await assert.rejects(f.mdt.issueCode(f.guild,f.managerCtx.member),e=>e.status===403);
   const code=await f.mdt.issueCode(f.guild,f.ctx.member),logged=await f.mdt.login(f.client,code,'987654321');
   const ctx=await f.mdt.authorize(f.client,'Bearer '+logged.token,'987654321');assert.equal(ctx.member.id,f.user);assert.equal(ctx.session.roblox_user_id,'987654321');
+});
+test('the owner registers a Discord-Roblox pair and that member gets their own code and identity',async()=>{
+  const f=fixture();await f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId,robloxIds:'987654321'});
+  const code=await f.mdt.issueCode(f.guild,f.members.get(f.managerId));
+  const result=await f.mdt.login(f.client,code,'987654321',f.guild.id);assert.equal(result.officer.id,f.managerId);
+  const ctx=await f.mdt.authorize(f.client,'Bearer '+result.token,'987654321');assert.equal(ctx.member.id,f.managerId);assert.equal(ctx.session.roblox_user_id,'987654321');
+  const loader=await f.loader.getMdtLoaderCommand(f.guild.id,f.managerId,'https://test.example');assert.match(loader.code,/^loadstring\(game:HttpGet/);
+  const res=await f.loaderHttp('GET',loader.url);assert.ok(res.body.includes('"123456789", "987654321"'));
+  if(process.env.MDT_LOADER_FIXTURE_PATH)fs.writeFileSync(process.env.MDT_LOADER_FIXTURE_PATH,JSON.stringify({code:loader.code,url:loader.url,source:res.body}));
+});
+test('member codes cannot be used with the owner or a different registered Roblox account',async()=>{
+  const f=fixture(),second='100000000000000004';f.addMember(second);
+  await f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId,robloxIds:'987654321'});await f.mdt.updateMdtMember(f.guild,f.user,{discordId:second,robloxIds:'777777'});
+  for(const id of ['123456789','777777'])await assert.rejects(f.mdt.login(f.client,await f.mdt.issueCode(f.guild,f.members.get(f.managerId)),id),e=>e.status===403);
+  await assert.rejects(f.mdt.login(f.client,await f.mdt.issueCode(f.guild,f.ctx.member),'987654321'),e=>e.status===403);
+});
+test('member registration rejects other administrators, duplicate accounts, bots and absent members',async()=>{
+  const f=fixture();await assert.rejects(f.mdt.updateMdtMember(f.guild,f.managerId,{discordId:f.managerId,robloxIds:'987654321'}),e=>e.status===403);
+  await assert.rejects(f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId,robloxIds:'123456789'}),e=>e.status===400);
+  await assert.rejects(f.mdt.updateMdtMember(f.guild,f.user,{discordId:'100000000000000099',robloxIds:'987654321'}),e=>e.status===400);
+  f.members.get(f.managerId).user.bot=true;await assert.rejects(f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId,robloxIds:'987654321'}),e=>e.status===400);assert.equal(f.database.settings.members.length,0);
+});
+test('members can create and edit their own records while the owner retains review and other-record control',async()=>{
+  const f=fixture();await f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId,robloxIds:'987654321'});
+  const ctx={guild:f.guild,member:f.members.get(f.managerId),settings:await f.mdt.getSettings(f.guild.id)},record=await f.mdt.createRecord(ctx,f.draft());assert.equal(record.row.created_by,f.managerId);
+  await f.mdt.mutateRecord(ctx,record.row.id,{revision:1,fields:{title:'Tag jelentése',content:'Saját módosítás'}},'edit');
+  const other=await f.mdt.createRecord(f.ctx,{...f.draft(),clientKey:'owner-other-123456'});assert.equal(f.mdt.publicRecord(other.row,ctx).canEdit,false);
+  await assert.rejects(f.mdt.mutateRecord(ctx,other.row.id,{revision:1},'archive'),e=>e.status===403);
+  const pending=await f.mdt.createRecord(ctx,f.draft('case','member-pending-1234'));await assert.rejects(f.mdt.mutateRecord(ctx,pending.row.id,{revision:1,decision:'approve'},'review'),e=>e.status===403);
+  await f.mdt.mutateRecord({...f.ctx,settings:ctx.settings},pending.row.id,{revision:1,decision:'approve'},'review');assert.equal(f.database.records.get(pending.row.id).status,'published');
+});
+test('member searches and direct record access hide other unapproved records before pagination',async()=>{
+  const f=fixture();await f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId,robloxIds:'987654321'});
+  const ctx={guild:f.guild,member:f.members.get(f.managerId),settings:await f.mdt.getSettings(f.guild.id)};
+  const hidden=await f.mdt.createRecord(f.ctx,f.draft('case','owner-pending-1234')),own=await f.mdt.createRecord(ctx,f.draft('case','member-pending-1234'));
+  const published=await f.mdt.createRecord(f.ctx,f.draft('case','owner-approved-1234'));await f.mdt.mutateRecord(f.ctx,published.row.id,{revision:1,decision:'approve'},'review');
+  await assert.rejects(f.mdt.getRecord(ctx,hidden.row.id),e=>e.status===403);assert.equal((await f.mdt.getRecord(ctx,own.row.id)).id,own.row.id);
+  const logged=await f.mdt.login(f.client,await f.mdt.issueCode(f.guild,ctx.member),'987654321');
+  const req={method:'GET',headers:{authorization:'Bearer '+logged.token,'x-mdt-roblox-id':'987654321'},socket:{remoteAddress:'::1'}};
+  const res={writeHead:(status)=>res.status=status,end:(text)=>res.body=JSON.parse(text)};
+  await f.mdt.handleMdtApi(f.client,req,res,new URL('https://test.example/api/mdt/v1/records?key=case'));assert.equal(res.status,200);assert.deepEqual(res.body.records.map(r=>r.id),[published.row.id,own.row.id]);
+});
+test('removing a member revokes their codes and sessions and readding does not resurrect tokens',async()=>{
+  const f=fixture();await f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId,robloxIds:'987654321'});
+  const member=f.members.get(f.managerId),logged=await f.mdt.login(f.client,await f.mdt.issueCode(f.guild,member),'987654321');await f.mdt.issueCode(f.guild,member);
+  await f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId},true);assert.equal(f.database.codes.size,0);assert.equal(f.database.sessions.size,0);
+  await assert.rejects(f.mdt.issueCode(f.guild,member),e=>e.status===403);await assert.rejects(f.mdt.authorize(f.client,'Bearer '+logged.token,'987654321'),e=>e.status===401);
+  await f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId,robloxIds:'987654321'});await assert.rejects(f.mdt.authorize(f.client,'Bearer '+logged.token,'987654321'),e=>e.status===401);
+});
+test('only the bound Belv guild can configure MDT, issue codes or request loaders',async()=>{
+  const f=fixture(),other={...f.guild,id:'100000000000000099'};f.client.guilds.cache.set(other.id,other);
+  await assert.rejects(f.mdt.saveMdtOwnerConfig(other,f.user,f.database.settings),e=>e.status===403);await assert.rejects(f.mdt.provisionMdtOwnerChannels(other,f.user),e=>e.status===403);
+  await assert.rejects(f.mdt.issueCode(other,f.ctx.member),e=>e.status===403);await assert.rejects(f.loader.getMdtLoaderCommand(other.id,f.user,'https://test.example'),e=>e.status===403);
+  assert.equal(f.database.scopeGuildId,f.guild.id);assert.equal(f.database.loaderLinks.size,0);
+  const loader=await f.loader.getMdtLoaderCommand(f.guild.id,f.user,'https://test.example');f.database.scopeGuildId=other.id;assert.equal((await f.loaderHttp('GET',loader.url)).status,403);
+});
+test('Belv staff gets a private status response but needs a registered ID pair for panel login',async()=>{
+  const f=fixture();f.database.settings.staffRoleId='100000000000000011';const replies=[],deferrals=[];
+  const base={guild:f.guild,guildId:f.guild.id,user:{id:f.managerId},deferReply:async(x)=>deferrals.push(x),editReply:async(x)=>replies.push(x)};
+  await f.mdt.handleMdtButton({...base,customId:'mdt_hub:allapot'});assert.equal(deferrals.length,1);assert.equal(deferrals[0].flags,64);assert.ok(replies[0].includes('Discord-olvasó'));
+  await f.mdt.handleMdtButton({...base,customId:'mdt_hub:belepes'});assert.ok(replies[1].includes('Nincs MDT-hozzáférésed'));assert.equal(f.database.codes.size,0);
+  await f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId,robloxIds:'987654321'});await f.mdt.handleMdtButton({...base,customId:'mdt_hub:belepes'});assert.equal(f.database.codes.size,1);assert.ok(replies[2].includes('987654321'));
+});
+test('Discord hub grants staff and members view access without changing review-room or unrelated resources',async()=>{
+  const f=fixture();await f.mdt.provisionMdtOwnerChannels(f.guild,f.user);await f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId,robloxIds:'987654321'});f.database.settings.staffRoleId='100000000000000011';
+  const result=await f.discordModule.syncMdtDiscord(f.guild,f.user);assert.equal(result.readers,2);assert.equal(f.state.sends.length,2);assert.equal(f.state.mutations.length,0);
+  for(const changed of f.state.permissionChanges){assert.notEqual(changed.channel,f.database.settings.reviewChannelId);assert.deepEqual(Object.keys(changed.values).sort(),['ReadMessageHistory','ViewChannel']);}
+  const hub=f.state.sends.find(s=>s.channel===f.database.settings.discordChannelIds.hub);assert.ok(hub.message.payload.components[0].data.components.some(b=>b.data.custom_id==='mdt_hub:belepes'));assert.deepEqual(hub.message.payload.allowedMentions,{parse:[]});
+  const count=f.state.permissionChanges.length;await f.discordModule.syncMdtDiscord(f.guild,f.user);assert.equal(f.state.sends.length,2);assert.equal(f.state.messageEdits.length,2);assert.equal(f.state.permissionChanges.length,count);
+  await assert.rejects(f.discordModule.syncMdtDiscord(f.guild,f.managerId),e=>e.status===403);
+});
+test('Discord member removal restores prior permissions and preserves unrelated SendMessages flags',async()=>{
+  const f=fixture();await f.mdt.provisionMdtOwnerChannels(f.guild,f.user);const channel=f.guild.channels.cache.get(f.database.settings.defaultChannelId);
+  await channel.permissionOverwrites.edit(f.managerId,{ViewChannel:false,SendMessages:true},{type:1});
+  await f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId,robloxIds:'987654321'});await f.discordModule.syncMdtDiscord(f.guild,f.user);
+  await f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId},true);await f.discordModule.syncMdtDiscord(f.guild,f.user);
+  const overwrite=channel.permissionOverwrites.cache.get(f.managerId);assert.equal(overwrite.deny.has(bits.ViewChannel),true);assert.equal(overwrite.allow.has(bits.SendMessages),true);assert.equal(overwrite.allow.has(bits.ReadMessageHistory),false);assert.equal(f.database.discordStates.get(f.guild.id).overwrites.length,0);
+});
+test('a partial Discord update persists permission snapshots and resumes without duplicates',async()=>{
+  const f=fixture();await f.mdt.provisionMdtOwnerChannels(f.guild,f.user);await f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId,robloxIds:'987654321'});f.state.failPermission=true;
+  await assert.rejects(f.discordModule.syncMdtDiscord(f.guild,f.user),e=>e.status===503);assert.equal(f.database.locks.size,0);assert.ok(f.database.discordStates.get(f.guild.id).overwrites.length);
+  f.state.failPermission=false;await f.discordModule.syncMdtDiscord(f.guild,f.user);assert.equal(f.state.sends.length,2);await f.discordModule.syncMdtDiscord(f.guild,f.user);assert.equal(f.state.sends.length,2);
+});
+test('Owner Center pair forms add and revoke real member access while preserving the staff role',async()=>{
+  const f=fixture();await f.mdt.provisionMdtOwnerChannels(f.guild,f.user);f.database.settings.staffRoleId='100000000000000011';
+  await f.owner.saveMdtOwnerForm(f.guild,f.user,new URLSearchParams({operation:'member-add',discord_id:f.managerId,member_roblox_ids:'987654321'}));assert.equal(f.database.settings.members[0].discordId,f.managerId);assert.equal(f.database.settings.staffRoleId,'100000000000000011');
+  await f.owner.saveMdtOwnerForm(f.guild,f.user,new URLSearchParams({operation:'member-remove',discord_id:f.managerId}));assert.equal(f.database.settings.members.length,0);assert.equal(f.database.settings.staffRoleId,'100000000000000011');
+  await assert.rejects(f.owner.saveMdtOwnerForm(f.guild,f.managerId,new URLSearchParams({operation:'member-add',discord_id:f.managerId,member_roblox_ids:'987654321'})),e=>e.status===403);
+});
+test('MDT guild-command synchronization updates Belv only and leaves other bot commands intact',async()=>{
+  const f=fixture(),edited=[],deleted=[],created=[];
+  const commands=new Map([['mdt',{name:'mdt',edit:async(p)=>edited.push(p),delete:async()=>deleted.push('mdt')}],['cia',{name:'cia',delete:async()=>deleted.push('cia')}] ]);
+  const manager={fetch:async()=>commands,create:async(p)=>created.push(p)};
+  await f.mdt.syncMdtGuildCommand({...f.guild,commands:manager});assert.equal(edited.length,1);assert.equal(edited[0].default_member_permissions,null);assert.equal(deleted.length,0);
+  await f.mdt.syncMdtGuildCommand({...f.guild,id:'100000000000000099',commands:manager});assert.deepEqual(deleted,['mdt']);assert.equal(created.length,0);
 });

@@ -1,14 +1,14 @@
-# NEXA Bot 20.2.2 — Belv MDT / NEXA OS Studio
+# NEXA Bot 20.3.0 — Belv állományi MDT / NEXA OS Studio
 
-Az MDT indításához elég egy saját `loadstring(game:HttpGet("…"))()` sor. Másold az Owner Center **Egysoros MDT-betöltő** mezőjéből, vagy kérd el a fő owner fiókkal: **`/mdt script`**. A teljes panelkód is megnyitható és letölthető.
+Az Owner Centerben **Discord-ID + Roblox-ID párral** vehetsz fel MDT-tagokat. Saját Discord-kódjukkal és saját ügyintézői nevükkel használják a Roblox-panelt. A Belv állomány kiválasztott rangja a közzétett iratokat Discordon olvashatja. A beállítások és a jóváhagyás a fő ownernél maradnak.
 
-A betöltőlink a saját bot HTTPS-webcímére mutat, újraindítás után megmarad, az aktuális Roblox-ID-listával tölt be, és Owner Centerben visszavonható. Az MDT-adatokhoz külön **`/mdt belepes`** kód kell. Másnak átadott személyes kóddal a másik felvett fiók a te fő owner-jogoddal használhatja az MDT-t; csak saját ID-ket adj hozzá.
+Új Discord MDT-központ és útmutató: privát személyes kód, betöltő, állapot és kijelentkezés gombjai. Helyi Roblox-betöltőképernyő animált állapotjelzéssel. Tagfelvétel és visszavonás megőrzi a többi Discord-jogot, a meglévő iratokat és csatornaszerkezetet.
 
-A bot csak a hiányzó privát MDT-csatornákat hozza létre. A meglévő rangokat és csatornákat a telepítő nem módosítja; ismételt vagy megszakadt telepítés folytatható. A játékoskereső és a kiválasztott, megjelenített játékbeli rendőrségi lista színjelzésének olvasása megmarad. Hiányzó vagy ellentmondó játékjelzés ismeretlen.
+Az MDT egyetlen Belv Discord-szerverhez kötött. Beállítható `BELV_MDT_GUILD_ID` változóval; meglévő egyetlen aktív MDT-t automatikusan átvesz, új rendszerben az első owner-beállítás rögzíti. A tagok `/mdt script` és `/mdt belepes` paranccsal indulnak, saját fiókpárjukon.
 
-Ellenőrzés: 89/89 Node-teszt (41 MDT), 18/18 emulált Roblox-folyamat, JavaScript- és Lua-szintaxis. Az egysoros indítást a bot által előállított kóddal és személyes Lua-forrással is ellenőriztük. Élő Discord/Roblox/Xeno-próba és Render-deploy nem történt. Nincs új npm-függőség.
+**102/102 Node-teszt (54 MDT), 22/22 emulált Roblox-folyamat** és szintaxisellenőrzés sikeres. Élő Discord/Roblox/Xeno-próba és Render-deploy nem történt. Nincs új npm-függőség.
 
-Használat: [BELV-MDT-UTMUTATO.md](BELV-MDT-UTMUTATO.md). Kiadás: [RELEASE-20.2.2.md](RELEASE-20.2.2.md).
+Beállítás és használat: [BELV-MDT-UTMUTATO.md](BELV-MDT-UTMUTATO.md). Kiadás: [RELEASE-20.3.0.md](RELEASE-20.3.0.md).
 
 ## Megtartott CIA-végleges telepítés
 

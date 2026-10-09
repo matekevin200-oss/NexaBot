@@ -1,4 +1,4 @@
--- BELV MDT 1.1 | NEXA Bot 20.2.2
+-- BELV MDT 2.0 | NEXA Bot 20.3.0
 -- Roblox kliensfelulet: csak a sajat NEXA MDT API-val kommunikal.
 -- Bot-token vagy Discord-webhook nem kell a scriptbe.
 -- A panel nyitasahoz F6 vagy a BELV MDT gomb hasznalhato.
@@ -8,6 +8,7 @@ local CONFIG = { BaseUrl = "", GuildId = "", AllowedRobloxIds = {} }
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
+local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 if not LocalPlayer then error("A Belv MDT kliensoldalon futtathato.") end
 local allowed = false
@@ -43,6 +44,7 @@ local refreshPlayersPage, showPlayerProfile
 local wantedSource, wantedSourcePath
 local closeModal
 local body, navButtons, statusLabel, headerUser
+local showLoading, hideLoading
 local fieldBoxes = {}
 local function trim(value) return (tostring(value or ""):gsub("^%s+", ""):gsub("%s+$", "")) end
 local function connect(signal, callback)
@@ -133,7 +135,7 @@ local function run(action)
     task.spawn(function()
         local ok, errorMessage = pcall(action)
         state.busy = false
-        if not ok then notifyError("MDT-hiba: " .. tostring(errorMessage):sub(1, 170)) end
+        if not ok then if hideLoading then hideLoading() end; notifyError("MDT-hiba: " .. tostring(errorMessage):sub(1, 170)) end
     end)
 end
 
@@ -142,6 +144,38 @@ local window = frame(screen, "Window", UDim2.new(0.5, 0, 0.5, 0), UDim2.fromOffs
 window.AnchorPoint = Vector2.new(0.5, 0.5)
 corner(window, 14); stroke(window)
 local scale = ui("UIScale", window, { Scale = 1 })
+local loading = frame(window, "LoadingScreen", UDim2.fromOffset(0, 0), UDim2.fromScale(1, 1), palette.bg)
+loading.ZIndex = 30; loading.Active = true; corner(loading, 14)
+local function loadingLabel(text, y, height, color, size, bold)
+    local item = label(loading, text, UDim2.fromOffset(280, y), UDim2.fromOffset(560, height), color, size, bold)
+    item.ZIndex = 31; item.TextXAlignment = Enum.TextXAlignment.Center; return item
+end
+loadingLabel("BELVÉDELMI IGAZGATÓSÁG", 185, 24, palette.gold, 12, true)
+loadingLabel("BELV MDT", 233, 64, palette.text, 47, true)
+loadingLabel("MŰVELETI ADATTERMINÁL  /  20.3.0", 306, 24, palette.muted, 12)
+local loadingStage = loadingLabel("Kliens előkészítése", 372, 36, palette.text, 20, true)
+local loadingDetail = loadingLabel("Személyes Discord–Roblox hozzáférés", 415, 24, palette.muted, 12)
+local loadingTrack = frame(loading, "ProgressTrack", UDim2.fromOffset(280, 462), UDim2.fromOffset(560, 8), palette.field)
+loadingTrack.ZIndex = 31; corner(loadingTrack, 4)
+local loadingFill = frame(loadingTrack, "ProgressFill", UDim2.fromOffset(0, 0), UDim2.fromScale(0, 1), palette.gold)
+loadingFill.ZIndex = 32; corner(loadingFill, 4)
+local loadingPercent = loadingLabel("INDÍTÁS • 0%", 492, 22, palette.gold, 11, true)
+loadingLabel("BELV SZERVER  •  SAJÁT FIÓKPÁR  •  NEXA NYILVÁNTARTÁS", 550, 28, palette.muted, 10)
+local loadingTween, loadingEpoch = nil, 0
+showLoading = function(stage, progress, detail)
+    loadingEpoch = loadingEpoch + 1; loading.Visible = true
+    loadingStage.Text = stage; loadingDetail.Text = detail or ""
+    progress = math.max(0, math.min(1, progress or 0))
+    loadingPercent.Text = "MUNKAFOLYAMAT • " .. tostring(math.floor(progress * 100)) .. "%"
+    if loadingTween then loadingTween:Cancel() end
+    loadingTween = TweenService:Create(loadingFill, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = UDim2.fromScale(progress, 1) })
+    loadingTween:Play()
+end
+hideLoading = function(delay)
+    local epoch = loadingEpoch
+    if not delay then loading.Visible = false; return end
+    task.delay(delay, function() if alive and epoch == loadingEpoch then loading.Visible = false end end)
+end
 local top = frame(window, "Top", UDim2.fromOffset(0, 0), UDim2.new(1, 0, 0, 66), palette.panel)
 corner(top, 14)
 label(top, "BELV", UDim2.fromOffset(24, 12), UDim2.fromOffset(75, 25), palette.gold, 23, true)
@@ -689,14 +723,14 @@ local function playersPage()
     task.spawn(function()
         local result, err = api("GET", "/bootstrap")
         if not alive or not state.token or epoch ~= state.listEpoch then return end
-        if result then refreshPlayersPage(); setStatus("Személyes owner-hozzáférés ellenőrizve.", palette.green) else notifyError(err) end
+        if result then refreshPlayersPage(); setStatus("Személyes MDT-hozzáférés ellenőrizve.", palette.green) else notifyError(err) end
     end)
 end
 renderPage = function()
     clearBody()
     if state.page == "overview" then
         label(body, "Műveleti áttekintés", UDim2.fromOffset(0, 0), UDim2.fromOffset(860, 36), palette.text, 27, true)
-        subtitle("NEXA botkapcsolat • saját Belv Discord • kizárólag a fő botowner számára")
+        subtitle("NEXA botkapcsolat • Belv Discord • saját ügyintézői hozzáférés")
         local cards = { { "JÁTÉKOSOK", "Keresés és adatlap", "Név vagy Roblox-ID alapján kereshetsz." }, { "DISCORD", "Automatikus közzététel", "A célcsatornák az Owner Centerben készülnek." }, { "KÖRÖZÉS", "Játék és saját MDT", "A játék jelzése és a saját RP-irat külön látszik." } }
         for index, card in ipairs(cards) do
             local p = frame(body, "Info" .. index, UDim2.fromOffset((index - 1) * 302, 91), UDim2.fromOffset(290, 171), palette.panel); corner(p)
@@ -712,7 +746,7 @@ renderPage = function()
     elseif state.page == "players" or state.page == "gamewanted" then playersPage()
     elseif state.page == "document" and not state.template then
         label(body, "Belv-iratsablonok", UDim2.fromOffset(0, 0), UDim2.fromOffset(860, 36), palette.text, 27, true)
-        subtitle("A NEXA Discordon beállított Belv-sablonjai • személyes owner hozzáférés")
+        subtitle("A NEXA Discordon beállított Belv-sablonjai • személyes ügyintézői hozzáférés")
         local pane = scroll(body, "Templates", UDim2.fromOffset(0, 82), UDim2.fromOffset(894, 496))
         local index = 0
         for _, t in ipairs(state.templates) do
@@ -745,18 +779,23 @@ showLogin = function()
     local code = textbox(body, "A /mdt belepes privát válaszából", UDim2.fromOffset(32, 338), UDim2.fromOffset(750, 48), false)
     button(body, "Kapcsolódás a NEXA bothoz", UDim2.fromOffset(32, 418), UDim2.fromOffset(302, 48), function()
         run(function()
+            showLoading("Személyes fiókpár ellenőrzése", 0.2, "A saját Discord-kódod és Roblox-ID-d ellenőrzése")
             state.base = trim(base.Text):gsub("/+$", "")
             local result, err = api("POST", "/auth", { code = trim(code.Text), robloxUserId = tostring(LocalPlayer.UserId), guildId = CONFIG.GuildId }, true)
-            if not result then notifyError(err); return end
+            if not result then hideLoading(); notifyError(err); return end
             state.token = result.token; code.Text = ""
+            showLoading("Belv nyilvántartás betöltése", 0.6, "Saját jogosultságok és elérhető iratsablonok lekérése")
             local bootstrap, bootError = api("GET", "/bootstrap")
-            if not bootstrap then notifyError(bootError); return end
+            if not bootstrap then state.token = nil; hideLoading(); notifyError(bootError); return end
             state.templates = bootstrap.templates or {}; state.officer = bootstrap.officer; state.guild = bootstrap.guild; state.page = "overview"
-            headerUser.Text = bootstrap.officer.name .. "  ·  " .. bootstrap.guild.name
+            state.manager = bootstrap.manager == true
+            headerUser.Text = bootstrap.officer.name .. "  ·  " .. (state.manager and "FŐ OWNER" or "MDT ÜGYINTÉZŐ")
+            showLoading("MDT használatra kész", 1, bootstrap.officer.name .. "  •  " .. bootstrap.guild.name)
+            hideLoading(0.45)
             headerUser.TextColor3 = palette.green; renderPage(); setStatus("Csatlakozva • " .. tostring(#state.templates) .. " elérhető irattípus", palette.green)
         end)
     end, palette.gold)
-    local hint = label(body, "Csak a fő botowner és az engedélyezett Roblox-ID jelentkezhet be.\nA bot Discord-tokenje csak a szerveren marad.", UDim2.fromOffset(32, 494), UDim2.fromOffset(780, 52), palette.muted, 12)
+    local hint = label(body, "A fő ownernek a saját Discord-ID-det és Roblox-ID-det kell párosítania.\nSaját Discord-kódot kérj; minden irat a saját ügyintézői neveden készül.", UDim2.fromOffset(32, 494), UDim2.fromOffset(780, 52), palette.muted, 12)
     hint.TextWrapped = true
 end
 local function resize()
@@ -791,7 +830,10 @@ connect(screen.Destroying, function()
     alive = false; state.token = nil
     for _, connection in ipairs(connections) do connection:Disconnect() end
 end)
+showLoading("Kliens ellenőrizve", 0.35, "Engedélyezett Roblox-fiók • saját képernyőn megjelenő panel")
 bindCamera(); showLogin()
+showLoading("Személyes belépésre kész", 1, "A csatlakozáshoz kérj saját kódot: /mdt belepes")
+hideLoading(0.85)
 task.spawn(function()
     local tick = 0
     while alive do

@@ -1,5 +1,15 @@
 # NEXA Bot változásnapló
 
+## 20.3.0 — Tagi Belv MDT, állományi Discord-központ és betöltőképernyő
+
+- Fő owner által felvett Discord–Roblox fiókpárok, saját tagi kódok és ügyintézői azonosítás.
+- Saját iratkezelés; fő owner-jóváhagyás; más tag függő iratának védelme.
+- Belv állományi rang olvasási hozzáférése a közzétett nyilvántartáshoz.
+- Discord-központ és útmutató, személyes gombok, visszaállítható célzott jogosultságok és ismételhető frissítés.
+- Animált helyi betöltőképernyő és hibánál visszatérés a bejelentkezéshez.
+- Egyetlen Belv Discord-szerver; `/mdt` szerverhez kötött regisztráció.
+- 102 Node-teszt és 22 emulált kliensfolyamat sikeres.
+
 ## 20.2.2 — Saját egysoros MDT-betöltő
 
 - `/mdt script`: privát, kész `loadstring(game:HttpGet("…"))()` sor a fő ownernek.

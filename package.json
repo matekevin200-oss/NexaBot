@@ -1,8 +1,8 @@
 {
   "name": "nexabot",
-  "version": "20.2.2",
+  "version": "20.3.0",
   "private": true,
-  "description": "NEXA Bot 20.2.2 – Belv MDT private one-line loader and owner-only Roblox panel",
+  "description": "NEXA Bot 20.3.0 – Belv MDT Discord-Roblox member access, staff hub and loading screen",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {

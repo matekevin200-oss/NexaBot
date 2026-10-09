@@ -49,6 +49,7 @@ UDim = { new = function(scale, offset) return { Scale = scale, Offset = offset }
 UDim2 = { new = function(...) return { ... } end, fromOffset = function(x,y) return {x,y} end, fromScale = function(x,y) return {x,y} end }
 Vector2 = { new = function(x,y) return { X=x,Y=y } end }
 Color3 = { fromRGB = function(r,g,b) return {R=r/255,G=g/255,B=b/255} end }
+TweenInfo = { new = function(...) return {...} end }
 Enum = setmetatable({}, { __index = function(self,k) local t = setmetatable({}, {__index=function(s,v) rawset(s,v,k..":"..v);return k..":"..v end});rawset(self,k,t);return t end })
 local function drain()
     while #tasks > 0 do
@@ -79,6 +80,12 @@ local function reset()
     services.Players={LocalPlayer=player,GetPlayers=function() return live end,GetNameFromUserIdAsync=function(_,id) assert(id==999999);return "OfflinePlayer" end,GetUserIdFromNameAsync=function(_,name) assert(name=="OfflinePlayer");return 999999 end}
     data.live=live
     services.UserInputService={InputBegan=signal(),GetFocusedTextBox=function() return nil end}
+    services.TweenService={Create=function(_,object,info,properties)
+        data.tweens=data.tweens or {};local tween={object=object,properties=properties}
+        function tween:Play() for key,value in pairs(properties)do object[key]=value end end
+        function tween:Cancel() self.cancelled=true end
+        table.insert(data.tweens,tween);return tween
+    end}
     local encoded={},0
     local n=0
     services.HttpService={
@@ -95,13 +102,15 @@ local function reset()
         local response
         if options.Url:find("/auth",1,true) then
             local body=services.HttpService:JSONDecode(options.Body)
-            assert(body.robloxUserId=="123456789");assert(body.guildId=="100000000000000001");assert(body.code=="secret-code")
+            assert(body.robloxUserId==tostring(services.Players.LocalPlayer.UserId));assert(body.guildId=="100000000000000001");assert(body.code=="secret-code")
+            if data.failAuth then return {StatusCode=403,Body=services.HttpService:JSONEncode({ok=false,error="Invalid account pair"})} end
             response={ok=true,token=string.rep("T",43)}
         else
-            assert(options.Headers.Authorization=="Bearer "..string.rep("T",43));assert(options.Headers["X-Mdt-Roblox-Id"]=="123456789")
+            assert(options.Headers.Authorization=="Bearer "..string.rep("T",43));assert(options.Headers["X-Mdt-Roblox-Id"]==tostring(services.Players.LocalPlayer.UserId))
             if revoked then return {StatusCode=403,Body=services.HttpService:JSONEncode({ok=false,error="Owner access revoked"})} end
             if options.Url:find("/bootstrap",1,true) then
-                response={ok=true,guild={id="100000000000000001",name="Belv"},officer={id="100000000000000002",name="Owner"},templates={
+                if data.failBootstrap then return {StatusCode=503,Body=services.HttpService:JSONEncode({ok=false,error="Bootstrap temporarily unavailable"})} end
+                response={ok=true,manager=data.isOwner==true,guild={id="100000000000000001",name="Belv"},officer={id=data.officerId or "100000000000000002",name=data.officerName or "Owner"},templates={
                     {key="note",title="MDT feljegyzés",category="note",fields={{id="title",label="Feljegyzés címe",required=true},{id="content",label="Feljegyzés tartalma",style="paragraph",required=true},{id="reference",label="Hivatkozás",required=false}}},
                     {key="person",title="Személynyilvántartás",category="person",fields={{id="username",label="Roblox-felhasználónév",required=true},{id="robloxId",label="Roblox-ID"},{id="name",label="RP-név",required=true},{id="state",label="RP-státusz",required=true},{id="notes",label="Megjegyzés",style="paragraph"}}},
                     {key="warrant",title="MDT körözés",category="warrant",approval=true,fields={{id="target",label="Körözött RP-személy vagy jármű",required=true},{id="robloxId",label="Körözött Roblox-ID"},{id="reason",label="RP-körözés indoka",style="paragraph",required=true},{id="priority",label="Prioritás",required=true},{id="validity",label="Érvényesség",required=true}}},
@@ -244,8 +253,23 @@ if arg[2] then
         login();assert(current("TextLabel","Műveleti áttekintés"));assert(#requests==2)
     end)
     checked("the downloaded client refuses an unlisted actual Roblox account before creating its panel",function()
-        local gui=reset();services.Players.LocalPlayer.UserId=987654321;runLoader()
+        local gui=reset();services.Players.LocalPlayer.UserId=555555555;runLoader()
         assert(not gui:FindFirstChild("BelvMdtNexaV1"));assert(#requests==0);assert(#warnings==1)
     end)
+    checked("a registered member uses the downloaded client with their own Roblox ID and officer name",function()
+        reset();services.Players.LocalPlayer.UserId=987654321;data.officerId="100000000000000003";data.officerName="Belv tag";runLoader();login()
+        assert(current("TextLabel","Belv tag  ·  MDT ÜGYINTÉZŐ"));assert(#requests==2)
+    end)
 end
+checked("the loading screen is local, animated, and released after login",function()
+    reset();configured('"123456789"');local loading=current("Frame","LoadingScreen");assert(loading.ZIndex==30);assert(loading.Active==true);assert(loading.Visible==false)
+    assert(#data.tweens==2);login();assert(loading.Visible==false);assert(#data.tweens==5);assert(data.tweens[1].cancelled==true)
+end)
+checked("failed authentication closes loading and keeps login available",function()
+    reset();configured('"123456789"');data.failAuth=true;login();assert(current("Frame","LoadingScreen").Visible==false);assert(current("TextBox","A /mdt belepes privát válaszából"));assert(#requests==1)
+end)
+checked("failed bootstrap closes loading and prevents navigation with an incomplete session",function()
+    reset();configured('"123456789"');data.failBootstrap=true;login();assert(current("Frame","LoadingScreen").Visible==false);local before=#requests
+    click("Ügyiratok");assert(current("TextLabel","Belépés a Belv MDT-be"));assert(#requests==before)
+end)
 print(tostring(checks).." headless client-flow checks passed.")
