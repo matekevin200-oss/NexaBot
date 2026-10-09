@@ -1,4 +1,9 @@
-# NEXA Bot 20.1.1 — CIA Final Install / NEXA OS Studio
+# NEXA Bot 20.2.0 — Belv MDT / NEXA OS Studio
+A Belv MDT a Roblox képernyőjén nyílik meg, és a NEXA boton keresztül ír a Belv Discord-csatornáiba. Kizárólag a fő botowner használhatja; az Owner Centerben kötelező felvenni a Roblox-ID-t, majd onnan letölteni a hozzá beállított scriptet. A személyes belépőkód: `/mdt belepes`.
+
+Beállítás és használat: [BELV-MDT-UTMUTATO.md](BELV-MDT-UTMUTATO.md). Ellenőrzés: 66/66 Node-teszt és 7/7 emulált Roblox-kliensfolyamat. Élő Xeno/Emergency Hamburg teszt és Render-deploy nem történt.
+
+## Megtartott CIA-végleges telepítés
 
 - A fő BOT_OWNER_ID fiók még egyszer frissítheti a korábban telepített CIA-rendszert.
 - A V1/V2 telepítési jelző felismerhető; a korábbi telepítési zár nem tiltja az utolsó futást.

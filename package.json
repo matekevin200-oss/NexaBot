@@ -1,8 +1,8 @@
 {
   "name": "nexabot",
-  "version": "20.1.1",
+  "version": "20.2.0",
   "private": true,
-  "description": "NEXA Bot 20.1.1 – one final owner-only CIA upgrade, persistent installer lock and command removal",
+  "description": "NEXA Bot 20.2.0 – Belv MDT Roblox panel with authenticated Discord document bridge",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {

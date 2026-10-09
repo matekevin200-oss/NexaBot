@@ -1,5 +1,13 @@
 # NEXA Bot változásnapló
 
+## 20.2.0 — Belv MDT
+
+- Owner-only Roblox MDT a NEXA Discord-iratrendszerével.
+- Owner Center Roblox-ID-lista és személyre beállított scriptletöltés.
+- Személyes kód, szerverenkénti PostgreSQL-mentés, jóváhagyás, keresés, verzióellenőrzés és újraküldés.
+- 66 Node-teszt és 7 emulált kliensfolyamat sikeres.
+- Útmutató: [BELV-MDT-UTMUTATO.md](BELV-MDT-UTMUTATO.md).
+
 ## 20.1.1 — CIA utolsó telepítés
 
 - A fő BOT_OWNER_ID fiók még egyszer frissítheti a korábban telepített CIA-rendszert.

@@ -1,7 +1,482 @@
-// NEXA Bot 20.1.1 CIA Expanded release — NEXA OS Studio platform.
+// NEXA Bot 20.2.0 Belv MDT release — NEXA OS Studio platform.
 const __nativeRequire = require;
 const __path = __nativeRequire('node:path').posix;
 const __modules = {
+"src/belv-mdt.js": function(module, exports, require) {
+const crypto = require('node:crypto');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
+const { dashboardUrl, dbQuery, getOwnerSettings, isBotOwner, isPersistentStore } = require('./config');
+const { allDocumentTypes, documentRule, findDocumentChannel } = require('./documents');
+const { recordAudit, recordError } = require('./telemetry');
+
+const PREFIX = '/api/mdt/v1';
+const CODE_MS = 10 * 60 * 1000;
+const SESSION_MS = 6 * 60 * 60 * 1000;
+const windows = new Map();
+const syncLocks = new Map();
+const field = (id, label, paragraph = false, required = true, maxLength = paragraph ? 1000 : 160) => ({ id, label, style: paragraph ? 'paragraph' : 'short', required, maxLength, placeholder: label });
+const TYPES = Object.freeze([
+  { key: 'person', title: 'Személynyilvántartás', fields: [field('username', 'Roblox-felhasználónév'), field('name', 'RP-név'), field('state', 'RP-státusz'), field('notes', 'Megjegyzés', true, false)] },
+  { key: 'vehicle', title: 'Járműnyilvántartás', fields: [field('plate', 'Rendszám'), field('model', 'Jármű típusa'), field('owner', 'RP-tulajdonos'), field('state', 'RP-státusz'), field('notes', 'Megjegyzés', true, false)] },
+  { key: 'case', title: 'MDT ügyirat', approval: true, fields: [field('title', 'Ügy tárgya'), field('persons', 'Érintettek'), field('location', 'Időpont és helyszín'), field('events', 'Tényállás és intézkedés', true), field('evidence', 'Bizonyíték, hivatkozás', true, false)] },
+  { key: 'warrant', title: 'MDT körözés', approval: true, fields: [field('target', 'Körözött RP-személy vagy jármű'), field('reason', 'RP-körözés indoka', true), field('priority', 'Prioritás'), field('validity', 'Érvényesség'), field('notes', 'Megjegyzés', true, false)] },
+  { key: 'shift', title: 'MDT szolgálati bejegyzés', fields: [field('time', 'Kezdet és befejezés'), field('unit', 'Egység, hívójel'), field('participants', 'Résztvevők'), field('activity', 'Tevékenység', true), field('notes', 'Rendkívüli esemény', true, false)] },
+  { key: 'note', title: 'MDT belső feljegyzés', fields: [field('title', 'Feljegyzés címe'), field('content', 'Feljegyzés tartalma', true), field('reference', 'Kapcsolódó ügy vagy hivatkozás', false, false)] }
+]);
+
+class MdtError extends Error {
+  constructor(status, message) { super(message); this.status = status; }
+}
+const fail = (status, message) => { throw new MdtError(status, message); };
+const digest = (value) => crypto.createHash('sha256').update(value).digest('hex');
+const sid = (value) => /^\d{16,22}$/.test(String(value || '')) ? String(value) : null;
+const has = (member, bit) => Boolean(member?.permissions?.has(bit));
+const admin = (member) => isBotOwner(member?.id);
+function requireDatabase() { if (!isPersistentStore()) fail(503, 'Az MDT-hez működő PostgreSQL-adatbázis szükséges.'); }
+async function query(sql, values = []) {
+  requireDatabase();
+  const result = await dbQuery(sql, values);
+  if (!result) fail(503, 'Az MDT-adatbázis átmenetileg nem érhető el.');
+  return result;
+}
+async function getSettings(guildId) {
+  return (await query('SELECT config FROM nexabot_mdt_settings WHERE guild_id=$1', [guildId])).rows[0]?.config || { enabled: false, channelIds: {} };
+}
+async function revokeMdtOwnerSessions(guildId, actorId) {
+  if (!isBotOwner(actorId)) fail(403, 'MDT-belépéseket csak a fő botowner vonhat vissza.');
+  await query('DELETE FROM nexabot_mdt_sessions WHERE guild_id=$1 AND user_id=$2', [guildId, actorId]);
+  await query('DELETE FROM nexabot_mdt_codes WHERE guild_id=$1 AND user_id=$2', [guildId, actorId]);
+  await recordAudit('mdt_owner_revoke', { guildId, actorId });
+}
+async function saveMdtOwnerConfig(guild, actorId, input) {
+  if (!isBotOwner(actorId)) fail(403, 'MDT-beállításokat csak a fő botowner módosíthat.');
+  const rawIds = Array.isArray(input.robloxIds) ? input.robloxIds : String(input.robloxIds || '').split(/[\s,;]+/).filter(Boolean);
+  if (rawIds.some((id) => !/^[1-9]\d{0,19}$/.test(String(id)))) fail(400, 'Érvénytelen Roblox-ID. Csak pozitív számot adj meg.');
+  const robloxIds = [...new Set(rawIds.map(String))];
+  if (robloxIds.length > 10) fail(400, 'Legfeljebb 10 saját Roblox-fiókot adhatsz hozzá.');
+  const settings = { enabled: input.enabled === true, robloxIds, defaultChannelId: sid(input.defaultChannelId), reviewChannelId: sid(input.reviewChannelId) || sid(input.defaultChannelId), channelIds: {} };
+  if (settings.enabled && !robloxIds.length) fail(400, 'A bekapcsoláshoz legalább egy Roblox-ID-t adj hozzá.');
+  if (settings.enabled && !settings.defaultChannelId) fail(400, 'Válassz alapértelmezett MDT-célcsatornát.');
+  for (const type of TYPES) {
+    const id = sid(input.channelIds?.[type.key]);
+    if (id) settings.channelIds[type.key] = id;
+  }
+  for (const id of new Set([settings.defaultChannelId, settings.reviewChannelId, ...Object.values(settings.channelIds)].filter(Boolean))) {
+    if (!textChannel(guild, id)) fail(400, 'A kiválasztott csatorna nem szerveres szöveges csatorna.');
+    if (settings.enabled) await writable({ guild }, id);
+  }
+  await query('INSERT INTO nexabot_mdt_settings(guild_id,config) VALUES($1,$2) ON CONFLICT(guild_id) DO UPDATE SET config=EXCLUDED.config,updated_at=NOW()', [guild.id, settings]);
+  await recordAudit('mdt_owner_config', { guildId: guild.id, actorId, metadata: { enabled: settings.enabled, robloxIds } });
+  return settings;
+}
+function leader(member, settings) {
+  return admin(member);
+}
+function assertAccess(guild, member, settings) {
+  const owner = getOwnerSettings();
+  if (owner.blacklistedGuilds?.includes(guild.id) || owner.blacklistedUsers?.includes(member?.id)) fail(403, 'Ez a szerver vagy fiók le van tiltva a NEXA rendszerben.');
+  if (owner.maintenance && !isBotOwner(member?.id)) fail(503, 'A NEXA jelenleg karbantartás alatt áll.');
+  if (!settings.enabled) fail(403, 'Az MDT ezen a Discord-szerveren nincs bekapcsolva.');
+  if (!member || !isBotOwner(member.id)) fail(403, 'A Belv MDT-t kizárólag a NEXA fő botowner használhatja.');
+}
+async function freshMember(guild, userId) {
+  return guild.members.fetch({ user: userId, force: true }).catch(() => null);
+}
+function textChannel(guild, id) {
+  const channel = guild.channels.cache.get(id);
+  return channel?.guild?.id === guild.id && channel.isTextBased?.() && !channel.isThread?.() ? channel : null;
+}
+function canSee(member, channel) {
+  return Boolean(channel?.permissionsFor(member)?.has(PermissionFlagsBits.ViewChannel));
+}
+function definitions(guild, member, settings) {
+  assertAccess(guild, member, settings);
+  const generic = TYPES.map((type) => ({ ...type, channelId: settings.channelIds?.[type.key] || settings.defaultChannelId, category: type.key }));
+  const documents = allDocumentTypes(guild).filter((type) => {
+    const rule = documentRule(guild, type);
+    return admin(member) || rule.accessRoleId && member.roles.cache.has(rule.accessRoleId);
+  }).map((type) => ({ ...type, key: `doc:${type.key}`, channelId: findDocumentChannel(guild, type)?.id, category: 'document', documentKey: type.key }));
+  return [...generic, ...documents].filter((type) => {
+    const channel = textChannel(guild, type.channelId);
+    return canSee(member, channel);
+  }).map((type) => ({ ...type, fields: (type.fields || []).slice(0, 10).map((item) => ({ ...item, maxLength: Math.min(1000, Math.max(1, item.maxLength || 160)) })) }));
+}
+function definition(ctx, key) {
+  const type = definitions(ctx.guild, ctx.member, ctx.settings).find((item) => item.key === key);
+  if (!type) fail(403, 'Ehhez az irattípushoz vagy Discord-csatornához nincs hozzáférésed.');
+  return type;
+}
+function cleanFields(type, input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) fail(400, 'Érvénytelen űrlapadat.');
+  const fields = {};
+  let length = 0;
+  for (const spec of type.fields) {
+    if (input[spec.id] != null && typeof input[spec.id] !== 'string') fail(400, `${spec.label}: szöveget adj meg.`);
+    const value = String(input[spec.id] || '').replace(/\u0000/g, '').trim();
+    if (spec.required && !value) fail(400, `Hiányzó mező: ${spec.label}.`);
+    if (value.length > spec.maxLength) fail(400, `${spec.label}: legfeljebb ${spec.maxLength} karakter.`);
+    fields[spec.id] = value;
+    length += value.length;
+  }
+  if (length > 4000) fail(400, 'Az űrlap teljes szövege legfeljebb 4000 karakter lehet.');
+  const title = String(fields.title || fields.subject || fields.name || fields.username || fields.plate || fields.target || type.title).slice(0, 160);
+  return { fields, title };
+}
+function publicTemplate(type) {
+  return { key: type.key, title: type.title, category: type.category, approval: Boolean(type.approval), fields: type.fields.map(({ id, label, style, required, maxLength, placeholder }) => ({ id, label, style, required, maxLength, placeholder })) };
+}
+function publicRecord(row, ctx) {
+  const manager = leader(ctx.member, ctx.settings);
+  const owned = row.created_by === ctx.member.id;
+  return { id: String(row.id), key: row.template_key, title: row.title, fields: row.fields, status: row.status, revision: row.revision, createdBy: row.created_by, updatedBy: row.updated_by, createdAt: row.created_at, updatedAt: row.updated_at, discordState: row.discord_state, discordUrl: row.discord_message_id ? `https://discord.com/channels/${row.guild_id}/${row.discord_channel_id}/${row.discord_message_id}` : row.review_message_id ? `https://discord.com/channels/${row.guild_id}/${row.review_channel_id}/${row.review_message_id}` : null, canEdit: (owned || manager) && !['archived', 'published'].includes(row.status) || (owned || manager) && row.status === 'published' && !row.approval_required, canArchive: (owned || manager) && row.status !== 'archived', canReview: manager && row.status === 'pending', canSync: owned || manager };
+}
+async function getRecord(ctx, id) {
+  if (!/^\d{1,20}$/.test(String(id))) fail(400, 'Érvénytelen MDT-azonosító.');
+  const row = (await query('SELECT * FROM nexabot_mdt_records WHERE guild_id=$1 AND id=$2', [ctx.guild.id, id])).rows[0];
+  if (!row) fail(404, 'Az MDT-bejegyzés nem található ezen a szerveren.');
+  definition(ctx, row.template_key);
+  return row;
+}
+function assertEdit(ctx, row) {
+  if (row.created_by !== ctx.member.id && !leader(ctx.member, ctx.settings)) fail(403, 'Csak a saját bejegyzésedet módosíthatod; más iratához vezetői rang kell.');
+}
+function statusLabel(status) { return ({ pending: 'Jóváhagyásra vár', published: 'Közzétéve', rejected: 'Elutasítva', archived: 'Lezárva / archiválva' })[status] || status; }
+function recordEmbed(row, type) {
+  const embed = new EmbedBuilder().setColor(row.status === 'pending' ? 0xe6b75a : row.status === 'rejected' ? 0xe26c78 : 0x78cbb0)
+    .setTitle(`BELV MDT #${row.id} • ${type.title}`.slice(0, 256))
+    .setDescription(row.title).addFields(
+      { name: 'Beküldő Discord-azonosítója', value: row.created_by, inline: true },
+      { name: 'Állapot', value: statusLabel(row.status), inline: true },
+      ...type.fields.map((spec) => ({ name: spec.label.slice(0, 80), value: (row.fields[spec.id] || '—').slice(0, 1000) })),
+      ...(row.reviewed_by ? [{ name: 'Elbíráló Discord-azonosítója', value: row.reviewed_by }] : []),
+      ...(row.review_reason ? [{ name: 'Elbírálás indoka', value: row.review_reason.slice(0, 300) }] : []))
+    .setFooter({ text: `NEXA • Belvédelmi Igazgatóság • Emergency Hamburg RP • r${row.revision}` }).setTimestamp(new Date(row.updated_at));
+  return embed;
+}
+function controls(row) {
+  const button = (action, label, style) => new ButtonBuilder().setCustomId(`mdt_${action}:${row.id}`).setLabel(label).setStyle(style);
+  return [new ActionRowBuilder().addComponents(
+    ...(row.status === 'pending' ? [button('approve', 'Jóváhagyás', ButtonStyle.Success), button('reject', 'Elutasítás', ButtonStyle.Danger)] : []),
+    button('view', 'MDT-adatlap', ButtonStyle.Secondary),
+    ...(row.status !== 'archived' ? [button('archive', 'Lezárás', ButtonStyle.Secondary)] : []))];
+}
+async function writable(ctx, id) {
+  const channel = textChannel(ctx.guild, id);
+  if (!channel) fail(409, 'A beállított Discord-csatorna nem található. Ellenőrizd az /mdt beallitas parancsot.');
+  const bot = ctx.guild.members.me || await ctx.guild.members.fetchMe();
+  const permissions = channel.permissionsFor(bot);
+  if (![PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.ReadMessageHistory].every((bit) => permissions?.has(bit))) fail(409, 'A botnak a célcsatornában látási, üzenetküldési, beágyazási és előzményolvasási jog kell.');
+  return channel;
+}
+async function syncRecordUnlocked(ctx, id) {
+  const row = await getRecord(ctx, id);
+  const type = definition(ctx, row.template_key);
+  try {
+    const review = row.status === 'pending' || row.status === 'rejected' || row.status === 'archived' && row.approval_required && !row.discord_message_id;
+    const channelId = review ? row.review_channel_id || ctx.settings.reviewChannelId || ctx.settings.defaultChannelId : row.discord_channel_id || type.channelId;
+    const channel = await writable(ctx, channelId);
+    const messageId = review ? row.review_message_id : row.discord_message_id;
+    const payload = { embeds: [recordEmbed(row, type)], components: controls(row), allowedMentions: { parse: [] } };
+    let message;
+    if (messageId) {
+      const previous = await channel.messages.fetch(messageId).catch((error) => { if (error.code === 10008) return null; throw error; });
+      message = previous ? await previous.edit(payload) : await channel.send({ ...payload, nonce: `${review ? 'R' : 'P'}${row.id}`, enforceNonce: true });
+    } else message = await channel.send({ ...payload, nonce: `${review ? 'R' : 'P'}${row.id}`, enforceNonce: true });
+    const updated = await query(review
+      ? "UPDATE nexabot_mdt_records SET review_channel_id=$1,review_message_id=$2,discord_state='synced' WHERE guild_id=$3 AND id=$4 RETURNING *"
+      : "UPDATE nexabot_mdt_records SET discord_channel_id=$1,discord_message_id=$2,discord_state='synced' WHERE guild_id=$3 AND id=$4 RETURNING *", [channel.id, message.id, ctx.guild.id, row.id]);
+    if (!review && row.review_message_id) {
+      const reviewChannel = textChannel(ctx.guild, row.review_channel_id);
+      const previous = await reviewChannel?.messages.fetch(row.review_message_id).catch(() => null);
+      if (previous) await previous.edit({ ...payload, components: [] }).catch(() => null);
+    }
+    return { row: updated.rows[0], warning: null };
+  } catch (error) {
+    await query("UPDATE nexabot_mdt_records SET discord_state='failed' WHERE guild_id=$1 AND id=$2", [ctx.guild.id, row.id]);
+    await recordError(error, { command: 'mdt_discord_sync', guildId: ctx.guild.id, userId: ctx.member.id });
+    return { row: { ...row, discord_state: 'failed' }, warning: 'Az irat az adatbázisban megvan, de a Discord-közzététel sikertelen. Javítsd a bot csatornajogait, majd válaszd az Újraküldés gombot.' };
+  }
+}
+async function withLock(key, action) {
+  const previous = syncLocks.get(key) || Promise.resolve();
+  const run = previous.catch(() => {}).then(action);
+  syncLocks.set(key, run);
+  try { return await run; } finally { if (syncLocks.get(key) === run) syncLocks.delete(key); }
+}
+const syncRecord = (ctx, id) => withLock(`${ctx.guild.id}:${id}`, () => syncRecordUnlocked(ctx, id));
+async function createRecord(ctx, body) {
+  const type = definition(ctx, body.key);
+  const data = cleanFields(type, body.fields);
+  if (!/^[a-zA-Z0-9_-]{16,80}$/.test(String(body.clientKey || ''))) fail(400, 'Hiányzó kérésazonosító.');
+  const inputHash = digest(JSON.stringify([type.key, data.title, data.fields]));
+  const inserted = await query(`INSERT INTO nexabot_mdt_records (guild_id,template_key,title,fields,status,approval_required,created_by,updated_by,client_key,input_hash)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$7,$8,$9) ON CONFLICT (guild_id,created_by,client_key) DO NOTHING RETURNING *`,
+  [ctx.guild.id, type.key, data.title, data.fields, type.approval ? 'pending' : 'published', Boolean(type.approval), ctx.member.id, body.clientKey, inputHash]);
+  let row = inserted.rows[0];
+  if (!row) {
+    row = (await query('SELECT * FROM nexabot_mdt_records WHERE guild_id=$1 AND created_by=$2 AND client_key=$3', [ctx.guild.id, ctx.member.id, body.clientKey])).rows[0];
+    if (!row || row.input_hash !== inputHash) fail(409, 'A korábbi kérésazonosítóhoz más űrlaptartalom tartozik. Nyiss új bejegyzést.');
+    return { row, duplicate: true, warning: row.discord_state === 'synced' ? null : 'A korábbi beküldés már mentve van; a Discord-küldést az Újraküldés gombbal folytathatod.' };
+  }
+  await recordAudit('mdt_record_create', { actorId: ctx.member.id, guildId: ctx.guild.id, targetId: String(row.id), metadata: { key: type.key, status: row.status } });
+  return syncRecord(ctx, row.id);
+}
+async function mutateRecord(ctx, id, body, action) {
+  return withLock(`${ctx.guild.id}:${id}`, async () => {
+    const row = await getRecord(ctx, id);
+    const type = definition(ctx, row.template_key);
+    if (!Number.isInteger(body.revision) || body.revision !== row.revision) fail(409, 'Ezt az iratot időközben módosították. Frissítsd az adatlapot.');
+    let fields = row.fields, title = row.title, status = row.status, reviewedBy = row.reviewed_by, reason = row.review_reason;
+    if (action === 'review') {
+      if (!leader(ctx.member, ctx.settings)) fail(403, 'A jóváhagyáshoz vezetői Discord-rang szükséges.');
+      if (row.status !== 'pending') fail(409, 'Ez az irat már nem vár jóváhagyásra.');
+      if (!['approve', 'reject'].includes(body.decision)) fail(400, 'Érvénytelen döntés.');
+      status = body.decision === 'approve' ? 'published' : 'rejected';
+      reviewedBy = ctx.member.id; reason = String(body.reason || '').trim().slice(0, 300);
+    } else {
+      assertEdit(ctx, row);
+      if (row.status === 'archived') fail(409, 'A lezárt bejegyzés már nem módosítható.');
+      if (action === 'archive') status = 'archived';
+      else {
+        if (row.approval_required && row.status === 'published') fail(409, 'A jóváhagyott irat lezárható, de nem írható át. Módosításhoz új bejegyzést készíts.');
+        ({ fields, title } = cleanFields(type, body.fields));
+        status = row.approval_required ? 'pending' : 'published'; reviewedBy = null; reason = null;
+      }
+    }
+    const result = await query(`UPDATE nexabot_mdt_records SET fields=$1,title=$2,status=$3,reviewed_by=$4,review_reason=$5,updated_by=$6,revision=revision+1,updated_at=NOW(),discord_state='pending'
+      WHERE guild_id=$7 AND id=$8 AND revision=$9 RETURNING *`, [fields, title, status, reviewedBy, reason, ctx.member.id, ctx.guild.id, id, body.revision]);
+    if (!result.rowCount) fail(409, 'Az irat megváltozott. Frissítsd az adatlapot.');
+    await recordAudit(`mdt_record_${action}`, { actorId: ctx.member.id, guildId: ctx.guild.id, targetId: String(id), metadata: { status } });
+    return syncRecordUnlocked(ctx, id);
+  });
+}
+async function issueCode(guild, member) {
+  const settings = await getSettings(guild.id);
+  assertAccess(guild, member, settings);
+  if (!settings.robloxIds?.length) fail(409, 'Előbb add hozzá a Roblox-ID-det az Owner Center → Belv MDT résznél.');
+  const code = crypto.randomBytes(18).toString('base64url');
+  await query('DELETE FROM nexabot_mdt_codes WHERE guild_id=$1 AND user_id=$2 OR expires_at<NOW()', [guild.id, member.id]);
+  await query('INSERT INTO nexabot_mdt_codes(code_hash,guild_id,user_id,expires_at) VALUES($1,$2,$3,$4)', [digest(code), guild.id, member.id, new Date(Date.now() + CODE_MS)]);
+  return code;
+}
+async function login(client, code, robloxId, expectedGuildId) {
+  if (!/^[1-9]\d{0,19}$/.test(String(robloxId || ''))) fail(403, 'Hiányzó vagy érvénytelen Roblox-ID.');
+  if (!/^[a-zA-Z0-9_-]{24}$/.test(String(code || ''))) fail(401, 'Hibás vagy lejárt MDT-belépőkód.');
+  const data = (await query('DELETE FROM nexabot_mdt_codes WHERE code_hash=$1 AND expires_at>NOW() RETURNING *', [digest(code)])).rows[0];
+  if (!data) fail(401, 'Hibás, lejárt vagy már felhasznált MDT-belépőkód. Kérj újat: /mdt belepes.');
+  const guild = client.guilds.cache.get(data.guild_id);
+  if (!guild) fail(403, 'A NEXA nincs az érintett Discord-szerveren.');
+  const member = await freshMember(guild, data.user_id);
+  const settings = await getSettings(guild.id);
+  assertAccess(guild, member, settings);
+  if (!settings.robloxIds?.includes(String(robloxId))) fail(403, 'Ez a Roblox-ID nincs hozzáadva az Owner Center MDT-listájához.');
+  if (expectedGuildId && expectedGuildId !== guild.id) fail(403, 'A belépőkódot a panelhez beállított Belv Discord-szerveren kérd.');
+  const token = crypto.randomBytes(32).toString('base64url');
+  const expiresAt = new Date(Date.now() + SESSION_MS);
+  await query('DELETE FROM nexabot_mdt_sessions WHERE guild_id=$1 AND user_id=$2 OR expires_at<NOW()', [guild.id, member.id]);
+  await query('INSERT INTO nexabot_mdt_sessions(token_hash,guild_id,user_id,expires_at,roblox_user_id) VALUES($1,$2,$3,$4,$5)', [digest(token), guild.id, member.id, expiresAt, String(robloxId)]);
+  await recordAudit('mdt_login', { guildId: guild.id, actorId: member.id });
+  return { token, expiresAt, guild: { id: guild.id, name: guild.name }, officer: { id: member.id, name: member.displayName || member.user.username } };
+}
+async function authorize(client, header, robloxId) {
+  const token = String(header || '').match(/^Bearer ([a-zA-Z0-9_-]{43})$/)?.[1];
+  if (!token) fail(401, 'Jelentkezz be az MDT-panelbe.');
+  const session = (await query('SELECT * FROM nexabot_mdt_sessions WHERE token_hash=$1 AND expires_at>NOW()', [digest(token)])).rows[0];
+  if (!session) fail(401, 'Az MDT-munkamenet lejárt vagy visszavonták. Kérj új belépőkódot.');
+  const guild = client.guilds.cache.get(session.guild_id);
+  if (!guild) fail(403, 'A Discord-szerver nem érhető el.');
+  const member = await freshMember(guild, session.user_id);
+  const settings = await getSettings(guild.id);
+  assertAccess(guild, member, settings);
+  if (!session.roblox_user_id || !settings.robloxIds?.includes(session.roblox_user_id) || String(robloxId || '') !== session.roblox_user_id) fail(403, 'Ez a Roblox-fiók már nincs engedélyezve az Owner Centerben.');
+  return { guild, member, settings, session, tokenHash: digest(token) };
+}
+function rateAllowed(key, limit) {
+  const now = Date.now();
+  for (const [k, window] of windows) if (now - window.start > 60_000) windows.delete(k);
+  if (windows.size > 10_000) fail(429, 'Az MDT túlterhelt. Próbáld később.');
+  const current = windows.get(key) || { start: now, count: 0 };
+  current.count++; windows.set(key, current);
+  return current.count <= limit;
+}
+function send(response, status, value) {
+  response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...(status === 429 ? { 'Retry-After': '60' } : {}) });
+  response.end(JSON.stringify(value));
+}
+async function readJson(request) {
+  if (!String(request.headers['content-type'] || '').toLowerCase().startsWith('application/json')) fail(415, 'JSON-tartalmú kérés szükséges.');
+  const length = Number(request.headers['content-length'] || 0);
+  if (length > 32_000) fail(413, 'Túl nagy MDT-kérés.');
+  const chunks = []; let bytes = 0;
+  for await (const chunk of request) {
+    bytes += Buffer.byteLength(chunk); if (bytes > 32_000) fail(413, 'Túl nagy MDT-kérés.');
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  let value; try { value = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { fail(400, 'Hibás JSON-kérés.'); }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) fail(400, 'JSON-objektum szükséges.');
+  return value;
+}
+async function handleMdtApi(client, request, response, url) {
+  try {
+    requireDatabase();
+    const forwarded = String(request.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    const ip = /^[0-9a-fA-F.:]{3,64}$/.test(forwarded) ? forwarded : String(request.socket?.remoteAddress || 'unknown');
+    const path = url.pathname.slice(PREFIX.length);
+    if (path === '/auth' && request.method === 'POST') {
+      if (!rateAllowed(`login:${ip}`, 12)) fail(429, 'Túl sok belépési kísérlet. Várj egy percet.');
+      const body = await readJson(request);
+      return send(response, 200, { ok: true, ...(await login(client, body.code, body.robloxUserId, body.guildId)) });
+    }
+    if (!rateAllowed(`api:${ip}`, 180)) fail(429, 'Túl sok MDT-kérés. Várj egy percet.');
+    const ctx = await authorize(client, request.headers.authorization, request.headers['x-mdt-roblox-id']);
+    if (!rateAllowed(`officer:${ctx.guild.id}:${ctx.member.id}`, 90)) fail(429, 'Túl sok MDT-kérés. Várj egy percet.');
+    if (path === '/logout' && request.method === 'POST') {
+      await query('DELETE FROM nexabot_mdt_sessions WHERE token_hash=$1', [ctx.tokenHash]);
+      return send(response, 200, { ok: true });
+    }
+    if (path === '/bootstrap' && request.method === 'GET') return send(response, 200, { ok: true, guild: { id: ctx.guild.id, name: ctx.guild.name }, officer: { id: ctx.member.id, name: ctx.member.displayName || ctx.member.user.username }, manager: leader(ctx.member, ctx.settings), templates: definitions(ctx.guild, ctx.member, ctx.settings).map(publicTemplate) });
+    if (path === '/records' && request.method === 'GET') {
+      const allowed = definitions(ctx.guild, ctx.member, ctx.settings).map((type) => type.key);
+      const chosen = url.searchParams.get('key');
+      if (chosen && !allowed.includes(chosen)) fail(403, 'Ehhez az irattípushoz nincs jogosultságod.');
+      const keys = chosen ? [chosen] : allowed;
+      const search = String(url.searchParams.get('q') || '').trim().slice(0, 100);
+      const before = url.searchParams.get('before');
+      if (before && !/^\d{1,20}$/.test(before)) fail(400, 'Érvénytelen lapozási azonosító.');
+      const result = await query(`SELECT * FROM nexabot_mdt_records WHERE guild_id=$1 AND template_key=ANY($2::text[])
+        AND ($3='' OR strpos(lower(title||' '||fields::text),lower($3))>0) AND ($4::bigint IS NULL OR id<$4::bigint)
+        ORDER BY id DESC LIMIT 51`, [ctx.guild.id, keys, search, before || null]);
+      const rows = result.rows.slice(0, 50);
+      return send(response, 200, { ok: true, records: rows.map((row) => publicRecord(row, ctx)), next: result.rows.length > 50 ? String(rows[rows.length - 1].id) : null });
+    }
+    if (path === '/records' && request.method === 'POST') {
+      const result = await createRecord(ctx, await readJson(request));
+      return send(response, result.duplicate ? 200 : 201, { ok: true, record: publicRecord(result.row, ctx), warning: result.warning });
+    }
+    const match = path.match(/^\/records\/(\d{1,20})(?:\/(archive|review|sync))?$/);
+    if (match) {
+      if (request.method === 'GET' && !match[2]) return send(response, 200, { ok: true, record: publicRecord(await getRecord(ctx, match[1]), ctx) });
+      if (request.method === 'POST' && match[2] === 'sync') {
+        const row = await getRecord(ctx, match[1]); assertEdit(ctx, row);
+        const result = await syncRecord(ctx, match[1]);
+        return send(response, 200, { ok: true, record: publicRecord(result.row, ctx), warning: result.warning });
+      }
+      if (request.method === 'PATCH' && !match[2] || request.method === 'POST' && ['archive', 'review'].includes(match[2])) {
+        const result = await mutateRecord(ctx, match[1], await readJson(request), match[2] || 'edit');
+        return send(response, 200, { ok: true, record: publicRecord(result.row, ctx), warning: result.warning });
+      }
+    }
+    fail(404, 'Ismeretlen MDT-végpont.');
+  } catch (error) {
+    if (!(error instanceof MdtError)) await recordError(error, { command: 'mdt_api' }).catch(() => {});
+    return send(response, error.status || 503, { ok: false, error: error.status ? error.message : 'Az MDT szolgáltatás átmenetileg nem érhető el. Próbáld újra később.' });
+  }
+}
+function buildMdtCommand() {
+  return new SlashCommandBuilder().setName('mdt').setDescription('Kizárólag a fő botowner Belv MDT-parancsai.').setDMPermission(false).setDefaultMemberPermissions(0)
+    .addSubcommand((sub) => sub.setName('belepes').setDescription('Személyes, egyszer használható MDT-belépőkód.'))
+    .addSubcommand((sub) => sub.setName('kijelentkezes').setDescription('A saját MDT-munkamenetek visszavonása.'))
+    .addSubcommand((sub) => sub.setName('allapot').setDescription('MDT állapot; beállítások az Owner Centerben.'));
+}
+async function handleMdtCommand(interaction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  try {
+    if (!interaction.guild) fail(400, 'Ezt Discord-szerveren használd.');
+    requireDatabase();
+    const guild = interaction.guild;
+    const member = await freshMember(guild, interaction.user.id);
+    if (!member) fail(403, 'A Discord-tagságod nem ellenőrizhető.');
+    const action = interaction.options.getSubcommand();
+    const settings = await getSettings(guild.id);
+    if (!isBotOwner(member.id)) fail(403, 'Az MDT-t kizárólag a fő botowner használhatja.');
+    if (action === 'kijelentkezes') {
+      await query('DELETE FROM nexabot_mdt_sessions WHERE guild_id=$1 AND user_id=$2', [guild.id, member.id]);
+      await query('DELETE FROM nexabot_mdt_codes WHERE guild_id=$1 AND user_id=$2', [guild.id, member.id]);
+      return interaction.editReply('🔒 A saját MDT-belépőkódjaid és munkameneteid visszavonva.');
+    }
+    if (action === 'allapot') {
+      if (!admin(member)) assertAccess(guild, member, settings);
+      return interaction.editReply(`**Belv MDT:** ${settings.enabled ? 'bekapcsolva' : 'kikapcsolva'}\n**Használat:** csak a fő botowner\n**Roblox-ID-k:** ${(settings.robloxIds || []).join(', ') || 'még nincs hozzáadva'}\n**Beállítások:** ${dashboardUrl().replace(/\/dashboard\/?$/, '')}/owner/mdt/${guild.id}\nSzemélyes kód: \`/mdt belepes\``);
+    }
+    if (action === 'belepes') {
+      const root = dashboardUrl().replace(/\/dashboard\/?$/, '');
+      if (!root.startsWith('https://')) fail(409, 'A bot PUBLIC_URL vagy RENDER_EXTERNAL_URL értéke HTTPS-webcím legyen.');
+      const code = await issueCode(guild, member);
+      return interaction.editReply(`**Belv MDT-belépés**\nA Roblox-panelen add meg:\n**NEXA webcím:** ${root}\n**Személyes kód:** \`${code}\`\n\nA kód **10 percig**, egyszer használható. A munkamenet legfeljebb **6 órás**; a Discord-rangodat minden kérésnél újra ellenőrizzük. A kódot tartsd magadnál. Kijelentkezés: \`/mdt kijelentkezes\`.`);
+    }
+    fail(400, 'Ismeretlen MDT-parancs.');
+  } catch (error) {
+    if (!error.status) await recordError(error, { command: 'mdt_slash', guildId: interaction.guildId, userId: interaction.user.id });
+    return interaction.editReply(`❌ ${error.status ? error.message : 'Az MDT átmenetileg nem érhető el. Ellenőrizd a bot naplóját.'}`);
+  }
+}
+async function handleMdtButton(interaction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  try {
+    requireDatabase();
+    const match = interaction.customId.match(/^mdt_(view|approve|reject|archive):(\d{1,20})$/);
+    if (!match || !interaction.guild) fail(400, 'Érvénytelen MDT-gomb.');
+    const guild = interaction.guild, member = await freshMember(guild, interaction.user.id), settings = await getSettings(guild.id);
+    assertAccess(guild, member, settings);
+    const ctx = { guild, member, settings };
+    const row = await getRecord(ctx, match[2]);
+    if (match[1] === 'view') return interaction.editReply({ embeds: [recordEmbed(row, definition(ctx, row.template_key))] });
+    const action = match[1] === 'archive' ? 'archive' : 'review';
+    const result = await mutateRecord(ctx, row.id, { revision: row.revision, decision: match[1], reason: match[1] === 'reject' ? 'Elutasítva a vezető Discord-gombjával.' : '' }, action);
+    return interaction.editReply(result.warning || `✅ MDT #${row.id}: ${statusLabel(result.row.status)}.`);
+  } catch (error) {
+    if (!error.status) await recordError(error, { command: 'mdt_button', guildId: interaction.guildId, userId: interaction.user.id });
+    return interaction.editReply(`❌ ${error.status ? error.message : 'Az MDT-művelet nem sikerült.'}`);
+  }
+}
+module.exports = { PREFIX, TYPES, MdtError, buildMdtCommand, handleMdtApi, handleMdtCommand, handleMdtButton, definitions, cleanFields, createRecord, mutateRecord, getRecord, syncRecord, issueCode, login, authorize, getSettings, publicRecord, saveMdtOwnerConfig, revokeMdtOwnerSessions };
+
+},
+"src/mdt-client.js": function(module, exports, require) {
+module.exports = "-- BELV MDT 1.0 | NEXA Bot 20.2.0\n-- Roblox kliensfelulet: csak a sajat NEXA MDT API-val kommunikal.\n-- Bot-token vagy Discord-webhook nem kell a scriptbe.\n-- A panel nyitasahoz F6 vagy a BELV MDT gomb hasznalhato.\n-- A hasznalatra beallitott script az Owner Center -> Belv MDT oldalon toltheto le.\nlocal CONFIG = { BaseUrl = \"\", GuildId = \"\", AllowedRobloxIds = {} }\n\nlocal Players = game:GetService(\"Players\")\nlocal UserInputService = game:GetService(\"UserInputService\")\nlocal HttpService = game:GetService(\"HttpService\")\nlocal LocalPlayer = Players.LocalPlayer\nif not LocalPlayer then error(\"A Belv MDT kliensoldalon futtathato.\") end\nlocal allowed = false\nfor _, id in ipairs(CONFIG.AllowedRobloxIds) do\n    if tostring(id) == tostring(LocalPlayer.UserId) then allowed = true; break end\nend\nif not allowed then\n    warn(\"Belv MDT: ez a Roblox-ID nincs hozzaadva. Az Owner Center -> Belv MDT oldalon add hozza, es onnan toltsd le a beallitott scriptet.\")\n    return\nend\nlocal PlayerGui = LocalPlayer:WaitForChild(\"PlayerGui\")\nlocal GUI_NAME = \"BelvMdtNexaV1\"\nlocal old = PlayerGui:FindFirstChild(GUI_NAME)\nif old then\n    old.Enabled = true\n    local oldWindow = old:FindFirstChild(\"Window\")\n    if oldWindow then oldWindow.Visible = true end\n    return\nend\n\nlocal palette = {\n    bg = Color3.fromRGB(16, 22, 31), panel = Color3.fromRGB(22, 30, 41),\n    field = Color3.fromRGB(29, 39, 52), line = Color3.fromRGB(47, 59, 73),\n    text = Color3.fromRGB(231, 237, 244), muted = Color3.fromRGB(155, 172, 191),\n    gold = Color3.fromRGB(229, 185, 103), green = Color3.fromRGB(111, 207, 167),\n    red = Color3.fromRGB(232, 126, 133), white = Color3.fromRGB(255, 255, 255)\n}\nlocal connections = {}\nlocal alive = true\nlocal state = { token = nil, base = CONFIG.BaseUrl, templates = {}, records = {}, page = \"overview\", template = nil, selected = nil, busy = false, listEpoch = 0, next = nil, dirty = false, pendingPayload = nil }\nlocal renderPage, showRecord, showEditor, refreshList, showLogin\nlocal body, navButtons, statusLabel, headerUser\nlocal fieldBoxes = {}\nlocal function trim(value) return (tostring(value or \"\"):gsub(\"^%s+\", \"\"):gsub(\"%s+$\", \"\")) end\nlocal function connect(signal, callback)\n    local connection = signal:Connect(callback)\n    table.insert(connections, connection)\n    return connection\nend\nlocal function ui(class, parent, props)\n    local object = Instance.new(class)\n    for key, value in pairs(props or {}) do object[key] = value end\n    object.Parent = parent\n    return object\nend\nlocal function corner(object, radius) ui(\"UICorner\", object, { CornerRadius = UDim.new(0, radius or 9) }) end\nlocal function stroke(object, color) ui(\"UIStroke\", object, { Color = color or palette.line, Thickness = 1 }) end\nlocal function frame(parent, name, position, size, color)\n    return ui(\"Frame\", parent, { Name = name, Position = position, Size = size, BackgroundColor3 = color or palette.panel, BorderSizePixel = 0 })\nend\nlocal function label(parent, text, position, size, color, fontSize, bold)\n    return ui(\"TextLabel\", parent, { Text = text, Position = position, Size = size, BackgroundTransparency = 1, BorderSizePixel = 0, TextColor3 = color or palette.text, TextSize = fontSize or 14, Font = bold and Enum.Font.GothamBold or Enum.Font.Gotham, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd, RichText = false })\nend\nlocal function button(parent, text, position, size, callback, accent)\n    local b = ui(\"TextButton\", parent, { Text = text, Position = position, Size = size, BackgroundColor3 = accent or palette.field, BorderSizePixel = 0, TextColor3 = accent == palette.gold and palette.bg or palette.text, TextSize = 13, Font = Enum.Font.GothamBold, AutoButtonColor = true, RichText = false })\n    corner(b, 7)\n    if callback then b.Activated:Connect(callback) end\n    return b\nend\nlocal function textbox(parent, placeholder, position, size, multiline)\n    local b = ui(\"TextBox\", parent, { Text = \"\", PlaceholderText = placeholder, PlaceholderColor3 = palette.muted, Position = position, Size = size, BackgroundColor3 = palette.field, BorderSizePixel = 0, TextColor3 = palette.text, TextSize = 14, Font = Enum.Font.Gotham, ClearTextOnFocus = false, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = multiline and Enum.TextYAlignment.Top or Enum.TextYAlignment.Center, MultiLine = multiline or false, TextWrapped = true, RichText = false })\n    corner(b, 7); stroke(b)\n    ui(\"UIPadding\", b, { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), PaddingTop = UDim.new(0, multiline and 10 or 0), PaddingBottom = UDim.new(0, multiline and 10 or 0) })\n    return b\nend\nlocal function scroll(parent, name, position, size)\n    return ui(\"ScrollingFrame\", parent, { Name = name, Position = position, Size = size, BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 4, ScrollBarImageColor3 = palette.line, CanvasSize = UDim2.new(0, 0, 0, 0), ScrollingDirection = Enum.ScrollingDirection.Y, ClipsDescendants = true })\nend\nlocal function setStatus(message, color)\n    if alive and statusLabel then statusLabel.Text = message; statusLabel.TextColor3 = color or palette.muted end\nend\nlocal function notifyError(message) setStatus(message, palette.red) end\nlocal function jsonDecode(text)\n    local ok, value = pcall(function() return HttpService:JSONDecode(text) end)\n    if not ok or type(value) ~= \"table\" then return nil end\n    return value\nend\nlocal function requestFunction()\n    if type(request) == \"function\" then return request end\n    if type(http_request) == \"function\" then return http_request end\n    if type(Xeno) == \"table\" and type(Xeno.request) == \"function\" then return Xeno.request end\n    if type(http) == \"table\" and type(http.request) == \"function\" then return http.request end\n    return nil\nend\nlocal function api(method, path, payload, anonymous)\n    local transport = requestFunction()\n    if not transport then return nil, \"Ez a környezet nem ad HTTP request funkciót. A NEXA-kapcsolat nem indítható.\", 0 end\n    if not state.base:match(\"^https://[^/]+$\") then return nil, \"HTTPS NEXA-webcímet adj meg, útvonal nélkül.\", 0 end\n    local headers = { [\"Content-Type\"] = \"application/json\", [\"Accept\"] = \"application/json\", [\"X-Mdt-Roblox-Id\"] = tostring(LocalPlayer.UserId) }\n    if not anonymous then\n        if not state.token then return nil, \"Kérj belépőkódot Discordon: /mdt belepes.\", 401 end\n        headers[\"Authorization\"] = \"Bearer \" .. state.token\n    end\n    local options = { Url = state.base .. \"/api/mdt/v1\" .. path, Method = method, Headers = headers }\n    if payload then options.Body = HttpService:JSONEncode(payload) end\n    local ok, response = pcall(function() return transport(options) end)\n    if not ok or type(response) ~= \"table\" then return nil, \"A NEXA nem érhető el. Ellenőrizd a webcímet; a be nem küldött űrlap megmaradt.\", 0 end\n    local code = tonumber(response.StatusCode or response.status_code or response.Status or 0) or 0\n    local value = jsonDecode(response.Body or response.body or \"\")\n    if code < 200 or code >= 300 or not value or value.ok ~= true then\n        local message = value and value.error or (\"NEXA HTTP-hiba: \" .. tostring(code))\n        if (code == 401 or code == 403) and not anonymous then\n            state.token = nil; state.templates = {}; state.records = {}; state.selected = nil\n            if body then\n                for _, child in ipairs(body:GetChildren()) do child:Destroy() end\n                label(body, \"Az MDT-hozzáférés lezárva\", UDim2.fromOffset(32, 150), UDim2.fromOffset(810, 50), palette.red, 25, true)\n                label(body, \"Ellenőrizd az Owner Center Roblox-ID-listáját, majd kérj új személyes Discord-kódot.\", UDim2.fromOffset(32, 217), UDim2.fromOffset(810, 70), palette.muted, 14).TextWrapped = true\n            end\n        end\n        return nil, message, code\n    end\n    return value, nil, code\nend\nlocal function run(action)\n    if state.busy then return end\n    state.busy = true\n    setStatus(\"Kapcsolódás a NEXA bothoz…\", palette.gold)\n    task.spawn(function()\n        local ok, errorMessage = pcall(action)\n        state.busy = false\n        if not ok then notifyError(\"MDT-hiba: \" .. tostring(errorMessage):sub(1, 170)) end\n    end)\nend\n\nlocal screen = ui(\"ScreenGui\", PlayerGui, { Name = GUI_NAME, ResetOnSpawn = false, IgnoreGuiInset = false, DisplayOrder = 80, ZIndexBehavior = Enum.ZIndexBehavior.Sibling })\nlocal window = frame(screen, \"Window\", UDim2.new(0.5, 0, 0.5, 0), UDim2.fromOffset(1120, 720), palette.bg)\nwindow.AnchorPoint = Vector2.new(0.5, 0.5)\ncorner(window, 14); stroke(window)\nlocal scale = ui(\"UIScale\", window, { Scale = 1 })\nlocal top = frame(window, \"Top\", UDim2.fromOffset(0, 0), UDim2.new(1, 0, 0, 66), palette.panel)\ncorner(top, 14)\nlabel(top, \"BELV\", UDim2.fromOffset(24, 12), UDim2.fromOffset(75, 25), palette.gold, 23, true)\nlabel(top, \"MOBILE DATA TERMINAL\", UDim2.fromOffset(105, 12), UDim2.fromOffset(310, 25), palette.text, 15, true)\nlabel(top, \"Belvédelmi Igazgatóság  /  Emergency Hamburg RP\", UDim2.fromOffset(24, 38), UDim2.fromOffset(500, 17), palette.muted, 11)\nheaderUser = label(top, \"NEXA • nincs belépve\", UDim2.fromOffset(565, 22), UDim2.fromOffset(400, 23), palette.muted, 12)\nbutton(top, \"—\", UDim2.fromOffset(1018, 17), UDim2.fromOffset(36, 30), function() window.Visible = false end)\nlocal destroyPanel\nbutton(top, \"×\", UDim2.fromOffset(1064, 17), UDim2.fromOffset(36, 30), function() if destroyPanel then destroyPanel() end end)\nlocal launch = button(screen, \"BELV MDT  ·  F6\", UDim2.new(0, 20, 1, -58), UDim2.fromOffset(156, 36), function() window.Visible = not window.Visible end, palette.gold)\nlaunch.AnchorPoint = Vector2.new(0, 0)\nlocal bottom = frame(window, \"Bottom\", UDim2.fromOffset(18, 677), UDim2.fromOffset(1084, 26), palette.bg)\nstatusLabel = label(bottom, \"Discord-belépőkód szükséges: /mdt belepes\", UDim2.fromOffset(0, 0), UDim2.fromOffset(1080, 24), palette.muted, 12)\nlocal nav = frame(window, \"Nav\", UDim2.fromOffset(16, 82), UDim2.fromOffset(178, 578), palette.panel)\ncorner(nav, 10)\nlabel(nav, \"BELV MŰVELETI RENDSZER\", UDim2.fromOffset(13, 15), UDim2.fromOffset(158, 20), palette.muted, 9, true)\nbody = frame(window, \"Body\", UDim2.fromOffset(208, 82), UDim2.fromOffset(894, 578), palette.bg)\nlocal pages = {\n    { \"overview\", \"Áttekintés\" }, { \"case\", \"Ügyiratok\" }, { \"warrant\", \"Körözések\" },\n    { \"person\", \"Személyek\" }, { \"vehicle\", \"Járművek\" }, { \"shift\", \"Szolgálati napló\" },\n    { \"document\", \"Belv-iratsablonok\" }, { \"note\", \"Feljegyzések\" }\n}\nnavButtons = {}\nlocal modal = nil\nlocal function closeModal() if modal then modal:Destroy(); modal = nil end end\nlocal function confirm(message, callback)\n    closeModal()\n    modal = frame(screen, \"Confirm\", UDim2.fromScale(0.5, 0.5), UDim2.fromOffset(440, 178), palette.panel)\n    modal.AnchorPoint = Vector2.new(0.5, 0.5); modal.ZIndex = 10; corner(modal, 12); stroke(modal)\n    local text = label(modal, message, UDim2.fromOffset(20, 20), UDim2.fromOffset(400, 80), palette.text, 14)\n    text.TextWrapped = true; text.TextTruncate = Enum.TextTruncate.None; text.ZIndex = 11\n    local no = button(modal, \"Mégse\", UDim2.fromOffset(20, 116), UDim2.fromOffset(185, 38), closeModal)\n    local yes = button(modal, \"Folytatás\", UDim2.fromOffset(220, 116), UDim2.fromOffset(200, 38), function() closeModal(); callback() end, palette.gold)\n    no.ZIndex = 11; yes.ZIndex = 11\nend\nlocal function navigate(key)\n    if state.busy then setStatus(\"Várd meg a folyamatban lévő műveletet.\", palette.gold); return end\n    local function change()\n        state.page = key; state.selected = nil; state.dirty = false; state.pendingPayload = nil\n        state.template = nil\n        if key ~= \"document\" and key ~= \"overview\" then\n            for _, t in ipairs(state.templates) do if t.key == key then state.template = t; break end end\n        end\n        renderPage()\n    end\n    if state.dirty then confirm(\"Van nem mentett űrlapod. Elveted és másik oldalra lépsz?\", change) else change() end\nend\nfor index, page in ipairs(pages) do\n    local key, title = page[1], page[2]\n    navButtons[key] = button(nav, title, UDim2.fromOffset(10, 48 + (index - 1) * 49), UDim2.fromOffset(158, 40), function()\n        if not state.token then showLogin(); return end\n        navigate(key)\n    end)\nend\nbutton(nav, \"Kijelentkezés\", UDim2.fromOffset(10, 520), UDim2.fromOffset(158, 38), function()\n    if state.busy then return end\n    confirm(\"Kijelentkezel? A beküldött iratok megmaradnak; a nem mentett űrlap elvész.\", function()\n        run(function()\n            if state.token then api(\"POST\", \"/logout\", {}) end\n            state.token = nil; state.templates = {}; state.records = {}; state.dirty = false; state.pendingPayload = nil\n            headerUser.Text = \"NEXA • nincs belépve\"; showLogin(); setStatus(\"Kijelentkeztél. Új kód: /mdt belepes.\")\n        end)\n    end)\nend)\nlocal function clearBody()\n    state.listEpoch = state.listEpoch + 1\n    for _, child in ipairs(body:GetChildren()) do child:Destroy() end\n    fieldBoxes = {}\n    for key, b in pairs(navButtons) do b.BackgroundColor3 = key == state.page and palette.field or palette.panel; b.TextColor3 = key == state.page and palette.gold or palette.text end\nend\nlocal function subtitle(text) label(body, text, UDim2.fromOffset(0, 36), UDim2.fromOffset(886, 22), palette.muted, 12) end\nlocal function statusText(status) return ({ pending = \"Ellenőrzésre vár\", published = \"Közzétéve\", rejected = \"Elutasítva\", archived = \"Lezárva\" })[status] or status or \"—\" end\nlocal listPanel, detailPanel, searchBox, listScroll\nlocal function detailClear()\n    if not detailPanel then return end\n    for _, child in ipairs(detailPanel:GetChildren()) do if not child:IsA(\"UICorner\") and not child:IsA(\"UIStroke\") then child:Destroy() end end\n    fieldBoxes = {}\nend\nlocal function displayRows(records, append)\n    if not alive or not listScroll or not listScroll.Parent then return end\n    if not append then\n        for _, child in ipairs(listScroll:GetChildren()) do child:Destroy() end\n        state.records = {}\n    end\n    for _, row in ipairs(records) do table.insert(state.records, row) end\n    for _, child in ipairs(listScroll:GetChildren()) do child:Destroy() end\n    for index, row in ipairs(state.records) do\n        local current = row\n        local b = button(listScroll, \"\", UDim2.fromOffset(0, (index - 1) * 75), UDim2.new(1, -6, 0, 66), function()\n            local open = function() state.dirty = false; state.pendingPayload = nil; showRecord(current) end\n            if state.dirty then confirm(\"Elveted a nem mentett űrlapot és megnyitod ezt az iratot?\", open) else open() end\n        end)\n        label(b, \"#\" .. row.id .. \"  ·  \" .. statusText(row.status), UDim2.fromOffset(12, 8), UDim2.new(1, -24, 0, 18), row.status == \"pending\" and palette.gold or palette.muted, 10, true)\n        label(b, row.title, UDim2.fromOffset(12, 29), UDim2.new(1, -24, 0, 23), palette.text, 13, true)\n    end\n    if #state.records == 0 then label(listScroll, \"Még nincs ilyen bejegyzés.\\nAz Új irat gombbal készíthetsz egyet.\", UDim2.fromOffset(12, 30), UDim2.new(1, -24, 0, 70), palette.muted, 12).TextWrapped = true end\n    listScroll.CanvasSize = UDim2.fromOffset(0, math.max(80, #state.records * 75))\nend\nrefreshList = function(append)\n    if not state.token or not state.template then return end\n    state.listEpoch = state.listEpoch + 1\n    local epoch, activeTemplate = state.listEpoch, state.template\n    local query = \"/records?key=\" .. HttpService:UrlEncode(activeTemplate.key) .. \"&q=\" .. HttpService:UrlEncode(searchBox and searchBox.Text or \"\")\n    if append and state.next then query = query .. \"&before=\" .. state.next end\n    task.spawn(function()\n        local result, err = api(\"GET\", query)\n        if not alive or epoch ~= state.listEpoch or state.template ~= activeTemplate then return end\n        if not result then notifyError(err); return end\n        state.next = result.next\n        displayRows(result.records or {}, append)\n        setStatus(\"NEXA-kapcsolat aktív • \" .. tostring(#state.records) .. \" irat betöltve\", palette.green)\n    end)\nend\nlocal function showDiscordUrl(parent, row, y)\n    if row.discordUrl and row.discordUrl ~= \"\" then\n        label(parent, \"Discord-bejegyzés • kijelölhető, másolható link\", UDim2.fromOffset(14, y), UDim2.new(1, -28, 0, 18), palette.muted, 10)\n        local url = textbox(parent, \"\", UDim2.fromOffset(14, y + 22), UDim2.new(1, -28, 0, 38), false)\n        url.Text = row.discordUrl; url.TextEditable = false\n    end\nend\nshowRecord = function(row)\n    if not detailPanel or not detailPanel.Parent then return end\n    state.selected = row; detailClear()\n    label(detailPanel, \"MDT #\" .. row.id, UDim2.fromOffset(16, 14), UDim2.new(1, -32, 0, 27), palette.gold, 19, true)\n    label(detailPanel, statusText(row.status) .. \"  ·  r\" .. tostring(row.revision) .. \"  ·  \" .. (row.discordState == \"synced\" and \"Discord szinkronban\" or \"Discord-küldésre vár\"), UDim2.fromOffset(16, 47), UDim2.new(1, -32, 0, 20), row.discordState == \"synced\" and palette.green or palette.gold, 11)\n    local content = scroll(detailPanel, \"RecordFields\", UDim2.fromOffset(0, 85), UDim2.new(1, 0, 1, -166))\n    local y = 0\n    local t = state.template\n    for _, spec in ipairs(t.fields) do\n        label(content, spec.label, UDim2.fromOffset(16, y), UDim2.new(1, -32, 0, 18), palette.muted, 11, true)\n        local value = tostring(row.fields[spec.id] or \"—\")\n        local lines = 0\n        for _ in value:gmatch(\"\\n\") do lines = lines + 1 end\n        local h = math.max(38, math.min(560, math.ceil(#value / 48) * 19 + lines * 19 + 14))\n        local view = label(content, value, UDim2.fromOffset(16, y + 22), UDim2.new(1, -32, 0, h), palette.text, 14)\n        view.TextWrapped = true; view.TextYAlignment = Enum.TextYAlignment.Top; view.TextTruncate = Enum.TextTruncate.None\n        y = y + h + 40\n    end\n    label(content, \"Beküldő: \" .. row.createdBy .. \"  ·  \" .. tostring(row.updatedAt), UDim2.fromOffset(16, y), UDim2.new(1, -32, 0, 38), palette.muted, 10).TextWrapped = true\n    y = y + 48; showDiscordUrl(content, row, y); content.CanvasSize = UDim2.fromOffset(0, y + 90)\n    local x = 14\n    if row.canEdit then button(detailPanel, \"Szerkesztés\", UDim2.new(0, x, 1, -59), UDim2.fromOffset(119, 39), function() showEditor(row) end); x = x + 129 end\n    if row.canArchive then\n        button(detailPanel, \"Lezárás\", UDim2.new(0, x, 1, -59), UDim2.fromOffset(102, 39), function()\n            confirm(\"Lezárod ezt az MDT-iratot? A nyilvántartás és a Discord-bejegyzés megmarad.\", function()\n                run(function()\n                    local result, err = api(\"POST\", \"/records/\" .. row.id .. \"/archive\", { revision = row.revision })\n                    if not result then notifyError(err); return end\n                    showRecord(result.record); refreshList(); setStatus(result.warning or \"Az irat lezárva.\", result.warning and palette.gold or palette.green)\n                end)\n            end)\n        end); x = x + 112\n    end\n    if row.canSync and row.discordState ~= \"synced\" then button(detailPanel, \"Újraküldés\", UDim2.new(0, x, 1, -59), UDim2.fromOffset(113, 39), function()\n        run(function()\n            local result, err = api(\"POST\", \"/records/\" .. row.id .. \"/sync\", {})\n            if not result then notifyError(err); return end\n            showRecord(result.record); setStatus(result.warning or \"Discord-szinkron kész.\", result.warning and palette.gold or palette.green)\n        end)\n    end, palette.gold) end\n    if row.canReview then\n        content.Size = UDim2.new(1, 0, 1, -214)\n        for index, choice in ipairs({ { \"approve\", \"Jóváhagyás\", palette.green }, { \"reject\", \"Elutasítás\", palette.red } }) do\n            local decision = choice[1]\n            button(detailPanel, choice[2], UDim2.new(0, 14 + (index - 1) * 173, 1, -110), UDim2.fromOffset(162, 36), function()\n                confirm(\"Rögzíted a vezetői döntést: \" .. choice[2] .. \"?\", function()\n                    run(function()\n                        local result, err = api(\"POST\", \"/records/\" .. row.id .. \"/review\", { revision = row.revision, decision = decision })\n                        if not result then notifyError(err); return end\n                        showRecord(result.record); refreshList(); setStatus(result.warning or \"A vezetői döntés mentve.\", result.warning and palette.gold or palette.green)\n                    end)\n                end)\n            end, choice[3])\n        end\n    end\nend\nshowEditor = function(existing)\n    if state.busy or not state.template then return end\n    detailClear(); state.selected = existing; state.pendingPayload = nil; state.dirty = false\n    local typeInfo = state.template\n    label(detailPanel, existing and (\"Szerkesztés • #\" .. existing.id) or \"Új Belv-bejegyzés\", UDim2.fromOffset(16, 14), UDim2.new(1, -32, 0, 30), palette.gold, 19, true)\n    label(detailPanel, typeInfo.approval and \"Beküldés után vezetői jóváhagyás szükséges.\" or \"Beküldés után a NEXA közzéteszi a Discordon.\", UDim2.fromOffset(16, 52), UDim2.new(1, -32, 0, 30), palette.muted, 11).TextWrapped = true\n    local form = scroll(detailPanel, \"Editor\", UDim2.fromOffset(0, 98), UDim2.new(1, 0, 1, -177))\n    local y = 0\n    for _, spec in ipairs(typeInfo.fields) do\n        label(form, spec.label .. (spec.required and \" *\" or \"\"), UDim2.fromOffset(16, y), UDim2.new(1, -32, 0, 18), palette.muted, 11, true)\n        local multiline = spec.style == \"paragraph\"\n        local h = multiline and 104 or 40\n        local box = textbox(form, spec.placeholder or spec.label, UDim2.fromOffset(16, y + 26), UDim2.new(1, -32, 0, h), multiline)\n        box.Text = existing and tostring(existing.fields[spec.id] or \"\") or \"\"\n        box:GetPropertyChangedSignal(\"Text\"):Connect(function() state.dirty = true end)\n        fieldBoxes[spec.id] = box; y = y + h + 46\n    end\n    form.CanvasSize = UDim2.fromOffset(0, y + 6)\n    button(detailPanel, \"Beküldés a Discordra\", UDim2.new(0, 16, 1, -58), UDim2.fromOffset(224, 40), function()\n        run(function()\n            local fields = {}\n            for _, spec in ipairs(typeInfo.fields) do\n                local value = trim(fieldBoxes[spec.id].Text)\n                if spec.required and value == \"\" then notifyError(\"Hiányzó mező: \" .. spec.label); return end\n                -- Roblox es a szerver is UTF-8 szoveget kezel; a vegso korlatot a szerver ellenorzi.\n                fields[spec.id] = value\n            end\n            local payload\n            if state.pendingPayload then payload = state.pendingPayload else\n                payload = { key = typeInfo.key, fields = fields, clientKey = HttpService:GenerateGUID(false):gsub(\"%-\", \"\") }\n                if existing then payload.revision = existing.revision end\n                state.pendingPayload = payload\n            end\n            local result, err, code = api(existing and \"PATCH\" or \"POST\", existing and (\"/records/\" .. existing.id) or \"/records\", payload)\n            if not result then\n                if code ~= 0 then state.pendingPayload = nil end\n                notifyError(err .. (code == 0 and \" Újrapróbáláskor ugyanazt a beküldést küldjük.\" or \"\")); return\n            end\n            state.pendingPayload = nil; state.dirty = false\n            showRecord(result.record); refreshList()\n            setStatus(result.warning or (result.record.status == \"pending\" and \"Mentve • vezetői ellenőrzésre elküldve.\" or \"Mentve és elküldve a Discordra.\"), result.warning and palette.gold or palette.green)\n        end)\n    end, palette.gold)\n    button(detailPanel, \"Mégse\", UDim2.new(0, 254, 1, -58), UDim2.fromOffset(98, 40), function()\n        local discard = function() state.dirty = false; state.pendingPayload = nil; if existing then showRecord(existing) else detailClear() end end\n        if state.dirty then confirm(\"Elveted a nem mentett űrlapot?\", discard) else discard() end\n    end)\nend\nlocal function recordsPage()\n    label(body, state.template.title, UDim2.fromOffset(0, 0), UDim2.fromOffset(674, 31), palette.text, 25, true)\n    subtitle(\"Saját Belv MDT • csak a fő botowner és az Owner Centerben felvett Roblox-ID-k\")\n    button(body, \"+ Új irat\", UDim2.fromOffset(746, 2), UDim2.fromOffset(148, 38), function()\n        if state.dirty then confirm(\"Elveted az aktuális űrlapot és újat kezdesz?\", function() state.dirty = false; showEditor(nil) end) else showEditor(nil) end\n    end, palette.gold)\n    listPanel = frame(body, \"ListPanel\", UDim2.fromOffset(0, 80), UDim2.fromOffset(300, 498), palette.panel); corner(listPanel)\n    detailPanel = frame(body, \"DetailPanel\", UDim2.fromOffset(314, 80), UDim2.fromOffset(580, 498), palette.panel); corner(detailPanel)\n    searchBox = textbox(listPanel, \"Keresés név, rendszám, szöveg…\", UDim2.fromOffset(12, 12), UDim2.fromOffset(276, 40), false)\n    listScroll = scroll(listPanel, \"RecordList\", UDim2.fromOffset(12, 68), UDim2.fromOffset(276, 369))\n    button(listPanel, \"Frissítés\", UDim2.fromOffset(12, 451), UDim2.fromOffset(133, 34), function() refreshList() end)\n    button(listPanel, \"További iratok\", UDim2.fromOffset(155, 451), UDim2.fromOffset(133, 34), function() if state.next then refreshList(true) else setStatus(\"Nincs több találat.\") end end)\n    local searchEpoch = 0\n    searchBox:GetPropertyChangedSignal(\"Text\"):Connect(function()\n        searchEpoch = searchEpoch + 1; local mine = searchEpoch\n        task.delay(0.55, function() if alive and mine == searchEpoch and searchBox and searchBox.Parent then refreshList() end end)\n    end)\n    label(detailPanel, \"Válassz egy iratot\", UDim2.fromOffset(26, 170), UDim2.new(1, -52, 0, 38), palette.text, 22, true)\n    local hint = label(detailPanel, \"Itt olvashatod vagy kezelheted az adatlapot.\\nÚj bejegyzés: a jobb felső Új irat gomb.\", UDim2.fromOffset(26, 218), UDim2.new(1, -52, 0, 62), palette.muted, 14)\n    hint.TextWrapped = true\n    refreshList()\nend\nrenderPage = function()\n    clearBody()\n    if state.page == \"overview\" then\n        label(body, \"Műveleti áttekintés\", UDim2.fromOffset(0, 0), UDim2.fromOffset(860, 36), palette.text, 27, true)\n        subtitle(\"NEXA botkapcsolat • saját Belv Discord • kizárólag a fő botowner számára\")\n        local cards = { { \"IRATOK\", \"Kitöltés és keresés\", \"A bal oldali menüben válassz irattípust.\" }, { \"DISCORD\", \"Automatikus közzététel\", \"A célcsatornákat a Discordon állítod be.\" }, { \"ELLENŐRZÉS\", \"Vezetői jóváhagyás\", \"Az ügyirat és a körözés ellenőrzésre kerül.\" } }\n        for index, card in ipairs(cards) do\n            local p = frame(body, \"Info\" .. index, UDim2.fromOffset((index - 1) * 302, 91), UDim2.fromOffset(290, 171), palette.panel); corner(p)\n            label(p, card[1], UDim2.fromOffset(18, 18), UDim2.fromOffset(260, 22), palette.gold, 10, true)\n            label(p, card[2], UDim2.fromOffset(18, 57), UDim2.fromOffset(260, 34), palette.text, 16, true)\n            local description = label(p, card[3], UDim2.fromOffset(18, 107), UDim2.fromOffset(254, 47), palette.muted, 12); description.TextWrapped = true\n        end\n        local p = frame(body, \"Start\", UDim2.fromOffset(0, 284), UDim2.fromOffset(894, 294), palette.panel); corner(p)\n        label(p, \"BELVÉDELMI IGAZGATÓSÁG\", UDim2.fromOffset(24, 23), UDim2.fromOffset(830, 35), palette.text, 23, true)\n        local instruction = label(p, \"1. Válassz nyilvántartást vagy Belv-iratsablont.\\n2. Töltsd ki az űrlapot, majd küldd be.\\n3. A NEXA menti az iratot és megjeleníti Discordon.\\n\\nA panelben csak RP-adatokat adj meg. A Roblox-játék állapotát nem módosítja.\", UDim2.fromOffset(24, 74), UDim2.fromOffset(820, 147), palette.muted, 15)\n        instruction.TextWrapped = true; instruction.TextTruncate = Enum.TextTruncate.None\n        button(p, \"Belv-iratsablonok megnyitása\", UDim2.fromOffset(24, 234), UDim2.fromOffset(298, 38), function() navigate(\"document\") end, palette.gold)\n    elseif state.page == \"document\" and not state.template then\n        label(body, \"Belv-iratsablonok\", UDim2.fromOffset(0, 0), UDim2.fromOffset(860, 36), palette.text, 27, true)\n        subtitle(\"A NEXA Discordon beállított Belv-sablonjai • személyes owner hozzáférés\")\n        local pane = scroll(body, \"Templates\", UDim2.fromOffset(0, 82), UDim2.fromOffset(894, 496))\n        local index = 0\n        for _, t in ipairs(state.templates) do\n            if t.category == \"document\" then\n                local selected = t; local y = index * 74; index = index + 1\n                local b = button(pane, \"\", UDim2.fromOffset(0, y), UDim2.new(1, -8, 0, 62), function() state.template = selected; renderPage() end)\n                label(b, t.title, UDim2.fromOffset(18, 10), UDim2.new(1, -220, 0, 25), palette.text, 15, true)\n                label(b, t.approval and \"Vezetői jóváhagyással\" or \"Közvetlen közzététel\", UDim2.fromOffset(18, 37), UDim2.new(1, -220, 0, 16), palette.muted, 11)\n                label(b, \"MEGNYITÁS  →\", UDim2.new(1, -176, 0, 20), UDim2.fromOffset(150, 22), palette.gold, 11, true)\n            end\n        end\n        pane.CanvasSize = UDim2.fromOffset(0, index * 74)\n        if index == 0 then label(pane, \"Nincs elérhető sablon. Ellenőrizd a Belv-dokumentumok használati rangját és a csatornajogaidat a NEXA-ban.\", UDim2.fromOffset(16, 30), UDim2.new(1, -32, 0, 90), palette.muted, 15).TextWrapped = true end\n    elseif state.template then recordsPage()\n    else\n        label(body, \"Ez az irattípus nem érhető el\", UDim2.fromOffset(20, 170), UDim2.fromOffset(800, 46), palette.text, 26, true)\n        label(body, \"Ellenőrizd a Discord-csatorna és a Belv-rang jogosultságait.\", UDim2.fromOffset(20, 225), UDim2.fromOffset(830, 50), palette.muted, 14).TextWrapped = true\n    end\nend\nshowLogin = function()\n    clearBody()\n    label(body, \"Belépés a Belv MDT-be\", UDim2.fromOffset(32, 45), UDim2.fromOffset(810, 45), palette.text, 29, true)\n    local help = label(body, \"Discordon a Belv-szerveren kérj személyes kódot: /mdt belepes\\nA kapott NEXA-webcímet és a 10 percig érvényes kódot add meg itt.\", UDim2.fromOffset(32, 105), UDim2.fromOffset(810, 58), palette.muted, 15)\n    help.TextWrapped = true; help.TextTruncate = Enum.TextTruncate.None\n    label(body, \"NEXA WEBcím\", UDim2.fromOffset(32, 195), UDim2.fromOffset(700, 22), palette.gold, 11, true)\n    local base = textbox(body, \"https://a-sajat-nexa-botod.onrender.com\", UDim2.fromOffset(32, 227), UDim2.fromOffset(750, 48), false)\n    base.Text = state.base\n    base.TextEditable = false\n    label(body, \"SZEMÉLYES DISCORD-BELÉPŐKÓD\", UDim2.fromOffset(32, 306), UDim2.fromOffset(700, 22), palette.gold, 11, true)\n    local code = textbox(body, \"A /mdt belepes privát válaszából\", UDim2.fromOffset(32, 338), UDim2.fromOffset(750, 48), false)\n    button(body, \"Kapcsolódás a NEXA bothoz\", UDim2.fromOffset(32, 418), UDim2.fromOffset(302, 48), function()\n        run(function()\n            state.base = trim(base.Text):gsub(\"/+$\", \"\")\n            local result, err = api(\"POST\", \"/auth\", { code = trim(code.Text), robloxUserId = tostring(LocalPlayer.UserId), guildId = CONFIG.GuildId }, true)\n            if not result then notifyError(err); return end\n            state.token = result.token; code.Text = \"\"\n            local bootstrap, bootError = api(\"GET\", \"/bootstrap\")\n            if not bootstrap then notifyError(bootError); return end\n            state.templates = bootstrap.templates or {}; state.officer = bootstrap.officer; state.guild = bootstrap.guild; state.page = \"overview\"\n            headerUser.Text = bootstrap.officer.name .. \"  ·  \" .. bootstrap.guild.name\n            headerUser.TextColor3 = palette.green; renderPage(); setStatus(\"Csatlakozva • \" .. tostring(#state.templates) .. \" elérhető irattípus\", palette.green)\n        end)\n    end, palette.gold)\n    local hint = label(body, \"Csak a fő botowner és az engedélyezett Roblox-ID jelentkezhet be.\\nA bot Discord-tokenje csak a szerveren marad.\", UDim2.fromOffset(32, 494), UDim2.fromOffset(780, 52), palette.muted, 12)\n    hint.TextWrapped = true\nend\nlocal function resize()\n    local camera = workspace.CurrentCamera\n    if camera then\n        local viewport = camera.ViewportSize\n        scale.Scale = math.min(1, math.max(0.2, math.min((viewport.X - 30) / 1120, (viewport.Y - 100) / 720)))\n    end\nend\nlocal cameraConnection\nlocal function bindCamera()\n    if cameraConnection then cameraConnection:Disconnect() end\n    if workspace.CurrentCamera then cameraConnection = connect(workspace.CurrentCamera:GetPropertyChangedSignal(\"ViewportSize\"), resize) end\n    resize()\nend\nconnect(workspace:GetPropertyChangedSignal(\"CurrentCamera\"), bindCamera)\nconnect(UserInputService.InputBegan, function(input, processed)\n    if not processed and not UserInputService:GetFocusedTextBox() and input.KeyCode == Enum.KeyCode.F6 then window.Visible = not window.Visible end\nend)\ndestroyPanel = function()\n    if state.busy then setStatus(\"Várd meg a folyamatban lévő műveletet.\", palette.gold); return end\n    confirm(\"Bezárod a panelt? A beküldött iratok megmaradnak; a nem mentett űrlap elvész.\", function()\n        run(function()\n            if state.token then api(\"POST\", \"/logout\", {}); state.token = nil end\n            alive = false\n            for _, connection in ipairs(connections) do connection:Disconnect() end\n            closeModal(); screen:Destroy()\n        end)\n    end)\nend\nconnect(screen.Destroying, function()\n    alive = false; state.token = nil\n    for _, connection in ipairs(connections) do connection:Disconnect() end\nend)\nbindCamera(); showLogin()\ntask.spawn(function()\n    while alive do\n        task.wait(30)\n        if alive and window.Visible and state.token and state.template and not state.busy then refreshList() end\n    end\nend)\n";
+
+},
+"src/mdt-owner.js": function(module, exports, require) {
+const { isBotOwner } = require('./config');
+const { getSettings, saveMdtOwnerConfig, TYPES, MdtError } = require('./belv-mdt');
+const clientSource = require('./mdt-client');
+
+function requireOwner(id) {
+  if (!isBotOwner(id)) throw new MdtError(403, 'A Belv MDT Owner Center oldalát kizárólag a fő botowner nyithatja meg.');
+}
+async function mdtOwnerPage(client, session, guildId, { layout, escapeHtml: escape }) {
+  requireOwner(session?.user?.id);
+  let content = `<div class="page-head"><div><div class="section-kicker">FŐ OWNER • ROBLOX MDT</div><h1>Belv MDT</h1><p class="muted">A panel kizárólag a fő botowner Discord-fiókjával és az itt felvett Roblox-ID-kkel használható.</p></div><a class="btn secondary" href="/owner">← Owner Center</a></div>`;
+  if (!guildId) {
+    content += `<div class="owner-tools">${[...client.guilds.cache.values()].map((guild) => `<article class="card"><h3>${escape(guild.name)}</h3><p class="muted">${escape(guild.id)}</p><a class="btn" href="/owner/mdt/${escape(guild.id)}">MDT beállítása</a></article>`).join('')}</div>`;
+    return layout('Belv MDT • Owner', content, session);
+  }
+  const guild = client.guilds.cache.get(guildId);
+  if (!guild) throw new MdtError(404, 'A NEXA Bot nincs ezen a Discord-szerveren.');
+  const settings = await getSettings(guild.id);
+  const channels = [...guild.channels.cache.values()].filter((channel) => channel.isTextBased?.() && !channel.isThread?.());
+  const select = (name, value, optional = false) => `<select name="${escape(name)}">${optional ? '<option value="">Alapcsatorna használata</option>' : '<option value="">Válassz csatornát</option>'}${channels.map((channel) => `<option value="${escape(channel.id)}"${value === channel.id ? ' selected' : ''}>#${escape(channel.name)}</option>`).join('')}</select>`;
+  content += `<section class="card"><div class="section-kicker">${escape(guild.name)}</div><h2>Roblox-fiókok és Discord-célcsatornák</h2><p class="muted">A saját Roblox-fiókod profilcímében szereplő számot add meg. Több saját fiók esetén külön sorba írd az ID-ket. Másoknak adott Owner Center-hozzáférés nem ad MDT-jogot.</p><form method="post" action="/owner/mdt/${escape(guild.id)}"><input type="hidden" name="csrf" value="${escape(session.csrf)}"><label><input type="checkbox" name="enabled"${settings.enabled ? ' checked' : ''}> MDT bekapcsolva</label><label>Engedélyezett Roblox-ID-k • legfeljebb 10 saját fiók</label><textarea name="roblox_ids" rows="4" maxlength="250" placeholder="123456789\n987654321">${escape((settings.robloxIds || []).join('\n'))}</textarea><div class="field-grid"><div><label>Alapértelmezett MDT-csatorna</label>${select('default_channel', settings.defaultChannelId)}</div><div><label>Vezetői ellenőrzés csatornája</label>${select('review_channel', settings.reviewChannelId, true)}</div>${TYPES.map((type) => `<div><label>${escape(type.title)}</label>${select(`channel_${type.key}`, settings.channelIds?.[type.key], true)}</div>`).join('')}</div><p class="muted">A meglévő Belv-iratsablonok saját NEXA-célcsatornájukba kerülnek. A jóváhagyást kérő iratok az ellenőrzési csatornában várnak a fő owner döntésére.</p><div class="actions"><button class="btn green" type="submit">MDT-beállítások mentése</button></div></form></section>`;
+  content += `<section class="card section"><h2>Roblox-panel letöltése</h2><p class="muted">Előbb mentsd a fiók-ID-ket és a csatornákat. A letöltött scriptbe a NEXA-webcím és az engedélyezett Roblox-ID-k kerülnek; belépési kód vagy bot-token nincs benne.</p><div class="actions">${settings.enabled && settings.robloxIds?.length ? `<a class="btn" href="/owner/mdt/${escape(guild.id)}/client.lua">Saját Belv MDT script letöltése</a>` : '<span class="badge">Előbb adj hozzá Roblox-ID-t és kapcsold be az MDT-t</span>'}</div><p class="muted">Discordon a kiválasztott Belv-szerveren kérj kódot: <code>/mdt belepes</code>. A panel nyitása és elrejtése: <strong>F6</strong>. Az ID-lista változtatása után töltsd le újra a scriptet.</p><form method="post" action="/owner/mdt/${escape(guild.id)}"><input type="hidden" name="csrf" value="${escape(session.csrf)}"><input type="hidden" name="operation" value="revoke"><button class="btn secondary" type="submit">Minden saját MDT-belépés visszavonása</button></form></section>`;
+  return layout('Belv MDT • Owner', content, session);
+}
+async function saveMdtOwnerForm(guild, actorId, form) {
+  requireOwner(actorId);
+  return saveMdtOwnerConfig(guild, actorId, { enabled: form.get('enabled') === 'on', robloxIds: form.get('roblox_ids'), defaultChannelId: form.get('default_channel'), reviewChannelId: form.get('review_channel'), channelIds: Object.fromEntries(TYPES.map((type) => [type.key, form.get(`channel_${type.key}`)])) });
+}
+async function buildMdtClientScript(guildId, actorId, baseUrl) {
+  requireOwner(actorId);
+  const settings = await getSettings(guildId);
+  if (!settings.enabled || !settings.robloxIds?.length) throw new MdtError(409, 'Előbb ments legalább egy Roblox-ID-t és kapcsold be az MDT-t.');
+  const root = new URL(baseUrl);
+  if (root.protocol !== 'https:') throw new MdtError(409, 'A NEXA PUBLIC_URL értéke HTTPS-webcím legyen.');
+  const base = root.origin;
+  const config = `local CONFIG = { BaseUrl = ${JSON.stringify(base)}, GuildId = ${JSON.stringify(guildId)}, AllowedRobloxIds = { ${settings.robloxIds.map((id) => JSON.stringify(id)).join(', ')} } }`;
+  return clientSource.replace('local CONFIG = { BaseUrl = "", GuildId = "", AllowedRobloxIds = {} }', config);
+}
+module.exports = { mdtOwnerPage, saveMdtOwnerForm, buildMdtClientScript };
+
+},
 "src/aegis.js": function(module, exports, require) {
 const crypto = require('node:crypto');
 const {
@@ -3857,6 +4332,36 @@ async function initializeConfigStore() {
         ON nexabot_aegis_scans (guild_id, created_at DESC);
       CREATE UNIQUE INDEX IF NOT EXISTS nexabot_one_aegis_baseline
         ON nexabot_aegis_scans (guild_id) WHERE is_baseline = TRUE;
+      CREATE TABLE IF NOT EXISTS nexabot_mdt_settings (
+        guild_id TEXT PRIMARY KEY, config JSONB NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS nexabot_mdt_codes (
+        code_hash TEXT PRIMARY KEY, guild_id TEXT NOT NULL, user_id TEXT NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS nexabot_mdt_codes_owner ON nexabot_mdt_codes(guild_id,user_id);
+      CREATE TABLE IF NOT EXISTS nexabot_mdt_sessions (
+        token_hash TEXT PRIMARY KEY, guild_id TEXT NOT NULL, user_id TEXT NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL, roblox_user_id TEXT NOT NULL DEFAULT ''
+      );
+      ALTER TABLE nexabot_mdt_sessions ADD COLUMN IF NOT EXISTS roblox_user_id TEXT NOT NULL DEFAULT '';
+      CREATE INDEX IF NOT EXISTS nexabot_mdt_sessions_owner ON nexabot_mdt_sessions(guild_id,user_id);
+      CREATE TABLE IF NOT EXISTS nexabot_mdt_records (
+        id BIGSERIAL PRIMARY KEY, guild_id TEXT NOT NULL, template_key TEXT NOT NULL,
+        title TEXT NOT NULL, fields JSONB NOT NULL, status TEXT NOT NULL,
+        approval_required BOOLEAN NOT NULL DEFAULT FALSE,
+        created_by TEXT NOT NULL, updated_by TEXT NOT NULL, reviewed_by TEXT,
+        review_reason TEXT, client_key TEXT NOT NULL, input_hash TEXT NOT NULL,
+        revision INTEGER NOT NULL DEFAULT 1, discord_state TEXT NOT NULL DEFAULT 'pending',
+        discord_channel_id TEXT, discord_message_id TEXT,
+        review_channel_id TEXT, review_message_id TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(guild_id,created_by,client_key)
+      );
+      CREATE INDEX IF NOT EXISTS nexabot_mdt_records_guild ON nexabot_mdt_records(guild_id,id DESC);
+      INSERT INTO nexabot_schema_migrations(version,name)
+      VALUES(11,'nexabot_20_2_belv_mdt') ON CONFLICT(version) DO NOTHING;
       CREATE TABLE IF NOT EXISTS nexabot_architect_deployments (
         id BIGSERIAL PRIMARY KEY,
         guild_id TEXT NOT NULL,
@@ -5518,6 +6023,8 @@ const {
   verifyBlueprintToken
 } = require('./server-architect');
 const { repairSupportServer } = require('./support-server');
+const { buildMdtCommand, handleMdtApi, revokeMdtOwnerSessions, PREFIX: MDT_API_PREFIX } = require('./belv-mdt');
+const { mdtOwnerPage, saveMdtOwnerForm, buildMdtClientScript } = require('./mdt-owner');
 
 const sessions = new Map();
 const oauthStates = new Map();
@@ -5740,6 +6247,7 @@ function layout(title, content, session = null, branding = null, language = null
     || title.startsWith('AEGIS')
     || title.startsWith('NEXA OS Studio')
     || title.startsWith('Owner Support')
+    || title.startsWith('Belv MDT')
   ));
   const pageLanguage = ownerView ? 'hu' : ((language || session?.language || 'en') === 'hu' ? 'hu' : 'en');
   const homeUrl = pageLanguage === 'en' ? '/?lang=en' : '/';
@@ -5821,7 +6329,7 @@ ${dashboardTheme()}
 @media(min-width:1500px){.nexa-v153 .owner-server-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:1180px){.billing-selector{grid-template-columns:1fr}.billing-selector form{grid-template-columns:1fr auto}.billing-grid{grid-template-columns:1fr}.billing-grid>section:first-child{position:static}.billing-plan{min-height:520px}}@media(max-width:900px){.nexa-v153 .topbar{height:64px}.nexa-v153 .app{grid-template-columns:1fr}.nexa-v153 .app .sidebar{top:64px;height:calc(100vh - 64px)}.nexa-v153 main{padding:24px 18px 96px}.nexa-v153 .contextbar{top:64px}.billing-steps{grid-template-columns:1fr}.billing-plans{grid-template-columns:1fr}.billing-plan{min-height:0}.billing-selector form{grid-template-columns:1fr}.billing-selector .btn{width:100%}}@media(max-width:760px){.profile-summary{display:none}.profile-menu summary{min-width:auto}.profile-hero{grid-template-columns:1fr;text-align:center}.profile-avatar-large{margin:auto}.language-grid,.readiness-grid{grid-template-columns:1fr}.billing-page-head{align-items:flex-start}.billing-page-head>.btn{width:100%}.billing-selector{padding:15px}.billing-plans-shell{padding:18px}.billing-diagnostics summary{align-items:flex-start;flex-direction:column}}
 
 /* NEXA Azure Command — calm, desktop-first operations theme */
-.footer-release{font-size:0!important}.footer-release::after{content:'NEXA Bot 20.1.1 • NEXA OS Studio';font-size:10px}
+.footer-release{font-size:0!important}.footer-release::after{content:'NEXA Bot 20.2.0 • NEXA OS Studio';font-size:10px}
 .nexa-v153{--primary:#4b9dff;--accent:#5ed8c4;--cyan:#78c8ff;--bg:#07101d;--panel:#0a1423;--card:#0e1b2d;--card2:#13243a;--line:#263b55;--text:#f4f8ff;--muted:#91a4bd;--red:#ff7185;--gold:#efc46b;background:radial-gradient(1050px 640px at 82% -12%,rgba(63,137,225,.22),transparent 70%),radial-gradient(820px 580px at -12% 78%,rgba(61,188,171,.10),transparent 72%),linear-gradient(150deg,#07101d 0,#091625 48%,#07111f 100%);background-attachment:fixed}.nexa-v153::before{background:linear-gradient(180deg,rgba(4,10,19,.03),rgba(4,10,19,.52))}.nexa-v153 .topbar{background:rgba(6,15,27,.9);border-bottom-color:#20344d;box-shadow:0 12px 40px rgba(0,0,0,.26)}.nexa-v153 .brand-mark{background:linear-gradient(145deg,#6fc4ff,#3578dc);color:#04101f;box-shadow:0 0 0 1px rgba(192,229,255,.3),0 13px 38px rgba(37,116,213,.25)}.nexa-v153 .brand-text span{color:#6fe1cd}.nexa-v153 .live-pill{background:#0b211f;border-color:#245950;color:#a9eee0}.nexa-v153 .live-dot{background:#62d9c5;box-shadow:0 0 0 4px rgba(98,217,197,.09),0 0 18px rgba(98,217,197,.55)}.nexa-v153 .navlinks,.nexa-v153 .locale-switch{background:#0b1727;border-color:#253a53}.nexa-v153 .navlinks a.active,.nexa-v153 .locale-switch a.active{background:#172b44;box-shadow:inset 0 0 0 1px #315074}.nexa-v153 .app{grid-template-columns:286px minmax(0,1fr)}.nexa-v153 .sidebar{background:linear-gradient(180deg,rgba(9,20,35,.985),rgba(5,13,24,.99));border-right-color:#1f344c}.nexa-v153 .side-label{color:#6f88a7}.nexa-v153 .side-search,.nexa-v153 .server-context{border-color:#29415d;background:#0b192a}.nexa-v153 .server-context{background:linear-gradient(145deg,rgba(75,157,255,.13),rgba(94,216,196,.045))}.nexa-v153 .server-select{background:#081524!important;border-color:#2d4868!important}.nexa-v153 .side-link{color:#91a7c2}.nexa-v153 .side-link:hover{background:#10223a;border-color:#29496b}.nexa-v153 .side-link.active{background:linear-gradient(90deg,rgba(75,157,255,.20),rgba(94,216,196,.065));border-color:#32618b;box-shadow:inset 3px 0 #5fb5ff,0 10px 26px rgba(0,0,0,.12);color:#f7fbff}.nexa-v153 .side-icon{background:#12263e;border-color:#29435f}.nexa-v153 .side-link.active .side-icon{background:#1d4266;color:#8ad8ff}.nexa-v153 main{max-width:1700px;padding:38px 46px 120px}.nexa-v153 .contextbar{background:linear-gradient(180deg,rgba(7,16,29,.985),rgba(7,16,29,.74),transparent);color:#7991ae}.nexa-v153 .contextbar strong{color:#dceaff}.nexa-v153 .page-head{border-bottom-color:#203750}.nexa-v153 .section-kicker{color:#70c8ff}.nexa-v153 .card{border-color:#263e5a;background:linear-gradient(145deg,rgba(15,30,49,.98),rgba(9,20,35,.98));box-shadow:0 22px 68px rgba(0,0,0,.25)}.nexa-v153 .card::before{display:block;background:rgba(75,157,255,.055)}.nexa-v153 .card:hover{border-color:#355b7f}.nexa-v153 .stat{border-color:#28435f;background:linear-gradient(145deg,#11263e,#0b1b2d)}.nexa-v153 .control-ribbon{border-color:#28415d;background:#081624}.nexa-v153 .control-ribbon>div{border-color:#213a55;background:linear-gradient(180deg,#11263d,#0b1a2c)}.nexa-v153 .settings-jump{border-color:#2a4664;background:rgba(8,21,36,.96);box-shadow:0 14px 45px rgba(0,0,0,.25)}.nexa-v153 .settings-jump a{color:#91a9c4}.nexa-v153 .settings-jump a:hover,.nexa-v153 .settings-jump a.active{background:#183450;color:#fff;box-shadow:inset 0 0 0 1px #396589}.nexa-v153 .switch{background:#0c1c2e;border-color:#263f5b}.nexa-v153 .switch:hover{background:#112740;border-color:#3a6389}.nexa-v153 select,.nexa-v153 textarea,.nexa-v153 input[type=text],.nexa-v153 input[type=number],.nexa-v153 input[type=url],.nexa-v153 input[type=color],.nexa-v153 input[type=password],.nexa-v153 input[type=datetime-local],.nexa-v153 input[type=search]{background:#071523!important;border-color:#2a4563!important;color:#f4f8ff!important}.nexa-v153 select:focus,.nexa-v153 textarea:focus,.nexa-v153 input:focus{border-color:#58aaff!important;box-shadow:0 0 0 3px rgba(75,157,255,.13)!important}.nexa-v153 .btn{border-color:#6db8ff;background:linear-gradient(135deg,#58abff,#3474d0);color:#fff;box-shadow:0 11px 28px rgba(38,105,191,.24)}.nexa-v153 .btn.secondary{background:#11243a;border-color:#31506f;color:#dceaff}.nexa-v153 .btn.green{background:linear-gradient(135deg,#62d9c5,#2e9f8d);border-color:#78ead6;color:#041713}.nexa-v153 .badge{background:#0c2928;border-color:#2b6760;color:#8ee6d7}.nexa-v153 .badge.pro{background:#112c48;border-color:#35658f;color:#9ed3ff}.nexa-v153 .badge.ultimate{background:#182844;border-color:#4c6896;color:#bfd7ff}.nexa-v153 .notice{background:#0d2928;border-color:#296158;color:#b7e9df}.nexa-v153 .notice.warn{background:#2b2414;border-color:#6d582d;color:#f0d79c}.nexa-v153 .notice.error,.nexa-v153 .error{background:#2a151d;border-color:#753344;color:#ffc1cc}.nexa-v153 .owner-server,.nexa-v153 .server.card{background:linear-gradient(145deg,#10243a,#091929)}.nexa-v153 .owner-server-metrics{background:#29425e;border-color:#29425e}.nexa-v153 .owner-server-metric{background:#0d1d30}.nexa-v153 .profile-menu[open] summary,.nexa-v153 .profile-menu summary:hover{background:#10243a;border-color:#315273}.nexa-v153 .profile-popover{background:rgba(8,20,34,.99);border-color:#315273}.nexa-v153 .profile-popover a:hover{background:#142c47}.nexa-v153 .language-card,.nexa-v153 .readiness-item{background:#0c1d30;border-color:#29435f}.nexa-v153 table{border-color:#29435f}.nexa-v153 thead{background:#091726}.nexa-v153 th,.nexa-v153 td{border-color:#213950}.nexa-v153 .savebar{border-color:#315371;background:rgba(7,18,31,.96);box-shadow:0 20px 62px rgba(0,0,0,.42)}.nexa-v153 .billing-steps>div{border-color:#263f5b;background:#0c1b2d}.nexa-v153 .billing-steps>div.active{border-color:#37638a;background:linear-gradient(145deg,#132b45,#0d1e32)}.nexa-v153 .billing-plan{border-color:#2b4765;background:linear-gradient(160deg,#10243a,#09192a)}.nexa-v153 .billing-plan.featured{border-color:#4b82b3;box-shadow:inset 0 3px #5eafff}.nexa-v153 .billing-cycle label{border-color:#2d4a69;background:#0a192a}.nexa-v153 .billing-cycle label:has(input:checked){border-color:#4e91ca;background:#122b47}.nexa-v153 .billing-feature-list{border-color:#263f5b}.nexa-v153 .billing-feature-list li{border-color:#213950}.nexa-v153 .billing-feature-list li::before{color:#62d9c5}
 @media(min-width:1500px){.nexa-v153 .guild-settings.view-control .settings{grid-template-columns:repeat(12,minmax(0,1fr));align-items:start}.nexa-v153 .guild-settings.view-control .settings>.card{grid-column:span 6}.nexa-v153 .guild-settings.view-control .settings>#modules,.nexa-v153 .guild-settings.view-control .settings>#tickets,.nexa-v153 .guild-settings.view-control .settings>#anti-raid,.nexa-v153 .guild-settings.view-control .settings>#protection,.nexa-v153 .guild-settings.view-control .settings>#channels,.nexa-v153 .guild-settings.view-control .settings>#roles,.nexa-v153 .guild-settings.view-control .settings>#messages,.nexa-v153 .guild-settings.view-control .settings>#branding,.nexa-v153 .guild-settings.view-control .settings>.savebar{grid-column:1/-1}}
 
@@ -5831,7 +6339,7 @@ ${dashboardTheme()}
 /* NEXA OS Studio 20 */
 .os-studio{display:grid;gap:20px}.os-studio-hero{position:relative;overflow:hidden;min-height:320px;padding:48px;border:1px solid #315576;border-radius:30px;background:radial-gradient(600px 340px at 85% 18%,rgba(89,190,255,.22),transparent 68%),radial-gradient(480px 300px at 12% 100%,rgba(86,224,195,.12),transparent 70%),linear-gradient(135deg,#0b1c31,#081421 72%);box-shadow:0 34px 100px rgba(0,0,0,.35);display:flex;align-items:center}.os-studio-hero>div:first-child{position:relative;z-index:2;max-width:850px}.os-version{display:inline-flex;padding:7px 11px;border:1px solid #397499;border-radius:999px;background:rgba(66,161,220,.1);color:#8bd8ff;font:900 10px ui-monospace,monospace;letter-spacing:1.3px}.os-studio-hero h1{margin:19px 0 12px;font-size:clamp(44px,6vw,76px);line-height:.95;letter-spacing:-4px}.os-studio-hero h1 em{font-style:normal;background:linear-gradient(100deg,#6cc6ff,#6fe4c9);-webkit-background-clip:text;color:transparent}.os-studio-hero p{max-width:760px;margin:0;color:#a5b9cf;font-size:17px}.os-studio-pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px}.os-studio-pills span{padding:7px 10px;border:1px solid #294964;border-radius:9px;background:#0a1828;color:#8faac2;font:800 9px ui-monospace,monospace;letter-spacing:.8px}.os-orbit{position:absolute;right:75px;top:50%;width:170px;height:170px;transform:translateY(-50%);display:grid;place-items:center;border:1px solid rgba(111,214,255,.22);border-radius:50%;box-shadow:0 0 80px rgba(69,164,224,.15)}.os-orbit::before,.os-orbit::after{content:'';position:absolute;border:1px solid rgba(105,224,201,.17);border-radius:50%}.os-orbit::before{inset:-28px}.os-orbit::after{inset:32px}.os-orbit i{position:absolute;width:12px;height:12px;border-radius:50%;background:#70e1c9;box-shadow:0 0 22px #70e1c9;animation:osOrbit 6s linear infinite;transform-origin:0 85px}.os-orbit b{font-size:68px;letter-spacing:-5px;color:#dff5ff}.os-orbit span{position:absolute;right:17px;bottom:18px;color:#70e1c9;font:900 13px ui-monospace,monospace}@keyframes osOrbit{to{transform:rotate(360deg)}}.studio-owner-lock{padding:13px 16px;border:1px solid #2c4a64;border-radius:13px;background:#0b1928;color:#97abc1;font-size:12px}.studio-steps{position:sticky;top:128px;z-index:8;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:8px;border:1px solid #284760;border-radius:17px;background:rgba(7,19,31,.92);backdrop-filter:blur(18px)}.studio-steps a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:11px;text-decoration:none;color:#8fa7bd}.studio-steps a:hover{background:#112a43;color:#fff}.studio-steps b{display:grid;place-items:center;width:30px;height:30px;border:1px solid #315979;border-radius:9px;color:#75caff;font:900 10px ui-monospace,monospace}.studio-steps span{font-size:12px;font-weight:850}.studio-builder,.studio-preview{padding:30px;border:1px solid #294a65;border-radius:24px;background:linear-gradient(145deg,rgba(12,29,47,.98),rgba(7,19,31,.98));box-shadow:0 24px 70px rgba(0,0,0,.26)}.studio-builder-copy{max-width:800px;margin-bottom:24px}.studio-builder-copy h2{margin:5px 0;font-size:32px}.studio-builder-copy p{margin:0;color:var(--muted)}.studio-prompt{display:grid;gap:8px}.studio-prompt>span,.studio-control-row label{font-size:12px;font-weight:850;color:#c8d9e8}.studio-prompt textarea{min-height:170px;font-size:15px;line-height:1.65}.studio-prompt small{color:#718ba2}.studio-block{margin-top:28px;padding-top:24px;border-top:1px solid #223d54}.studio-block-head{display:flex;gap:13px;align-items:flex-start;margin-bottom:15px}.studio-block-head>span{display:grid;place-items:center;width:38px;height:38px;border:1px solid #32638a;border-radius:11px;background:#102b45;color:#76cbff;font:900 11px ui-monospace,monospace}.studio-block-head h3{margin:0}.studio-block-head p{margin:2px 0 0;color:var(--muted);font-size:12px}.studio-template-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.studio-template input,.studio-feature input{position:absolute;opacity:0;pointer-events:none}.studio-template>span{display:grid;min-height:132px;padding:16px;border:1px solid #29445d;border-radius:15px;background:#091827;cursor:pointer;transition:.18s}.studio-template>span:hover{transform:translateY(-2px);border-color:#42739a}.studio-template input:checked+span{border-color:#64bfff;background:linear-gradient(145deg,#123252,#0c2239);box-shadow:inset 0 0 0 1px rgba(104,198,255,.2),0 12px 30px rgba(31,110,168,.18)}.studio-template i{font-style:normal;font-size:24px;color:#74d9c6}.studio-template strong{margin-top:8px}.studio-template small{color:#8299ae;font-size:10px;line-height:1.35}.studio-feature-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.studio-feature>span{position:relative;display:flex;align-items:center;gap:9px;min-height:54px;padding:12px 42px 12px 13px;border:1px solid #29445d;border-radius:13px;background:#091827;cursor:pointer;font-size:12px}.studio-feature strong{font-size:11px}.studio-feature i{position:absolute;right:13px;width:28px;height:16px;border-radius:999px;background:#233a4d}.studio-feature i::after{content:'';position:absolute;left:3px;top:3px;width:10px;height:10px;border-radius:50%;background:#7890a3;transition:.18s}.studio-feature input:checked+span{border-color:#347a73;background:#0c282a}.studio-feature input:checked+span i{background:#2b8073}.studio-feature input:checked+span i::after{left:15px;background:#8ff1dd}.studio-control-row{display:grid;grid-template-columns:minmax(170px,.6fr) minmax(170px,.6fr) minmax(240px,1fr);align-items:end;gap:12px;margin-top:24px}.studio-control-row label{display:grid;gap:7px}.studio-generate{min-height:50px;font-size:13px}.studio-generate span{font-size:18px}.studio-preview-head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding-bottom:22px;border-bottom:1px solid #26455e}.studio-preview-head h2{margin:5px 0 3px;font-size:34px}.studio-preview-head p{margin:0;color:var(--muted)}.studio-hash{display:grid;gap:4px;text-align:right}.studio-hash span{color:#6f899f;font:800 9px ui-monospace,monospace}.studio-hash code{padding:8px 10px;border:1px solid #315979;border-radius:10px;background:#091725;color:#8bd6ff}.studio-simulation{display:grid;grid-template-columns:170px 1fr;gap:25px;margin:22px 0;padding:22px;border:1px solid #2d5c5a;border-radius:20px;background:linear-gradient(145deg,#0b2929,#0a2025)}.studio-simulation.warning{border-color:#6b5b31;background:linear-gradient(145deg,#292313,#181b1c)}.studio-simulation.blocked{border-color:#723746;background:linear-gradient(145deg,#2b1720,#171923)}.studio-score{position:relative;display:grid;place-items:center;align-content:center;width:140px;height:140px;border-radius:50%;background:radial-gradient(circle at center,#0c1d2b 55%,transparent 57%),conic-gradient(#65dbc5 calc(var(--score)*1%),#24384a 0);box-shadow:0 0 35px rgba(66,184,164,.13)}.studio-score strong{font-size:39px;line-height:1}.studio-score span{margin-top:4px;color:#83a199;font:800 8px ui-monospace,monospace}.studio-sim-body h3{margin:3px 0}.studio-sim-body>p{margin:0 0 14px;color:#91a9b9}.studio-diff{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.studio-diff>div{display:grid;padding:12px;border:1px solid #2b4b5d;border-radius:12px;background:rgba(6,17,27,.45)}.studio-diff b{font-size:20px;color:#7ddfc9}.studio-diff span{font-size:11px;font-weight:800}.studio-diff small{color:#718b9c;font-size:9px}.studio-diff .safe b{color:#82e6d2}.studio-metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:18px 0}.studio-metrics>div{display:grid;padding:15px;border:1px solid #29465f;border-radius:14px;background:#0a1929}.studio-metrics strong{font-size:24px}.studio-metrics span{color:#8098ad;font-size:10px;text-transform:uppercase}.studio-modules{display:flex;align-items:center;justify-content:space-between;gap:18px}.studio-modules>div:last-child{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}.studio-modules>div:last-child span{padding:6px 9px;border:1px solid #2f6b64;border-radius:8px;background:#0d2b2a;color:#8ae6d5;font:800 9px ui-monospace,monospace}.studio-blueprint-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:18px 0}.studio-category{overflow:hidden;border:1px solid #29465f;border-radius:17px;background:#091827}.studio-category-head{display:flex;align-items:center;gap:12px;padding:15px;border-bottom:1px solid #263f57;background:linear-gradient(90deg,#112a44,#0b1d30)}.studio-category-head>span{color:#69c6ff;font:900 19px ui-monospace,monospace}.studio-category-head small{color:#6e879c;font:800 8px ui-monospace,monospace}.studio-category-head h3{margin:1px 0 0;font-size:14px}.studio-channel-list{display:grid}.studio-channel-list>div{display:grid;grid-template-columns:24px 1fr auto;align-items:center;gap:8px;padding:10px 13px;border-bottom:1px solid #1d3347}.studio-channel-list>div:last-child{border-bottom:0}.studio-channel-list i{color:#68c7ff;font-style:normal}.studio-channel-list span{display:grid}.studio-channel-list strong{font-size:11px}.studio-channel-list small{color:#6e879d;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.studio-channel-list b{color:#6b859a;font:800 8px ui-monospace,monospace}.studio-color{display:inline-block;width:9px;height:9px;margin-right:8px;border-radius:50%}.studio-deploy{display:grid;grid-template-columns:1fr minmax(340px,.75fr);gap:24px;margin-top:18px;padding:25px;border:1px solid #347267;border-radius:20px;background:linear-gradient(135deg,#0d2d2b,#0a2027)}.studio-deploy h3{margin:4px 0}.studio-deploy p{margin:0;color:#91aaa7}.studio-deploy form{display:grid;grid-template-columns:1fr auto;align-items:end;gap:10px}.studio-deploy label{display:grid;gap:6px;font-size:11px;font-weight:800}.studio-deploy .btn[disabled]{opacity:.45;cursor:not-allowed;filter:grayscale(.5)}.studio-two-col{display:grid;grid-template-columns:1fr 1fr;gap:15px}.studio-last form{display:grid;grid-template-columns:1fr auto;align-items:end;gap:10px;margin-top:16px}.studio-last form label{display:grid;gap:6px;font-size:11px;font-weight:800}.studio-history{display:grid}.studio-history-row{display:grid;grid-template-columns:34px 1fr auto auto;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid #223a51}.studio-history-row:last-child{border-bottom:0}.studio-history-row>span{color:#6ebff1;font:900 10px ui-monospace,monospace}.studio-history-row>div{display:grid}.studio-history-row strong{font-size:11px}.studio-history-row small{color:#70889e;font-size:9px}.studio-history-row code{color:#82d7c7;font-size:9px}.studio-history-row>b{color:#849cb1;font:800 9px ui-monospace,monospace}.studio-empty{border-style:dashed!important;background:#0a1928!important;color:#8aa2b8!important}
 @media(max-width:1250px){.os-orbit{opacity:.35;right:30px}.studio-template-grid,.studio-feature-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.studio-two-col{grid-template-columns:1fr}.studio-simulation{grid-template-columns:140px 1fr}.studio-score{width:120px;height:120px}}@media(max-width:760px){.os-studio-hero{min-height:0;padding:28px 22px}.os-orbit{display:none}.os-studio-hero h1{font-size:45px}.studio-steps{position:static;grid-template-columns:repeat(2,1fr)}.studio-builder,.studio-preview{padding:19px}.studio-template-grid,.studio-feature-grid,.studio-blueprint-grid{grid-template-columns:1fr}.studio-control-row,.studio-deploy,.studio-deploy form,.studio-last form{grid-template-columns:1fr}.studio-simulation{grid-template-columns:1fr}.studio-score{margin:auto}.studio-diff,.studio-metrics{grid-template-columns:repeat(2,1fr)}.studio-preview-head,.studio-modules{align-items:flex-start;flex-direction:column}.studio-hash{text-align:left}.studio-history-row{grid-template-columns:30px 1fr auto}.studio-history-row>b{display:none}}
-</style></head><body class="nexa-v153 ${ownerView ? 'owner-mode' : ''}${activePage ? ` page-${escapeHtml(activePage)}` : ''}"><header class="topbar"><div class="topbar-inner">${user ? `<button class="sidebar-toggle" type="button" data-sidebar-toggle aria-label="Menu">☰</button>` : ``}<a class="brand" href="${homeUrl}"><span class="brand-mark">N</span><span class="brand-text">Nexa<span>Bot</span></span></a><div class="live-pill"><i class="live-dot"></i> NEXA CORE ONLINE</div><nav class="navlinks" aria-label="${pageLanguage === 'en' ? 'Main navigation' : 'Fő navigáció'}"><a${navClass('platform')} href="${platformUrl}">${platformLabel}</a><a${navClass('commands')} href="${commandsUrl}">${commandsLabel}</a><a${navClass('subscriptions')} href="${pricingUrl}">${pricingLabel}</a><a${navClass('guide')} href="${guideUrl}">${guideLabel}</a><a${navClass('privacy')} href="${privacyUrl}">${privacyLabel}</a></nav><div class="spacer"></div>${localeSwitcher}${userMenu}</div></header>${user ? `<div class="app"><aside class="sidebar">${sidebarNavigation}<div class="footer-note">${escapeHtml(productName)}<br><span class="footer-release">NEXA Bot 20.1.1 • NEXA OS Studio</span></div></aside><main><div class="contextbar"><span>NEXA</span><b>›</b><span>${ownerView ? 'OWNER' : 'CONTROL'}</span><b>›</b><strong data-current-location>${escapeHtml(title)}</strong></div>${content}</main></div>` : `<main class="public-main">${content}</main>`}<script src="/assets/nexa-dashboard.js" defer></script></body></html>`;
+</style></head><body class="nexa-v153 ${ownerView ? 'owner-mode' : ''}${activePage ? ` page-${escapeHtml(activePage)}` : ''}"><header class="topbar"><div class="topbar-inner">${user ? `<button class="sidebar-toggle" type="button" data-sidebar-toggle aria-label="Menu">☰</button>` : ``}<a class="brand" href="${homeUrl}"><span class="brand-mark">N</span><span class="brand-text">Nexa<span>Bot</span></span></a><div class="live-pill"><i class="live-dot"></i> NEXA CORE ONLINE</div><nav class="navlinks" aria-label="${pageLanguage === 'en' ? 'Main navigation' : 'Fő navigáció'}"><a${navClass('platform')} href="${platformUrl}">${platformLabel}</a><a${navClass('commands')} href="${commandsUrl}">${commandsLabel}</a><a${navClass('subscriptions')} href="${pricingUrl}">${pricingLabel}</a><a${navClass('guide')} href="${guideUrl}">${guideLabel}</a><a${navClass('privacy')} href="${privacyUrl}">${privacyLabel}</a></nav><div class="spacer"></div>${localeSwitcher}${userMenu}</div></header>${user ? `<div class="app"><aside class="sidebar">${sidebarNavigation}<div class="footer-note">${escapeHtml(productName)}<br><span class="footer-release">NEXA Bot 20.2.0 • NEXA OS Studio</span></div></aside><main><div class="contextbar"><span>NEXA</span><b>›</b><span>${ownerView ? 'OWNER' : 'CONTROL'}</span><b>›</b><strong data-current-location>${escapeHtml(title)}</strong></div>${content}</main></div>` : `<main class="public-main">${content}</main>`}<script src="/assets/nexa-dashboard.js" defer></script></body></html>`;
 }
 
 function publicLanguage(url, request = null) {
@@ -5877,7 +6385,7 @@ function landing(client, session, language = 'hu') {
   const dashboardHref = session ? '/dashboard' : '/login';
   const query = en ? '?lang=en' : '';
   const copy = en ? {
-    eyebrow: 'NEXA BOT 20.1.1 · NEXA OS STUDIO',
+    eyebrow: 'NEXA BOT 20.2.0 · NEXA OS STUDIO',
     headlineA: 'Your server.', headlineB: 'Operating at its next level.',
     lead: 'Moderation, support, community automation, AI and serious server protection in one auditable control system built for growth.',
     dashboard: session ? 'Open dashboard' : 'Sign in with Discord', invite: 'Invite NEXA Bot', explore: 'Explore the platform',
@@ -5889,9 +6397,9 @@ function landing(client, session, language = 'hu') {
     accessKicker: 'Flexible access', accessTitle: 'Start free. Upgrade when your server grows.', accessLead: 'Secure monthly and annual Stripe subscriptions work alongside complimentary plans granted by the bot owner.',
     securityKicker: 'Security architecture', securityTitle: 'Protection that can explain every action.', securityLead: 'Sensitive operations are permission-checked, rate-limited and written to an audit trail. Secrets remain server-side.',
     ctaKicker: 'NEXA is ready', ctaTitle: 'Give your Discord server a real operating system.', ctaLead: 'Invite the bot, sign in with Discord and configure each server independently from a responsive command center.',
-    footer: 'Discord management platform · Version 20.1.1', privacy: 'Privacy', terms: 'Terms', commands: 'Commands'
+    footer: 'Discord management platform · Version 20.2.0', privacy: 'Privacy', terms: 'Terms', commands: 'Commands'
   } : {
-    eyebrow: 'NEXA BOT 20.1.1 · NEXA OS STUDIO',
+    eyebrow: 'NEXA BOT 20.2.0 · NEXA OS STUDIO',
     headlineA: 'A szervered.', headlineB: 'Egy szinttel feljebb.',
     lead: 'Moderáció, ügyféltámogatás, közösségi automatizálás, AI és komoly szervervédelem egyetlen auditálható, növekedésre tervezett rendszerben.',
     dashboard: session ? 'Vezérlőpult megnyitása' : 'Belépés Discorddal', invite: 'NEXA Bot meghívása', explore: 'Platform felfedezése',
@@ -5903,7 +6411,7 @@ function landing(client, session, language = 'hu') {
     accessKicker: 'Rugalmas hozzáférés', accessTitle: 'Kezdd ingyen. Válts, amikor nő a szervered.', accessLead: 'A biztonságos havi és éves Stripe-előfizetés együtt működik a bot Owner által ingyen kiosztott csomagokkal.',
     securityKicker: 'Biztonsági architektúra', securityTitle: 'Védelem, amely minden döntésről elszámol.', securityLead: 'Az érzékeny műveleteket jogosultság-ellenőrzés, rate limit és auditnapló védi. A titkos kulcsok kizárólag szerveroldalon maradnak.',
     ctaKicker: 'A NEXA készen áll', ctaTitle: 'Adj valódi operációs rendszert a Discord-szerverednek.', ctaLead: 'Hívd meg a botot, lépj be Discorddal, majd állíts be minden szervert külön a mobilbarát irányítóközpontból.',
-    footer: 'Discord management platform · 20.1.1-es verzió', privacy: 'Adatvédelem', terms: 'Feltételek', commands: 'Parancsok'
+    footer: 'Discord management platform · 20.2.0-es verzió', privacy: 'Adatvédelem', terms: 'Feltételek', commands: 'Parancsok'
   };
   const capabilities = en ? [
     ['MD', 'Moderation with context', 'Every action becomes a searchable Case ID instead of disappearing into chat history.', ['Ban, kick and timeout', 'Warnings and clearing', 'Lock and slowmode', 'Member information']],
@@ -6220,7 +6728,7 @@ function publicInfoPage(kind, session, language = 'hu') {
   };
   const [title, description, sections] = pages[kind] || pages.commands;
   const query = en ? '?lang=en' : '';
-  return layout(title, `<section class="hero"><div class="eyebrow">NEXA Bot 20.1.1</div><h1>${escapeHtml(title)}</h1><p class="lead">${escapeHtml(description)}</p><div class="actions"><a class="btn secondary" href="/${query}">← ${en ? 'Home' : 'Kezdőlap'}</a><a class="btn" href="${escapeHtml(inviteUrl())}">${en ? 'Invite bot' : 'Bot meghívása'}</a></div></section><div class="grid">${sections.map(([name, body], index) => `<article class="card${kind === 'platform' && index < 2 ? ' feature-wide' : ''}"><div class="feature-icon">${['◈','⌾','⬢','↗','▤','✦'][index] || '◇'}</div><h2>${escapeHtml(name)}</h2><p class="muted">${escapeHtml(body)}</p></article>`).join('')}</div>`, session, null, language, kind);
+  return layout(title, `<section class="hero"><div class="eyebrow">NEXA Bot 20.2.0</div><h1>${escapeHtml(title)}</h1><p class="lead">${escapeHtml(description)}</p><div class="actions"><a class="btn secondary" href="/${query}">← ${en ? 'Home' : 'Kezdőlap'}</a><a class="btn" href="${escapeHtml(inviteUrl())}">${en ? 'Invite bot' : 'Bot meghívása'}</a></div></section><div class="grid">${sections.map(([name, body], index) => `<article class="card${kind === 'platform' && index < 2 ? ' feature-wide' : ''}"><div class="feature-icon">${['◈','⌾','⬢','↗','▤','✦'][index] || '◇'}</div><h2>${escapeHtml(name)}</h2><p class="muted">${escapeHtml(body)}</p></article>`).join('')}</div>`, session, null, language, kind);
 }
 
 function knowledgeBasePage(session, language = 'hu') {
@@ -6262,7 +6770,7 @@ function knowledgeBasePage(session, language = 'hu') {
     ? { title: 'NEXA Knowledge Base', lead: 'A practical map of every major NEXA system: what it does, who can use it, where to configure it and what it needs.', what: 'What does it do?', who: 'Who can use it?', where: 'Where do I configure it?', need: 'What does it need?', back: 'Back to home', open: 'Open dashboard' }
     : { title: 'NEXA Tudásközpont', lead: 'Gyakorlati térkép minden fontos NEXA-rendszerhez: mit tud, ki használhatja, hol állítható és mi kell a működéséhez.', what: 'Mit csinál?', who: 'Ki használhatja?', where: 'Hol állítod?', need: 'Mi kell hozzá?', back: 'Vissza a kezdőlapra', open: 'Vezérlőpult megnyitása' };
   const cards = entries.map(([number, title, what, who, where, need], index) => `<details class="knowledge-card"${index === 0 ? ' open' : ''}><summary><span>${escapeHtml(number)}</span><strong>${escapeHtml(title)}</strong><i>+</i></summary><div class="knowledge-body"><dl><div><dt>${labels.what}</dt><dd>${escapeHtml(what)}</dd></div><div><dt>${labels.who}</dt><dd>${escapeHtml(who)}</dd></div><div><dt>${labels.where}</dt><dd>${escapeHtml(where)}</dd></div><div><dt>${labels.need}</dt><dd>${escapeHtml(need)}</dd></div></dl></div></details>`).join('');
-  const content = `<section class="knowledge-hero"><div class="eyebrow">NEXA 20.1.1 • SYSTEM ATLAS</div><h1>${labels.title}</h1><p class="lead">${labels.lead}</p><div class="actions"><a class="btn secondary" href="/${en ? '?lang=en' : ''}">← ${labels.back}</a><a class="btn" href="${session ? '/dashboard' : '/login'}">${labels.open}</a></div></section><nav class="knowledge-index" aria-label="${en ? 'Knowledge categories' : 'Tudástár kategóriák'}">${entries.map(([number, title]) => `<span><b>${escapeHtml(number)}</b>${escapeHtml(title)}</span>`).join('')}</nav><section class="knowledge-grid">${cards}</section>`;
+  const content = `<section class="knowledge-hero"><div class="eyebrow">NEXA 20.2.0 • SYSTEM ATLAS</div><h1>${labels.title}</h1><p class="lead">${labels.lead}</p><div class="actions"><a class="btn secondary" href="/${en ? '?lang=en' : ''}">← ${labels.back}</a><a class="btn" href="${session ? '/dashboard' : '/login'}">${labels.open}</a></div></section><nav class="knowledge-index" aria-label="${en ? 'Knowledge categories' : 'Tudástár kategóriák'}">${entries.map(([number, title]) => `<span><b>${escapeHtml(number)}</b>${escapeHtml(title)}</span>`).join('')}</nav><section class="knowledge-grid">${cards}</section>`;
   return layout(labels.title, content, session, null, language, 'guide');
 }
 
@@ -6385,6 +6893,7 @@ async function ownerDashboard(client, session, saved = false, options = {}) {
     return `<article class="card owner-server${disabled ? ' blacklisted' : ''}"><div class="owner-server-head">${guildIcon(guild)}<div class="owner-server-title"><h3><span class="server-name">${escapeHtml(guild.name)}</span><span class="badge ${plan}">${planName(plan)}</span>${rpActive ? '<span class="badge ultimate">RP AKTÍV</span>' : ''}${disabled ? '<span class="badge" style="color:#ff9cab;background:rgba(255,97,116,.12)">BLACKLIST</span>' : ''}</h3><div class="owner-server-id">${escapeHtml(guild.id)}</div></div></div><div class="owner-server-metrics"><div class="owner-server-metric"><strong>${Number(guild.memberCount || 0)}</strong><span>tag</span></div><div class="owner-server-metric"><strong>${guild.channels.cache.size}</strong><span>csatorna</span></div><div class="owner-server-metric"><strong>${guild.roles.cache.size}</strong><span>rang</span></div><div class="owner-server-metric"><strong>${activeModules.length}</strong><span>aktív modul</span></div></div><div class="owner-server-details"><div><strong>Server owner</strong><br>${escapeHtml(ownerDisplay)}<br><span class="muted">${escapeHtml(guild.ownerId)}</span></div><div><strong>Bot csatlakozott</strong><br>${escapeHtml(joined)}</div><div><strong>Bot jogosultság</strong><br>${permissions} engedély</div><div><strong>Hozzáférési szint</strong><br>${planName(plan)}</div></div><div class="owner-server-actions"><a class="btn secondary" href="/owner/guild/${escapeHtml(guild.id)}">Részletes állapot</a><a class="btn" href="/dashboard/guild/${escapeHtml(guild.id)}">Beállítások</a>${isBotOwner(session.user.id) ? `<a class="btn green" href="/owner/architect/${escapeHtml(guild.id)}">NEXA OS Studio</a>` : ''}<a class="btn" href="/billing?guild=${escapeHtml(guild.id)}">Számlázás</a><a class="btn green" href="/owner/chronoguard/${escapeHtml(guild.id)}">ChronoGuard 10.0</a>${rpActive ? `<a class="btn green" href="/owner/documents/${escapeHtml(guild.id)}">Iratvezérlés</a><a class="btn green" href="/owner/document-studio/${escapeHtml(guild.id)}">Saját iratok</a><a class="btn green" href="/owner/tgf-forge/${escapeHtml(guild.id)}">TGF Forge</a><a class="btn secondary" href="/owner/shifts/${escapeHtml(guild.id)}">Szolgálatkezelés</a><a class="btn secondary" href="/owner/erlc/${escapeHtml(guild.id)}">ER:LC Bridge</a>` : ''}<form class="owner-package" method="post" action="/owner/global"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="premium_guild" value="${escapeHtml(guild.id)}"><select name="premium_plan" aria-label="Csomag"><option value="free"${plan === 'free' ? ' selected' : ''}>Owner-ajándék törlése (fizetett megmarad)</option><option value="pro"${plan === 'pro' ? ' selected' : ''}>PRO csomag</option><option value="ultimate"${plan === 'ultimate' ? ' selected' : ''}>ULTIMATE csomag</option></select><button class="btn secondary" name="operation" value="package_set" type="submit">Owner-ajándék mentése</button></form><form method="post" action="/owner/rp-toggle"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="guild_id" value="${escapeHtml(guild.id)}"><button class="btn ${rpActive ? 'secondary' : 'green'}" type="submit">${rpActive ? 'RP-rendszer kikapcsolása' : 'RP-rendszer bekapcsolása'}</button></form></div></article>`;
   }).join('') : '<div class="card"><h2>A bot még nincs szerveren</h2><p class="muted">Hívd meg a NexaBotot az első szerverre.</p></div>';
   serverCards = serverCards.replace(/<a class="btn green" href="\/owner\/chronoguard\/(\d+)">ChronoGuard 10\.0<\/a>/g, (_match, guildId) => `<a class="btn green" href="/owner/chronoguard/${guildId}">ChronoGuard</a><a class="btn" href="/owner/aegis/${guildId}">AEGIS Permission DNA</a>`);
+  if (isBotOwner(session.user.id)) serverCards = serverCards.replace(/(<a class="btn green" href="\/owner\/architect\/(\d+)">NEXA OS Studio<\/a>)/g, '$1<a class="btn secondary" href="/owner/mdt/$2">Belv MDT</a>');
   const accessCards = allowedUsers.length ? allowedUsers.map((user) => `<article class="card"><h3>${escapeHtml(user.label)}</h3><p class="muted">Discord ID: ${escapeHtml(user.id)}</p><form method="post" action="/owner/ai-access/remove"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="user_id" value="${escapeHtml(user.id)}"><button class="btn secondary" type="submit">Hozzáférés eltávolítása</button></form></article>`).join('') : '<div class="notice warn">Jelenleg csak te használhatod a Nexa AI-t.</div>';
   const ownerCards = ownerUsers.length ? ownerUsers.map((user) => `<article class="card"><h3>${escapeHtml(user.label)}</h3><p class="muted">Owner-kezelő • ${escapeHtml(user.id)}</p>${isBotOwner(session.user.id) ? `<form method="post" action="/owner/access/remove"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="user_id" value="${escapeHtml(user.id)}"><button class="btn secondary" type="submit">Owner-hozzáférés elvétele</button></form>` : ''}</article>`).join('') : '<p class="muted">Nincs további owner-kezelő.</p>';
   const eventRows = (items, error = false) => items.length ? items.map((item) => `<tr><td>${escapeHtml(item.created_at || item.createdAt || '')}</td><td>${escapeHtml(error ? (item.error_type || item.errorType) : item.action)}</td><td>${escapeHtml(error ? item.message : (item.guild_id || item.guildId || 'globális'))}</td></tr>`).join('') : '<tr><td colspan="3" class="muted">Nincs bejegyzés.</td></tr>';
@@ -6396,7 +6905,7 @@ async function ownerDashboard(client, session, saved = false, options = {}) {
     ? `<nav class="pagination" aria-label="Szerverlista oldalak">${page > 1 ? `<a class="btn secondary small" href="${queryFor(page - 1)}">← Előző</a>` : ''}<span>${page}. oldal / ${totalPages}</span>${page < totalPages ? `<a class="btn secondary small" href="${queryFor(page + 1)}">Következő →</a>` : ''}</nav>`
     : '';
   const financialSection = `<section class="card section"><div class="section-kicker">Stripe pénzügyi áttekintés</div><h2 class="section-title">◉ Bevétel és számlaesemények</h2><div class="stats"><div class="stat"><div class="stat-value">${formatMinorCurrency(Number(paymentSummary.total_paid || 0), 'eur')}</div><div class="stat-label">Összes sikeres fizetés</div></div><div class="stat"><div class="stat-value">${formatMinorCurrency(Number(paymentSummary.paid_30d || 0), 'eur')}</div><div class="stat-label">Utolsó 30 nap</div></div><div class="stat"><div class="stat-value">${Number(paymentSummary.successful || 0)}</div><div class="stat-label">Sikeres számla</div></div><div class="stat"><div class="stat-value">${Number(paymentSummary.failed || 0)}</div><div class="stat-label">Sikertelen / nyitott</div></div></div><p class="muted">A kimutatás a Stripe webhook által rögzített bruttó EUR-számlaösszegeket mutatja. Kártyaadatot nem tárol.</p><div style="overflow:auto"><table><thead><tr><th>Stripe számla</th><th>Szerver ID</th><th>Összeg</th><th>Pénznem</th><th>Állapot</th><th>Időpont</th></tr></thead><tbody>${paymentRows}</tbody></table></div></section>`;
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 20.1.1 • Owner Command Center</div><h1>Hálózati irányítóközpont</h1><p class="muted">A teljes botinfrastruktúra, jogosultsági csomagok, védelem és AI-hozzáférés egy helyen.</p></div><a class="btn secondary" href="${escapeHtml(inviteUrl())}">Bot meghívása</a></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 20.2.0 • Owner Command Center</div><h1>Hálózati irányítóközpont</h1><p class="muted">A teljes botinfrastruktúra, jogosultsági csomagok, védelem és AI-hozzáférés egy helyen.</p></div><a class="btn secondary" href="${escapeHtml(inviteUrl())}">Bot meghívása</a></div>
 ${saved ? '<div class="notice">✅ A tulajdonosi beállítás mentve.</div>' : ''}
 <nav class="desktop-owner-nav" aria-label="Owner Center szakaszok"><a href="#overview">Áttekintés</a><a href="#system">Rendszer</a>${isBotOwner(session.user.id) ? '<a href="#architect">NEXA OS Studio</a>' : ''}<a href="#packages">Csomagok</a><a href="#access">Hozzáférések</a><a href="#audit">Audit</a><a href="#servers">Szerverek</a></nav>
 ${financialSection}
@@ -6446,7 +6955,7 @@ async function ownerGuildPage(guild, session) {
   const errorRows = errors.length ? errors.map((item) => `<tr><td>${escapeHtml(item.created_at || item.createdAt || '')}</td><td>${escapeHtml(item.error_type || item.errorType)}</td><td>${escapeHtml(item.message)}</td></tr>`).join('') : '<tr><td colspan="3" class="status-ok">Nincs rögzített hiba ennél a szervernél.</td></tr>';
   const securityReady = !readiness.missingPermissions.length && !readiness.higherBots.length;
   const joinedAt = botMember?.joinedAt ? botMember.joinedAt.toLocaleString('hu-HU') : 'Ismeretlen';
-  const content = `<div class="page-head"><div>${guildIcon(guild)}<div class="section-kicker">NEXA Bot 20.1.1 • Owner Server Inspector</div><h1>${escapeHtml(guild.name)}</h1><p class="muted">${escapeHtml(guild.id)} • részletes, csak tulajdonosi rendszerállapot</p></div><div class="actions"><a class="btn secondary" href="/owner">← Owner Center</a><a class="btn" href="/dashboard/guild/${escapeHtml(guild.id)}">Beállítások</a>${isBotOwner(session.user.id) ? `<a class="btn green" href="/owner/architect/${escapeHtml(guild.id)}">NEXA OS Studio</a>` : ''}<a class="btn green" href="/owner/chronoguard/${escapeHtml(guild.id)}">ChronoGuard</a><a class="btn" href="/owner/aegis/${escapeHtml(guild.id)}">AEGIS Permission DNA</a><a class="btn" href="/owner/shifts/${escapeHtml(guild.id)}">Szolgálatkezelés</a>${rpActive ? `<a class="btn green" href="/owner/documents/${escapeHtml(guild.id)}">Iratvezérlés</a><a class="btn green" href="/owner/document-studio/${escapeHtml(guild.id)}">Workflow Studio</a><a class="btn green" href="/owner/tgf-forge/${escapeHtml(guild.id)}">TGF Forge</a><a class="btn" href="/owner/erlc/${escapeHtml(guild.id)}">ER:LC Bridge</a>` : ''}</div></div>
+  const content = `<div class="page-head"><div>${guildIcon(guild)}<div class="section-kicker">NEXA Bot 20.2.0 • Owner Server Inspector</div><h1>${escapeHtml(guild.name)}</h1><p class="muted">${escapeHtml(guild.id)} • részletes, csak tulajdonosi rendszerállapot</p></div><div class="actions"><a class="btn secondary" href="/owner">← Owner Center</a><a class="btn" href="/dashboard/guild/${escapeHtml(guild.id)}">Beállítások</a>${isBotOwner(session.user.id) ? `<a class="btn green" href="/owner/architect/${escapeHtml(guild.id)}">NEXA OS Studio</a>` : ''}<a class="btn green" href="/owner/chronoguard/${escapeHtml(guild.id)}">ChronoGuard</a><a class="btn" href="/owner/aegis/${escapeHtml(guild.id)}">AEGIS Permission DNA</a><a class="btn" href="/owner/shifts/${escapeHtml(guild.id)}">Szolgálatkezelés</a>${rpActive ? `<a class="btn green" href="/owner/documents/${escapeHtml(guild.id)}">Iratvezérlés</a><a class="btn green" href="/owner/document-studio/${escapeHtml(guild.id)}">Workflow Studio</a><a class="btn green" href="/owner/tgf-forge/${escapeHtml(guild.id)}">TGF Forge</a><a class="btn" href="/owner/erlc/${escapeHtml(guild.id)}">ER:LC Bridge</a>` : ''}</div></div>
   ${blacklisted ? '<div class="notice error">🚫 Ez a szerver jelenleg blacklisten van, ezért a normál botfunkciók le vannak tiltva.</div>' : ''}
   <div class="stats"><div class="stat"><div class="stat-value">${Number(guild.memberCount || 0)}</div><div class="stat-label">Tag</div></div><div class="stat"><div class="stat-value">${guild.channels.cache.size}</div><div class="stat-label">Csatorna</div></div><div class="stat"><div class="stat-value">${guild.roles.cache.size}</div><div class="stat-label">Rang</div></div><div class="stat"><div class="stat-value">${planName(entitlement.plan)}</div><div class="stat-label">Csomag</div></div></div>
   <div class="grid"><section class="card"><div class="section-kicker">Azonosítás</div><h2>Szerveradatok</h2><div class="status-list"><div class="status-row"><strong>Tulajdonos</strong><span>${escapeHtml(owner?.user?.tag || owner?.displayName || guild.ownerId)}<br><span class="muted">${escapeHtml(guild.ownerId)}</span></span></div><div class="status-row"><strong>Bot csatlakozott</strong><span>${escapeHtml(joinedAt)}</span></div><div class="status-row"><strong>RP-rendszer</strong><span class="${rpActive ? 'status-ok' : 'muted'}">${rpActive ? '● Owner által engedélyezve' : '○ Kikapcsolva'}</span></div><div class="status-row"><strong>Csomag forrása</strong><span>${escapeHtml(entitlement.source || 'default')}</span></div></div></section>
@@ -6589,7 +7098,7 @@ function ownerDocumentsPage(guild, session, saved = false) {
     }).join('');
     return `<section class="section" style="margin-top:28px"><div class="page-head"><div><div class="section-kicker">Dokumentumcsoport</div><h2>${escapeHtml(categoryNames[groupKey] || groupKey)}</h2></div></div><div class="grid">${cards}</div></section>`;
   }).join('');
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 20.1.1 • Owner Document Control</div><h1>Irat- és jogosultságvezérlés</h1><p class="muted">${escapeHtml(guild.name)} • Itt állíthatod be, melyik Discord-rang használhatja a dokumentumpaneleket.</p></div><a class="btn secondary" href="/owner">← Owner Center</a></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 20.2.0 • Owner Document Control</div><h1>Irat- és jogosultságvezérlés</h1><p class="muted">${escapeHtml(guild.name)} • Itt állíthatod be, melyik Discord-rang használhatja a dokumentumpaneleket.</p></div><a class="btn secondary" href="/owner">← Owner Center</a></div>
 ${saved ? '<div class="notice">✅ A dokumentumszabályok mentve, a meglévő Discord-panelek frissítve.</div>' : ''}
 <div class="notice warn">Az egyszerű felhívások és tájékoztatások alapból nem kapnak ügyszámot. A hivatalos, jóváhagyásos iratok alapból igen.</div>
 <form method="post" action="/owner/documents/${escapeHtml(guild.id)}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><section class="card section"><div class="section-kicker">Globális jogosultság</div><h2 class="section-title">Ki használhatja a dokumentumrendszert?</h2><div class="field-grid"><div><label for="doc_default_role">Alapértelmezett használati rang</label><select id="doc_default_role" name="doc_default_role" required>${roleOptions(guild, defaultAccessRoleId, 'Válassz egy rangot')}</select><div class="help">Ez váltja le a korábbi, fix „Operatív állomány” korlátozást. A kiválasztott rang használhatja az összes olyan panelt, amelynél lent nem adsz meg külön rangot.</div></div></div></section>${sections}<div class="savebar"><span class="muted">A mentés után a bot frissíti a már kihelyezett dokumentumpaneleket is.</span><button class="btn green" type="submit">Minden szabály mentése</button></div></form>`;
@@ -6616,7 +7125,7 @@ function ownerDocumentStudioPage(guild, session, options = {}) {
     const notificationRole = guild.roles.cache.get(template.notificationRoleId);
     return `<article class="card template-card"><div class="section-kicker">${escapeHtml(template.key)}</div><h3>${escapeHtml(template.emoji)} ${escapeHtml(template.title)}</h3><p class="muted">${template.fields.length} kérdés • ${channel ? `#${escapeHtml(channel.name)}` : 'hiányzó csatorna'} • használat: ${role ? escapeHtml(role.name) : 'alapértelmezett rang'} • értesítés: ${notificationRole ? `@${escapeHtml(notificationRole.name)}` : 'nincs rangping'}</p><div class="actions"><a class="btn secondary small" href="/owner/document-studio/${guild.id}?edit=${encodeURIComponent(template.key)}">Szerkesztés</a><form method="post" action="/owner/document-studio/${guild.id}/install"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="template_key" value="${escapeHtml(template.key)}"><button class="btn green small" type="submit">Panel kihelyezése</button></form><form method="post" action="/owner/document-studio/${guild.id}/delete"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="template_key" value="${escapeHtml(template.key)}"><button class="btn danger small" type="submit">Törlés</button></form></div></article>`;
   }).join('') : '<div class="notice warn">Még nincs egyedi dokumentumsablon. Készítsd el az elsőt az alábbi szerkesztőben.</div>';
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.1.1 • Workflow Studio</div><h1>Egyedi dokumentumstúdió</h1><p class="muted">${escapeHtml(guild.name)} • Saját kérdések, célcsatorna, rang, ping, ügyszám és vezetői jóváhagyás.</p></div><div class="actions"><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a><a class="btn" href="/owner/documents/${guild.id}">Alap iratok</a></div></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.2.0 • Workflow Studio</div><h1>Egyedi dokumentumstúdió</h1><p class="muted">${escapeHtml(guild.name)} • Saját kérdések, célcsatorna, rang, ping, ügyszám és vezetői jóváhagyás.</p></div><div class="actions"><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a><a class="btn" href="/owner/documents/${guild.id}">Alap iratok</a></div></div>
   ${options.saved ? '<div class="notice">✅ A sablon mentve. A panel most már kihelyezhető a kiválasztott Discord-csatornába.</div>' : ''}
   ${options.installed ? '<div class="notice">✅ A dokumentumpanel kihelyezve vagy frissítve.</div>' : ''}
   <section class="section"><div class="page-head"><div><div class="section-kicker">Aktív sablonok</div><h2>Dokumentumfolyamatok</h2></div></div><div class="grid">${cards}</div></section>
@@ -6678,7 +7187,7 @@ async function ownerChronoGuardPage(guild, session, options = {}) {
       : options.scanned ? '<div class="notice">✅ A Shadow Scan lefutott. A kockázati eredmény lent látható.</div>'
         : options.restored ? `<div class="notice">✅ A biztonságos helyreállítás lefutott. ${escapeHtml(options.restored)}</div>`
           : '';
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.1.1 • ChronoGuard Digital Twin</div><h1>Szerver-időgép és incidensközpont</h1><p class="muted">${escapeHtml(guild.name)} • A szerver szerkezetének aláírt digitális ikre, eltérésmagyarázat, bizonyítékkapszula és előnézetes helyreállítás.</p></div><div class="actions"><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a><form method="post" action="/owner/chronoguard/${guild.id}/scan"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><button class="btn" type="submit">Shadow Scan futtatása</button></form></div></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.2.0 • ChronoGuard Digital Twin</div><h1>Szerver-időgép és incidensközpont</h1><p class="muted">${escapeHtml(guild.name)} • A szerver szerkezetének aláírt digitális ikre, eltérésmagyarázat, bizonyítékkapszula és előnézetes helyreállítás.</p></div><div class="actions"><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a><form method="post" action="/owner/chronoguard/${guild.id}/scan"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><button class="btn" type="submit">Shadow Scan futtatása</button></form></div></div>
   ${notice}
   ${!overview.available ? '<div class="notice error">A ChronoGuard használatához élő PostgreSQL DATABASE_URL szükséges.</div>' : ''}
   <div class="stats"><div class="stat"><div class="stat-value">${Number(diff.riskScore || 0)}/100</div><div class="stat-label">Drift kockázat</div></div><div class="stat"><div class="stat-value">${chronoRiskLabel(diff.riskLevel)}</div><div class="stat-label">Veszélyszint</div></div><div class="stat"><div class="stat-value">${snapshots.length}</div><div class="stat-label">Megőrzött állapot</div></div><div class="stat"><div class="stat-value">${baseline ? 'AKTÍV' : 'NINCS'}</div><div class="stat-label">Digitális bázis</div></div></div>
@@ -6711,7 +7220,7 @@ async function ownerAegisPage(guild, session, options = {}) {
     options.baseline ? '<div class="notice">✅ Az új, jóváhagyott jogosultsági bázis rögzítve.</div>' : '',
     options.error ? `<div class="notice error">${escapeHtml(options.error)}</div>` : ''
   ].join('');
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.1.1 • AEGIS PERMISSION DNA</div><h1>Jogosultsági intelligencia</h1><p class="muted">${escapeHtml(guild.name)} • Veszélyes jogok, robbanási sugár, elszigetelhetőség és kriptográfiai jogosultság-eltérés egy helyen.</p></div><div class="actions"><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a><a class="btn secondary" href="/tudaskozpont">Mit tud az AEGIS?</a></div></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.2.0 • AEGIS PERMISSION DNA</div><h1>Jogosultsági intelligencia</h1><p class="muted">${escapeHtml(guild.name)} • Veszélyes jogok, robbanási sugár, elszigetelhetőség és kriptográfiai jogosultság-eltérés egy helyen.</p></div><div class="actions"><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a><a class="btn secondary" href="/tudaskozpont">Mit tud az AEGIS?</a></div></div>
   ${notices}
   <div class="grid" style="grid-template-columns:minmax(260px,.55fr) minmax(0,1.45fr)"><section class="card" style="display:grid;place-items:center"><div class="aegis-score" style="--score:${Number(current.postureScore)}%"><div><strong>${Number(current.postureScore)}</strong><span>biztonsági pont / 100</span></div></div><p class="muted" style="text-align:center">Minél magasabb, annál kisebb a jogosultsági robbanási sugár.</p></section><section class="card"><div class="section-kicker">Élő Permission DNA</div><h2>Jelenlegi jogosultsági lenyomat</h2><code class="dna-code">${escapeHtml(current.permissionDna)}</code><div class="status-list" style="margin-top:14px"><div class="status-row"><strong>Jóváhagyott bázis</strong><span>${baseline ? `#${escapeHtml(baseline.id)} • ${escapeHtml(String(baseline.dna_hash).slice(0, 18))}…` : 'Még nincs'}</span></div><div class="status-row"><strong>Eltérés a bázistól</strong><span class="${diff.changed ? 'status-bad' : 'status-ok'}">${baseline ? (diff.changed ? '● IGEN' : '● NINCS') : '○ Először rögzíts bázist'}</span></div><div class="status-row"><strong>Kockázatváltozás</strong><span>${Number(diff.riskDelta || 0) > 0 ? '+' : ''}${Number(diff.riskDelta || 0)} pont</span></div><div class="status-row"><strong>Érintett identitások</strong><span>${escapeHtml(changedNames || 'Nincs')}</span></div></div><div class="actions"><form method="post" action="/owner/aegis/${guild.id}/scan"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><button class="btn" type="submit">Teljes vizsgálat</button></form><form method="post" action="/owner/aegis/${guild.id}/baseline"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><button class="btn secondary" type="submit">Jóváhagyott bázis rögzítése</button></form></div></section></div>
   <div class="stats"><div class="stat"><div class="stat-value risk-critical">${Number(current.counts.critical)}</div><div class="stat-label">Kritikus identitás</div></div><div class="stat"><div class="stat-value risk-high">${Number(current.counts.high)}</div><div class="stat-label">Magas kockázat</div></div><div class="stat"><div class="stat-value">${Number(current.counts.uncontainable)}</div><div class="stat-label">Nem elszigetelhető</div></div><div class="stat"><div class="stat-value">${Number(current.counts.untrustedBots)}</div><div class="stat-label">Ismeretlen bot</div></div></div>
@@ -6772,7 +7281,7 @@ async function ownerShiftsPage(guild, session, options = {}) {
     const name = member?.displayName || member?.user?.username || row.user_id;
     return `<form class="record" method="post" action="/owner/shifts/${guild.id}/record/${row.id}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div><strong>${escapeHtml(name)}</strong><div class="muted">${escapeHtml(row.user_id)} • #${escapeHtml(row.id)}</div><div class="badge ${row.ended_at ? '' : 'pro'}">${row.ended_at ? formatDuration(row.active_seconds) : 'AKTÍV'}</div></div><div><label>Kezdés • Budapest</label><input type="datetime-local" name="started_at" value="${escapeHtml(budapestInput(row.started_at))}" required></div><div><label>Befejezés • Budapest</label><input type="datetime-local" name="ended_at" value="${escapeHtml(budapestInput(row.ended_at))}"><div class="help">Üresen hagyva aktív szolgálat.</div></div><div><label>Szünet másodpercben</label><input type="number" name="break_seconds" min="0" max="31536000" value="${Number(row.break_seconds || 0)}"></div><div class="actions"><button class="btn green small" name="operation" value="update" type="submit">Mentés</button><button class="btn danger small" name="operation" value="delete" type="submit">Törlés</button></div></form>`;
   }).join('') : '<div class="notice warn">A szűréshez nem található szolgálati rekord.</div>';
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.1.1 • Shift Operations</div><h1>Szolgálati irányítóközpont</h1><p class="muted">${escapeHtml(guild.name)} • Aktív és lezárt szolgálatok szerkesztése, törlése és nullázása.</p></div><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.2.0 • Shift Operations</div><h1>Szolgálati irányítóközpont</h1><p class="muted">${escapeHtml(guild.name)} • Aktív és lezárt szolgálatok szerkesztése, törlése és nullázása.</p></div><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a></div>
   ${options.saved ? '<div class="notice">✅ A szolgálati adat módosítása rögzítve és auditálva.</div>' : ''}
   <div class="stats"><div class="stat"><div class="stat-value">${overview.active}</div><div class="stat-label">Aktív szolgálat</div></div><div class="stat"><div class="stat-value">${overview.completed}</div><div class="stat-label">Lezárt műszak</div></div><div class="stat"><div class="stat-value">${overview.members}</div><div class="stat-label">Érintett tag</div></div><div class="stat"><div class="stat-value">${formatDuration(overview.seconds)}</div><div class="stat-label">Összes aktív idő</div></div></div>
   <section class="card section"><div class="section-kicker">Keresés és veszélyes műveletek</div><h2 class="section-title">Tulajdonosi kezelés</h2><div class="owner-tools"><form method="get" action="/owner/shifts/${guild.id}"><label>Tag Discord ID szerinti szűrése</label><input type="text" name="user" inputmode="numeric" maxlength="22" value="${escapeHtml(options.userId || '')}" placeholder="123456789012345678"><div class="actions"><button class="btn" type="submit">Szűrés</button><a class="btn secondary" href="/owner/shifts/${guild.id}">Összes</a></div></form><form method="post" action="/owner/shifts/${guild.id}/reset-user"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><label>Egy tag teljes nullázása</label><input type="text" name="user_id" inputmode="numeric" maxlength="22" placeholder="Discord felhasználói ID" required><label>Megerősítés</label><input type="text" name="confirmation" placeholder="Írd be: RESET" required><button class="btn danger" type="submit">Tag szolgálatának nullázása</button></form><form method="post" action="/owner/shifts/${guild.id}/reset-all"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><label>Teljes szerver nullázása</label><p class="muted">Minden aktív és korábbi szolgálati rekord végleg törlődik.</p><input type="text" name="confirmation" placeholder="Írd be: TELJES RESET" required><button class="btn danger" type="submit">Minden szolgálat nullázása</button></form></div></section>
@@ -6796,7 +7305,7 @@ async function ownerErlcPage(guild, session, options = {}) {
   }).join('') || '<tr><td colspan="5" class="muted">Nincs online játékos vagy az API nem elérhető.</td></tr>';
   const staff = live?.Staff || {};
   const staffCount = Object.values(staff).reduce((sum, group) => sum + Object.keys(group || {}).length, 0);
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.1.1 • ER:LC Bridge</div><h1>ER:LC integráció</h1><p class="muted">${escapeHtml(guild.name)} • Privát szerver állapot, játékosok, staff és owneres parancsvezérlés.</p></div><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.2.0 • ER:LC Bridge</div><h1>ER:LC integráció</h1><p class="muted">${escapeHtml(guild.name)} • Privát szerver állapot, játékosok, staff és owneres parancsvezérlés.</p></div><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a></div>
   ${options.saved ? '<div class="notice">✅ Az ER:LC kulcs ellenőrizve, titkosítva és elmentve.</div>' : ''}${options.commandSent ? '<div class="notice">✅ Az ER:LC parancsot az API elfogadta.</div>' : ''}${apiError ? `<div class="notice error">⚠️ ER:LC API: ${escapeHtml(apiError)}</div>` : ''}
   <div class="stats"><div class="stat"><div class="stat-value">${live ? Number(live.CurrentPlayers || 0) : '—'}</div><div class="stat-label">Online játékos</div></div><div class="stat"><div class="stat-value">${live ? Number(live.MaxPlayers || 0) : '—'}</div><div class="stat-label">Férőhely</div></div><div class="stat"><div class="stat-value">${live ? (Array.isArray(live.Queue) ? live.Queue.length : 0) : '—'}</div><div class="stat-label">Várólista</div></div><div class="stat"><div class="stat-value">${live ? staffCount : '—'}</div><div class="stat-label">ER:LC staff</div></div></div>
   <div class="grid"><section class="card"><div class="section-kicker">Titkos kapcsolat</div><h2>API-kulcs</h2><div class="status-list"><div class="status-row"><strong>Állapot</strong><span class="${integration.enabled ? 'status-ok' : 'muted'}">${integration.configured ? (integration.enabled ? '● Bekapcsolva' : '○ Kikapcsolva') : '○ Nincs beállítva'}</span></div><div class="status-row"><strong>Forrás</strong><span>${escapeHtml(integration.source || '—')}</span></div><div class="status-row"><strong>Kulcs</strong><span>${escapeHtml(integration.keyMask)}</span></div><div class="status-row"><strong>ER:LC szerver</strong><span>${escapeHtml(live?.Name || integration.serverName || '—')}</span></div><div class="status-row"><strong>Join Key</strong><span>${escapeHtml(live?.JoinKey || integration.joinKey || '—')}</span></div></div></section><section class="card"><div class="section-kicker">Kulcs cseréje</div><h2>Biztonságos beállítás</h2><form method="post" action="/owner/erlc/${guild.id}/save"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><label>ER:LC Server Key</label><input type="password" name="server_key" minlength="10" maxlength="500" autocomplete="new-password" placeholder="A kulcs értéke nem lesz többé megjelenítve" required><p class="help">Mentés előtt a NEXA élő API-hívással ellenőrzi, majd AES-256-GCM titkosítással tárolja. A GitHubba nem kerül.</p><button class="btn green" type="submit">Kapcsolat tesztelése és mentése</button></form>${integration.source === 'database' ? `<div class="actions"><form method="post" action="/owner/erlc/${guild.id}/toggle"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="enabled" value="${integration.enabled ? '0' : '1'}"><button class="btn secondary" type="submit">${integration.enabled ? 'Ideiglenes kikapcsolás' : 'Bekapcsolás'}</button></form><form method="post" action="/owner/erlc/${guild.id}/delete"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="text" name="confirmation" placeholder="Írd be: ERLC TÖRLÉS" required><button class="btn danger" type="submit">Kulcs törlése</button></form></div>` : ''}</section></div>
@@ -6817,7 +7326,7 @@ async function dashboardList(client, session) {
   const persistence = isPersistentStore() ? '' : `<div class="notice warn">⚠️ ${en ? 'DATABASE_URL is not configured. Changes may be lost after a restart.' : 'Nincs DATABASE_URL beállítva. A módosítások újraindításkor elveszhetnek.'}</div>`;
   const members = guilds.reduce((sum, item) => sum + Number(item.botGuild.memberCount || 0), 0);
   const modules = guilds.reduce((sum, item) => sum + Object.values(getGuildConfig(item.botGuild.id).modules).filter(Boolean).length, 0);
-  return layout(en ? 'My servers' : 'Szervereim', `<div class="page-head"><div><div class="section-kicker">NEXA Bot 20.1.1 • Command Deck</div><h1>${en ? 'Server network' : 'Szerverhálózat'}</h1><p class="muted">${en ? 'Only servers where you are an owner, administrator or authorized manager are shown.' : 'Csak azok a szerverek láthatók, amelyekhez tulajdonosi, adminisztrátori vagy kijelölt kezelői jogosultságod van.'}</p></div></div><div class="stats"><div class="stat"><div class="stat-value">${guilds.length}</div><div class="stat-label">${en ? 'Managed servers' : 'Kezelt szerver'}</div></div><div class="stat"><div class="stat-value">${members}</div><div class="stat-label">${en ? 'Total members' : 'Összes tag'}</div></div><div class="stat"><div class="stat-value">${modules}</div><div class="stat-label">${en ? 'Configured modules' : 'Konfigurált modul'}</div></div><div class="stat"><div class="stat-value">ONLINE</div><div class="stat-label">NEXA Core</div></div></div>${persistence}<div class="grid">${cards}</div>`, session);
+  return layout(en ? 'My servers' : 'Szervereim', `<div class="page-head"><div><div class="section-kicker">NEXA Bot 20.2.0 • Command Deck</div><h1>${en ? 'Server network' : 'Szerverhálózat'}</h1><p class="muted">${en ? 'Only servers where you are an owner, administrator or authorized manager are shown.' : 'Csak azok a szerverek láthatók, amelyekhez tulajdonosi, adminisztrátori vagy kijelölt kezelői jogosultságod van.'}</p></div></div><div class="stats"><div class="stat"><div class="stat-value">${guilds.length}</div><div class="stat-label">${en ? 'Managed servers' : 'Kezelt szerver'}</div></div><div class="stat"><div class="stat-value">${members}</div><div class="stat-label">${en ? 'Total members' : 'Összes tag'}</div></div><div class="stat"><div class="stat-value">${modules}</div><div class="stat-label">${en ? 'Configured modules' : 'Konfigurált modul'}</div></div><div class="stat"><div class="stat-value">ONLINE</div><div class="stat-label">NEXA Core</div></div></div>${persistence}<div class="grid">${cards}</div>`, session);
 }
 
 async function profilePage(client, session) {
@@ -7208,7 +7717,7 @@ async function webSupportPage(session, notice = '') {
   const tickets = await listWebTickets(session.user.id);
   const statusText = (status) => en ? ({ open: 'OPEN', pending: 'PENDING', closed: 'CLOSED' }[status] || String(status).toUpperCase()) : ({ open: 'NYITOTT', pending: 'VÁRAKOZIK', closed: 'LEZÁRT' }[status] || String(status).toUpperCase());
   const rows = tickets.length ? tickets.map((ticket) => `<a class="record" href="/support/${ticket.id}" style="text-decoration:none"><div><strong>#${ticket.id} • ${escapeHtml(ticket.subject)}</strong><div class="muted">${escapeHtml(ticket.category)} • ${escapeHtml(new Date(ticket.updated_at).toLocaleString(en ? 'en-GB' : 'hu-HU'))}</div></div><span class="badge ${ticket.status === 'open' ? 'ultimate' : ''}">${statusText(ticket.status)}</span></a>`).join('') : `<div class="notice warn">${en ? 'You have no web support tickets yet.' : 'Még nincs webes segítségkérésed.'}</div>`;
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.1.1 • SUPPORT OPERATIONS</div><h1>${en ? 'Support Center' : 'Segítségkérés'}</h1><p class="muted">${en ? 'Your request opens a private ticket on the official NEXA Support server. Replies and status changes appear here automatically.' : 'A kérésedből privát ticket nyílik a hivatalos NEXA Support szerveren. A válaszokat és állapotváltozásokat itt automatikusan követheted.'}</p></div><a class="btn secondary" href="/dashboard">← Dashboard</a></div>${notice ? `<div class="notice">${escapeHtml(notice)}</div>` : ''}<div class="grid"><section class="card section"><h2>${en ? 'New support request' : 'Új segítségkérés'}</h2><form method="post" action="/support"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="field-grid"><div><label>${en ? 'Subject' : 'Téma'}</label><input type="text" name="subject" maxlength="100" required placeholder="${en ? 'What do you need help with?' : 'Miben kérsz segítséget?'}"></div><div><label>${en ? 'Category' : 'Kategória'}</label><select name="category"><option value="technical">${en ? 'Technical support' : 'Technikai segítség'}</option><option value="bug">${en ? 'Bug report' : 'Hibajelentés'}</option><option value="billing">${en ? 'Subscription / billing' : 'Előfizetés / számlázás'}</option><option value="partnership">${en ? 'Partnership' : 'Partnerség'}</option><option value="other">${en ? 'Other' : 'Egyéb'}</option></select></div><div><label>${en ? 'Priority' : 'Prioritás'}</label><select name="priority"><option value="low">${en ? 'Low' : 'Alacsony'}</option><option value="normal" selected>${en ? 'Normal' : 'Normál'}</option><option value="high">${en ? 'High' : 'Magas'}</option><option value="urgent">${en ? 'Urgent' : 'Sürgős'}</option></select></div></div><label>${en ? 'Message' : 'Üzenet'}</label><textarea name="content" maxlength="4000" required placeholder="${en ? 'Describe the problem in detail…' : 'Írd le pontosan a problémát…'}"></textarea><button class="btn green" type="submit">${en ? 'Open ticket' : 'Ticket megnyitása'}</button></form></section><section class="card section"><h2>${en ? 'My previous tickets' : 'Korábbi ügyeim'}</h2><div class="record-list">${rows}</div></section></div>`;
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.2.0 • SUPPORT OPERATIONS</div><h1>${en ? 'Support Center' : 'Segítségkérés'}</h1><p class="muted">${en ? 'Your request opens a private ticket on the official NEXA Support server. Replies and status changes appear here automatically.' : 'A kérésedből privát ticket nyílik a hivatalos NEXA Support szerveren. A válaszokat és állapotváltozásokat itt automatikusan követheted.'}</p></div><a class="btn secondary" href="/dashboard">← Dashboard</a></div>${notice ? `<div class="notice">${escapeHtml(notice)}</div>` : ''}<div class="grid"><section class="card section"><h2>${en ? 'New support request' : 'Új segítségkérés'}</h2><form method="post" action="/support"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="field-grid"><div><label>${en ? 'Subject' : 'Téma'}</label><input type="text" name="subject" maxlength="100" required placeholder="${en ? 'What do you need help with?' : 'Miben kérsz segítséget?'}"></div><div><label>${en ? 'Category' : 'Kategória'}</label><select name="category"><option value="technical">${en ? 'Technical support' : 'Technikai segítség'}</option><option value="bug">${en ? 'Bug report' : 'Hibajelentés'}</option><option value="billing">${en ? 'Subscription / billing' : 'Előfizetés / számlázás'}</option><option value="partnership">${en ? 'Partnership' : 'Partnerség'}</option><option value="other">${en ? 'Other' : 'Egyéb'}</option></select></div><div><label>${en ? 'Priority' : 'Prioritás'}</label><select name="priority"><option value="low">${en ? 'Low' : 'Alacsony'}</option><option value="normal" selected>${en ? 'Normal' : 'Normál'}</option><option value="high">${en ? 'High' : 'Magas'}</option><option value="urgent">${en ? 'Urgent' : 'Sürgős'}</option></select></div></div><label>${en ? 'Message' : 'Üzenet'}</label><textarea name="content" maxlength="4000" required placeholder="${en ? 'Describe the problem in detail…' : 'Írd le pontosan a problémát…'}"></textarea><button class="btn green" type="submit">${en ? 'Open ticket' : 'Ticket megnyitása'}</button></form></section><section class="card section"><h2>${en ? 'My previous tickets' : 'Korábbi ügyeim'}</h2><div class="record-list">${rows}</div></section></div>`;
   return layout(en ? 'Web Support' : 'Webes segítség', content, session, null);
 }
 
@@ -7227,7 +7736,7 @@ async function ownerSupportPage(session, url) {
   const tickets = await listAllWebTickets({ status: url.searchParams.get('status') || '', priority: url.searchParams.get('priority') || '', search: url.searchParams.get('q') || '' });
   const counts = tickets.reduce((acc, ticket) => { acc[ticket.status] = (acc[ticket.status] || 0) + 1; return acc; }, {});
   const rows = tickets.map((ticket) => `<a class="record" href="/owner/support/${ticket.id}" style="text-decoration:none"><div><strong>#${ticket.id} • ${escapeHtml(ticket.subject)}</strong><div class="muted">${escapeHtml(ticket.username)} • ${escapeHtml(ticket.category)}</div></div><div><span class="badge ${ticket.priority === 'urgent' ? 'pro' : ''}">${escapeHtml(String(ticket.priority).toUpperCase())}</span></div><div>${escapeHtml(ticket.assigned_name || 'Nincs felelős')}</div><div>${escapeHtml(new Date(ticket.updated_at).toLocaleString('hu-HU'))}</div><span class="badge ${ticket.status === 'open' ? 'ultimate' : ''}">${escapeHtml(String(ticket.status).toUpperCase())}</span></a>`).join('') || '<div class="notice warn">Nincs találat.</div>';
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.1.1 • OWNER SUPPORT OPERATIONS</div><h1>Support irányítóközpont</h1><p class="muted">Prioritás, felelős, állapot, belső jegyzet és ügyfélelégedettség egy helyen.</p></div><a class="btn secondary" href="/owner">← Owner Center</a></div><div class="stats"><div class="stat"><div class="stat-value">${tickets.length}</div><div class="stat-label">Találat</div></div><div class="stat"><div class="stat-value">${counts.open || 0}</div><div class="stat-label">Nyitott</div></div><div class="stat"><div class="stat-value">${counts.pending || 0}</div><div class="stat-label">Várakozik</div></div><div class="stat"><div class="stat-value">${counts.closed || 0}</div><div class="stat-label">Lezárt</div></div></div><form class="owner-search" method="get" action="/owner/support"><input type="search" name="q" placeholder="Ticket, felhasználó vagy téma"><select name="status"><option value="">Minden állapot</option><option value="open">Nyitott</option><option value="pending">Várakozik</option><option value="closed">Lezárt</option></select><select name="priority"><option value="">Minden prioritás</option><option value="urgent">Sürgős</option><option value="high">Magas</option><option value="normal">Normál</option><option value="low">Alacsony</option></select><button class="btn" type="submit">Szűrés</button></form><div class="record-list">${rows}</div>`;
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 20.2.0 • OWNER SUPPORT OPERATIONS</div><h1>Support irányítóközpont</h1><p class="muted">Prioritás, felelős, állapot, belső jegyzet és ügyfélelégedettség egy helyen.</p></div><a class="btn secondary" href="/owner">← Owner Center</a></div><div class="stats"><div class="stat"><div class="stat-value">${tickets.length}</div><div class="stat-label">Találat</div></div><div class="stat"><div class="stat-value">${counts.open || 0}</div><div class="stat-label">Nyitott</div></div><div class="stat"><div class="stat-value">${counts.pending || 0}</div><div class="stat-label">Várakozik</div></div><div class="stat"><div class="stat-value">${counts.closed || 0}</div><div class="stat-label">Lezárt</div></div></div><form class="owner-search" method="get" action="/owner/support"><input type="search" name="q" placeholder="Ticket, felhasználó vagy téma"><select name="status"><option value="">Minden állapot</option><option value="open">Nyitott</option><option value="pending">Várakozik</option><option value="closed">Lezárt</option></select><select name="priority"><option value="">Minden prioritás</option><option value="urgent">Sürgős</option><option value="high">Magas</option><option value="normal">Normál</option><option value="low">Alacsony</option></select><button class="btn" type="submit">Szűrés</button></form><div class="record-list">${rows}</div>`;
   return layout('Owner Support Operations', content, session, null);
 }
 
@@ -7558,7 +8067,7 @@ async function syncGuildCommandLanguage(guild, language = 'auto') {
   const { communityCommands } = require('./community');
   const commands = [
     buildSettingsCommand(), ...buildRpCommands(), buildSecurityCommand(), buildAiCommand(),
-    buildShiftCommand(), buildHelpCommand(), buildChronoGuardCommand(), buildAegisCommand(),
+    buildShiftCommand(), buildHelpCommand(), buildChronoGuardCommand(), buildAegisCommand(), buildMdtCommand(),
     ...engagementCommands(), ...moderationCommands(), ...communityCommands()
   ];
   if (guild.id === SUPPORT_GUILD_ID) commands.push(buildSupportSetupCommand());
@@ -7596,7 +8105,7 @@ function defaultHealthSnapshot(client) {
   const startup = process.uptime() < 180;
   return {
     name: 'NexaBot',
-    version: '20.1.1',
+    version: '20.2.0',
     healthy: ready || startup,
     status: ready ? 'online' : startup ? 'starting' : 'offline',
     guilds: client.guilds?.cache?.size || 0,
@@ -7611,6 +8120,7 @@ function defaultHealthSnapshot(client) {
 
 async function handleRequest(client, request, response, healthProvider = null) {
   const url = new URL(request.url, rootUrl());
+  if (url.pathname.startsWith(MDT_API_PREFIX + '/')) return handleMdtApi(client, request, response, url);
   if (request.method === 'POST' && url.pathname === '/webhooks/stripe') {
     const rawBody = await readRawBody(request, 1_000_000);
     if (!verifyWebhookSignature(rawBody, request.headers['stripe-signature'])) {
@@ -7867,6 +8377,31 @@ async function handleRequest(client, request, response, healthProvider = null) {
         search: url.searchParams.get('q'),
         page: url.searchParams.get('page')
       }));
+    }
+    const ownerMdtMatch = url.pathname.match(/^\/owner\/mdt(?:\/(\d{16,22})(?:\/(client\.lua))?)?$/);
+    if (ownerMdtMatch) {
+      if (!isBotOwner(session.user.id)) return sendHtml(response, 403, errorPage('Csak a fő botowner', 'A Belv MDT nem használható delegált Owner Center-hozzáféréssel.', session));
+      const guild = ownerMdtMatch[1] ? client.guilds.cache.get(ownerMdtMatch[1]) : null;
+      if (ownerMdtMatch[1] && !guild) return sendHtml(response, 404, errorPage('A szerver nem található', 'A NEXA nincs ezen a szerveren.', session));
+      try {
+        if (request.method === 'GET' && ownerMdtMatch[2]) {
+          const script = await buildMdtClientScript(guild.id, session.user.id, rootUrl());
+          response.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Disposition': 'attachment; filename="Belv-MDT-Emergency-Hamburg.lua"', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+          return response.end(script);
+        }
+        if (request.method === 'GET') return sendHtml(response, 200, await mdtOwnerPage(client, session, guild?.id, { layout, escapeHtml }));
+        if (request.method === 'POST' && guild) {
+          const form = await readBody(request);
+          if (form.get('csrf') !== session.csrf) return sendHtml(response, 403, errorPage('Lejárt munkamenet', 'Frissítsd az oldalt.', session));
+          if (form.get('operation') === 'revoke') {
+            await revokeMdtOwnerSessions(guild.id, session.user.id);
+          } else await saveMdtOwnerForm(guild, session.user.id, form);
+          return redirect(response, `/owner/mdt/${guild.id}?saved=1`, null, 303);
+        }
+        return sendHtml(response, 405, errorPage('Nem engedélyezett kérés', 'Az MDT-beállítás ezen a műveleten nem módosítható.', session));
+      } catch (error) {
+        return sendHtml(response, error.status || 503, errorPage('Belv MDT', error.status ? error.message : 'Az MDT-adatbázis nem érhető el.', session));
+      }
     }
     const ownerArchitectMatch = url.pathname.match(/^\/owner\/architect\/(\d{16,22})(?:\/(plan|apply|repair))?$/);
     if (ownerArchitectMatch) {
@@ -10476,6 +11011,7 @@ const { recordError, pruneTelemetry } = require('./telemetry');
 const { createRuntimeSupervisor, positiveInteger } = require('./runtime');
 const { buildChronoGuardCommand, startChronoGuardJobs } = require('./chronoguard');
 const { buildAegisCommand } = require('./aegis');
+const { buildMdtCommand } = require('./belv-mdt');
 const {
   auditSupportServer,
   buildCiaSetupCommand,
@@ -10536,6 +11072,7 @@ async function registerCommands(readyClient) {
         buildHelpCommand(),
         buildChronoGuardCommand(),
         buildAegisCommand(),
+        buildMdtCommand(),
         buildSupportSetupCommand(),
         ...engagementCommands(),
         ...moderationCommands(),
@@ -10612,7 +11149,7 @@ client.once(Events.ClientReady, async (readyClient) => {
     }
     console.log(`NexaBot elindult: ${readyClient.user.tag}`);
     await restoreGiveaways(readyClient);
-    console.log('A NEXA Bot 20.1.1 NEXA OS Studio Platform használatra kész.');
+    console.log('A NEXA Bot 20.2.0 NEXA OS Studio Platform használatra kész.');
   } catch (error) {
     console.error('A parancs regisztrálása nem sikerült:', error);
     await recordError(error, { command: 'registerCommands' });
@@ -10839,6 +11376,7 @@ const { handleEngagementCommand, handleVerificationButton } = require('./engagem
 const { handleApplicationButton, handleApplicationModal } = require('./applications');
 const { handleChronoGuardCommand } = require('./chronoguard');
 const { handleAegisCommand } = require('./aegis');
+const { handleMdtCommand, handleMdtButton } = require('./belv-mdt');
 const { handleDiscordSupportInteraction } = require('./web-support');
 const { canonicalCommandName } = require('./command-localizations');
 const {
@@ -10980,6 +11518,7 @@ async function handleCommand(interaction) {
   if (interaction.commandName === 'help') return handleHelpCommand(interaction);
   if (interaction.commandName === 'chronoguard') return handleChronoGuardCommand(interaction);
   if (interaction.commandName === 'aegis') return handleAegisCommand(interaction);
+  if (interaction.commandName === 'mdt') return handleMdtCommand(interaction);
   if (interaction.commandName === 'cia') {
     if (!isBotOwner(interaction.user.id)) {
       return ephemeralError(interaction, 'A CIA telepítését, frissítését és újratelepítését kizárólag a NEXA Bot elsődleges tulajdonosa használhatja.');
@@ -11995,6 +12534,7 @@ async function handleInteraction(interaction) {
     });
     if (interaction.isChatInputCommand()) return await handleCommand(interaction);
     if (interaction.isButton() && String(interaction.customId || '').startsWith('websupport_')) return await handleDiscordSupportInteraction(interaction);
+    if (interaction.isButton() && String(interaction.customId || '').startsWith('mdt_')) return await handleMdtButton(interaction);
     if (interaction.isButton()) return await handleButton(interaction);
     if (interaction.isUserSelectMenu() || interaction.isRoleSelectMenu() || interaction.isStringSelectMenu()) {
       return await handleSelectMenu(interaction);
@@ -13314,7 +13854,7 @@ module.exports = {
 const { Events, Status } = require('discord.js');
 const { databaseHealth } = require('./config');
 
-const APP_VERSION = '20.1.1';
+const APP_VERSION = '20.2.0';
 
 function positiveInteger(value, fallback, minimum = 1_000, maximum = 60 * 60 * 1000) {
   const parsed = Number.parseInt(value, 10);
