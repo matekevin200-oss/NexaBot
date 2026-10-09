@@ -1,8 +1,8 @@
 {
   "name": "nexabot",
-  "version": "20.2.0",
+  "version": "20.2.1",
   "private": true,
-  "description": "NEXA Bot 20.2.0 – Belv MDT Roblox panel with authenticated Discord document bridge",
+  "description": "NEXA Bot 20.2.1 – Belv MDT missing-channel installer, owner-only Roblox panel and people lookup",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {

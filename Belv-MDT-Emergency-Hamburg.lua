@@ -1,4 +1,4 @@
--- BELV MDT 1.0 | NEXA Bot 20.2.0
+-- BELV MDT 1.1 | NEXA Bot 20.2.1
 -- Roblox kliensfelulet: csak a sajat NEXA MDT API-val kommunikal.
 -- Bot-token vagy Discord-webhook nem kell a scriptbe.
 -- A panel nyitasahoz F6 vagy a BELV MDT gomb hasznalhato.
@@ -39,6 +39,9 @@ local connections = {}
 local alive = true
 local state = { token = nil, base = CONFIG.BaseUrl, templates = {}, records = {}, page = "overview", template = nil, selected = nil, busy = false, listEpoch = 0, next = nil, dirty = false, pendingPayload = nil }
 local renderPage, showRecord, showEditor, refreshList, showLogin
+local refreshPlayersPage, showPlayerProfile
+local wantedSource, wantedSourcePath
+local closeModal
 local body, navButtons, statusLabel, headerUser
 local fieldBoxes = {}
 local function trim(value) return (tostring(value or ""):gsub("^%s+", ""):gsub("%s+$", "")) end
@@ -110,7 +113,9 @@ local function api(method, path, payload, anonymous)
     if code < 200 or code >= 300 or not value or value.ok ~= true then
         local message = value and value.error or ("NEXA HTTP-hiba: " .. tostring(code))
         if (code == 401 or code == 403) and not anonymous then
-            state.token = nil; state.templates = {}; state.records = {}; state.selected = nil
+            state.token = nil; state.templates = {}; state.records = {}; state.selected = nil; state.person = nil; state.personRecords = {}
+            wantedSource = nil; wantedSourcePath = nil
+            if closeModal then closeModal() end
             if body then
                 for _, child in ipairs(body:GetChildren()) do child:Destroy() end
                 label(body, "Az MDT-hozzáférés lezárva", UDim2.fromOffset(32, 150), UDim2.fromOffset(810, 50), palette.red, 25, true)
@@ -155,13 +160,13 @@ corner(nav, 10)
 label(nav, "BELV MŰVELETI RENDSZER", UDim2.fromOffset(13, 15), UDim2.fromOffset(158, 20), palette.muted, 9, true)
 body = frame(window, "Body", UDim2.fromOffset(208, 82), UDim2.fromOffset(894, 578), palette.bg)
 local pages = {
-    { "overview", "Áttekintés" }, { "case", "Ügyiratok" }, { "warrant", "Körözések" },
+    { "overview", "Áttekintés" }, { "players", "Játékoskereső" }, { "gamewanted", "Játék körözései" }, { "case", "Ügyiratok" }, { "warrant", "MDT-körözések" },
     { "person", "Személyek" }, { "vehicle", "Járművek" }, { "shift", "Szolgálati napló" },
     { "document", "Belv-iratsablonok" }, { "note", "Feljegyzések" }
 }
 navButtons = {}
 local modal = nil
-local function closeModal() if modal then modal:Destroy(); modal = nil end end
+closeModal = function() if modal then modal:Destroy(); modal = nil end end
 local function confirm(message, callback)
     closeModal()
     modal = frame(screen, "Confirm", UDim2.fromScale(0.5, 0.5), UDim2.fromOffset(440, 178), palette.panel)
@@ -175,7 +180,7 @@ end
 local function navigate(key)
     if state.busy then setStatus("Várd meg a folyamatban lévő műveletet.", palette.gold); return end
     local function change()
-        state.page = key; state.selected = nil; state.dirty = false; state.pendingPayload = nil
+        state.page = key; state.selected = nil; state.dirty = false; state.pendingPayload = nil; state.person = nil; state.recordStatus = nil
         state.template = nil
         if key ~= "document" and key ~= "overview" then
             for _, t in ipairs(state.templates) do if t.key == key then state.template = t; break end end
@@ -186,7 +191,7 @@ local function navigate(key)
 end
 for index, page in ipairs(pages) do
     local key, title = page[1], page[2]
-    navButtons[key] = button(nav, title, UDim2.fromOffset(10, 48 + (index - 1) * 49), UDim2.fromOffset(158, 40), function()
+    navButtons[key] = button(nav, title, UDim2.fromOffset(10, 44 + (index - 1) * 44), UDim2.fromOffset(158, 36), function()
         if not state.token then showLogin(); return end
         navigate(key)
     end)
@@ -196,7 +201,7 @@ button(nav, "Kijelentkezés", UDim2.fromOffset(10, 520), UDim2.fromOffset(158, 3
     confirm("Kijelentkezel? A beküldött iratok megmaradnak; a nem mentett űrlap elvész.", function()
         run(function()
             if state.token then api("POST", "/logout", {}) end
-            state.token = nil; state.templates = {}; state.records = {}; state.dirty = false; state.pendingPayload = nil
+            state.token = nil; state.templates = {}; state.records = {}; state.dirty = false; state.pendingPayload = nil; state.person = nil
             headerUser.Text = "NEXA • nincs belépve"; showLogin(); setStatus("Kijelentkeztél. Új kód: /mdt belepes.")
         end)
     end)
@@ -240,6 +245,7 @@ refreshList = function(append)
     state.listEpoch = state.listEpoch + 1
     local epoch, activeTemplate = state.listEpoch, state.template
     local query = "/records?key=" .. HttpService:UrlEncode(activeTemplate.key) .. "&q=" .. HttpService:UrlEncode(searchBox and searchBox.Text or "")
+    if state.recordStatus then query = query .. "&status=" .. state.recordStatus end
     if append and state.next then query = query .. "&before=" .. state.next end
     task.spawn(function()
         local result, err = api("GET", query)
@@ -313,7 +319,7 @@ showRecord = function(row)
         end
     end
 end
-showEditor = function(existing)
+showEditor = function(existing, prefill)
     if state.busy or not state.template then return end
     detailClear(); state.selected = existing; state.pendingPayload = nil; state.dirty = false
     local typeInfo = state.template
@@ -326,10 +332,11 @@ showEditor = function(existing)
         local multiline = spec.style == "paragraph"
         local h = multiline and 104 or 40
         local box = textbox(form, spec.placeholder or spec.label, UDim2.fromOffset(16, y + 26), UDim2.new(1, -32, 0, h), multiline)
-        box.Text = existing and tostring(existing.fields[spec.id] or "") or ""
-        box:GetPropertyChangedSignal("Text"):Connect(function() state.dirty = true end)
+        box.Text = existing and tostring(existing.fields[spec.id] or "") or prefill and tostring(prefill[spec.id] or "") or ""
+        box:GetPropertyChangedSignal("Text"):Connect(function() state.dirty = true; state.pendingPayload = nil end)
         fieldBoxes[spec.id] = box; y = y + h + 46
     end
+    state.dirty = prefill ~= nil
     form.CanvasSize = UDim2.fromOffset(0, y + 6)
     button(detailPanel, "Beküldés a Discordra", UDim2.new(0, 16, 1, -58), UDim2.fromOffset(224, 40), function()
         run(function()
@@ -371,6 +378,13 @@ local function recordsPage()
     detailPanel = frame(body, "DetailPanel", UDim2.fromOffset(314, 80), UDim2.fromOffset(580, 498), palette.panel); corner(detailPanel)
     searchBox = textbox(listPanel, "Keresés név, rendszám, szöveg…", UDim2.fromOffset(12, 12), UDim2.fromOffset(276, 40), false)
     listScroll = scroll(listPanel, "RecordList", UDim2.fromOffset(12, 68), UDim2.fromOffset(276, 369))
+    if state.template.key == "warrant" then
+        button(listPanel, "Összes / jóváhagyott", UDim2.fromOffset(12, 61), UDim2.fromOffset(276, 31), function()
+            if state.recordStatus then state.recordStatus = nil else state.recordStatus = "published" end
+            refreshList(); setStatus(state.recordStatus and "Csak jóváhagyott, le nem zárt MDT-körözések. Az érvényesség az iratban olvasható." or "Minden MDT-körözés, az állapotával együtt.")
+        end)
+        listScroll.Position = UDim2.fromOffset(12, 104); listScroll.Size = UDim2.fromOffset(276, 333)
+    end
     button(listPanel, "Frissítés", UDim2.fromOffset(12, 451), UDim2.fromOffset(133, 34), function() refreshList() end)
     button(listPanel, "További iratok", UDim2.fromOffset(155, 451), UDim2.fromOffset(133, 34), function() if state.next then refreshList(true) else setStatus("Nincs több találat.") end end)
     local searchEpoch = 0
@@ -383,12 +397,307 @@ local function recordsPage()
     hint.TextWrapped = true
     refreshList()
 end
+-- A jatek dokumentacioja a rendorsegi telefonlistaban piros/feher neveket ir le.
+-- Csak a tulajdonos altal kivalasztott, megjelenitett listat olvassuk.
+-- Nem ismert jatekbeli attributumot nem talalgatunk, es nem hivunk jatek-remote-ot.
+local function gamePlayers()
+    local result = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        table.insert(result, { id = tostring(player.UserId), username = player.Name, displayName = player.DisplayName or player.Name, team = player.Team and player.Team.Name or "Nincs megadva", online = true })
+    end
+    table.sort(result, function(a, b) return a.username:lower() < b.username:lower() end)
+    return result
+end
+local function visibleGameGui(object)
+    local node, depth = object, 0
+    while node and node ~= PlayerGui and depth < 100 do
+        if node == screen then return false end
+        if node:IsA("ScreenGui") and not node.Enabled then return false end
+        if node:IsA("GuiObject") and not node.Visible then return false end
+        node = node.Parent; depth = depth + 1
+    end
+    return node == PlayerGui
+end
+local function guiPath(object)
+    local parts, node = {}, object
+    while node and node ~= PlayerGui do table.insert(parts, 1, node.Name); node = node.Parent end
+    return table.concat(parts, " / ")
+end
+local function textPlayer(object, byName)
+    if not (object:IsA("TextLabel") or object:IsA("TextButton")) or not visibleGameGui(object) then return nil end
+    local value = trim(object.Text):gsub("<[^>]+>", ""):lower()
+    if byName[value] then return byName[value] end
+    if value:sub(1, 1) == "@" and byName[value:sub(2)] then return byName[value:sub(2)] end
+    local username = value:match("^.-%(@([a-z0-9_]+)%)$")
+    return username and byName[username] or nil
+end
+local function wantedColor(object)
+    -- Egyedi RichText-szint nem lehet a TextColor3 alapjan hitelesen ertelmezni.
+    if object.RichText and object.Text:lower():find("color", 1, true) then return nil end
+    local color = object.TextColor3
+    if not color then return nil end
+    if color.R >= 0.65 and color.R - color.G >= 0.25 and color.R - color.B >= 0.20 then return true end
+    if math.min(color.R, color.G, color.B) >= 0.72 and math.max(color.R, color.G, color.B) - math.min(color.R, color.G, color.B) <= 0.15 then return false end
+    return nil
+end
+local function wantedSnapshot(players)
+    local result, byName = {}, {}
+    for _, person in ipairs(players) do
+        result[person.id] = { known = false, reason = "Nincs olvasható jelzés a kiválasztott játéklistában." }
+        byName[person.username:lower()] = person
+    end
+    if not wantedSource or not visibleGameGui(wantedSource) then
+        return result, "Nyisd meg a játék rendőrségi telefonlistáját, majd válaszd ki a Lista kapcsolása gombbal."
+    end
+    local signals = {}
+    for _, object in ipairs(wantedSource:GetDescendants()) do
+        local person = textPlayer(object, byName)
+        if person then
+            local value = wantedColor(object)
+            if value ~= nil then
+                local key = value and "wanted" or "clear"
+                signals[person.id] = signals[person.id] or {}
+                signals[person.id][key] = true
+            end
+        end
+    end
+    for id, values in pairs(signals) do
+        if values.wanted and values.clear then result[id] = { known = false, reason = "Ellentmondó piros és fehér jelzés; ellenőrizd a játékban." }
+        else result[id] = { known = true, wanted = values.wanted == true, source = wantedSourcePath, readAt = os.date("%H:%M:%S") } end
+    end
+    return result, nil
+end
+local function wantedLabel(value)
+    if not value or not value.known then return "Játék körözése: ismeretlen", palette.muted end
+    if value.wanted then return "Játék körözése: KÖRÖZÖTT", palette.red end
+    return "Játék körözése: nincs körözésjelzés", palette.green
+end
+local playerList, playerDetail, playerSearch, playerSummary, playerSourceLabel, playerWantedLabel, playerInfoLabel
+local function choosePoliceList()
+    if state.busy or not state.token then return end
+    closeModal()
+    modal = frame(screen, "PoliceSourcePicker", UDim2.fromScale(0.5, 0.5), UDim2.fromOffset(780, 488), palette.panel)
+    modal.AnchorPoint = Vector2.new(0.5, 0.5); modal.ZIndex = 10; corner(modal, 12); stroke(modal)
+    label(modal, "A játék rendőrségi telefonlistája", UDim2.fromOffset(20, 14), UDim2.fromOffset(740, 30), palette.gold, 20, true)
+    local help = label(modal, "A telefon rendőrségi névlistája legyen nyitva. Válaszd ki azt a sort, amelynek nevei egyeznek a játék listájával. A játékoslista vagy a chat színe nem körözési adat.", UDim2.fromOffset(20, 52), UDim2.fromOffset(740, 58), palette.muted, 13)
+    help.TextWrapped = true; help.TextTruncate = Enum.TextTruncate.None
+    local pane = scroll(modal, "PoliceSources", UDim2.fromOffset(20, 120), UDim2.fromOffset(740, 294))
+    local byName, candidates = {}, {}
+    for _, person in ipairs(gamePlayers()) do byName[person.username:lower()] = person end
+    for _, object in ipairs(PlayerGui:GetDescendants()) do
+        local person = textPlayer(object, byName)
+        if person then
+            local node, depth = object.Parent, 0
+            while node and node ~= PlayerGui and depth < 12 do
+                if node:IsA("Frame") or node:IsA("ScrollingFrame") or node:IsA("ScreenGui") then
+                    candidates[node] = candidates[node] or { node = node, names = {}, count = 0, path = guiPath(node) }
+                    local candidate = candidates[node]
+                    if not candidate.names[person.username] then candidate.names[person.username] = true; candidate.count = candidate.count + 1 end
+                end
+                node = node.Parent; depth = depth + 1
+            end
+        end
+    end
+    local ordered = {}
+    for _, candidate in pairs(candidates) do table.insert(ordered, candidate) end
+    table.sort(ordered, function(a, b)
+        if a.count ~= b.count then return a.count > b.count end
+        if a.node:IsA("ScrollingFrame") ~= b.node:IsA("ScrollingFrame") then return a.node:IsA("ScrollingFrame") end
+        return #a.path > #b.path
+    end)
+    for index, candidate in ipairs(ordered) do
+        if index > 40 then break end
+        local selected, names = candidate, {}
+        for name in pairs(candidate.names) do table.insert(names, name) end
+        table.sort(names)
+        local b = button(pane, "", UDim2.fromOffset(0, (index - 1) * 77), UDim2.fromOffset(722, 68), function()
+            wantedSource = selected.node; wantedSourcePath = selected.path; closeModal()
+            if refreshPlayersPage then refreshPlayersPage() end
+        end)
+        label(b, candidate.path, UDim2.fromOffset(12, 8), UDim2.fromOffset(695, 24), palette.text, 12, true)
+        label(b, tostring(candidate.count) .. " név: " .. table.concat(names, ", "):sub(1, 85), UDim2.fromOffset(12, 35), UDim2.fromOffset(695, 23), palette.muted, 11)
+    end
+    pane.CanvasSize = UDim2.fromOffset(0, math.min(40, #ordered) * 77)
+    if #ordered == 0 then label(pane, "Nincs felismerhető felhasználónév a megjelenített játékfelületen. Nyisd meg a rendőrségi telefont és a játékoslistáját, majd próbáld újra. Az MDT addig ismeretlen állapotot jelez.", UDim2.fromOffset(14, 28), UDim2.fromOffset(694, 120), palette.muted, 15).TextWrapped = true end
+    button(modal, "Mégse", UDim2.fromOffset(20, 435), UDim2.fromOffset(180, 34), closeModal)
+    button(modal, "Kapcsolat törlése", UDim2.fromOffset(530, 435), UDim2.fromOffset(230, 34), function() wantedSource = nil; wantedSourcePath = nil; closeModal(); refreshPlayersPage() end)
+    for _, object in ipairs(modal:GetDescendants()) do if object:IsA("GuiObject") then object.ZIndex = 11 end end
+end
+local function templateByKey(key)
+    for _, template in ipairs(state.templates) do if template.key == key then return template end end
+    return nil
+end
+local function openRelatedRecord(row)
+    local template = templateByKey(row.key)
+    if not template then notifyError("Az irattípus már nem elérhető."); return end
+    state.page = row.key; state.template = template; state.person = nil; state.selected = nil
+    renderPage(); showRecord(row)
+end
+local function beginPersonEntry(person, key)
+    if state.busy then return end
+    local template = templateByKey(key)
+    if not template then notifyError("Ehhez a nyilvántartáshoz nincs beállított célcsatorna."); return end
+    local prefill = { robloxId = person.id }
+    if key == "person" then prefill.username = person.username; prefill.name = person.displayName
+    elseif key == "warrant" then prefill.target = person.username
+    elseif key == "case" then prefill.persons = person.username end
+    state.page = key; state.template = template; state.person = nil; state.selected = nil
+    renderPage(); showEditor(nil, prefill)
+end
+local function displayPersonRecords(person, records, pane)
+    for _, child in ipairs(pane:GetChildren()) do child:Destroy() end
+    for index, row in ipairs(records) do
+        local selected = row
+        local b = button(pane, "", UDim2.fromOffset(0, (index - 1) * 67), UDim2.new(1, -5, 0, 59), function() openRelatedRecord(selected) end)
+        label(b, (row.key == "warrant" and "MDT-KÖRÖZÉS" or row.key == "case" and "ÜGYIRAT" or "SZEMÉLYADAT") .. " • " .. statusText(row.status), UDim2.fromOffset(10, 6), UDim2.new(1, -20, 0, 18), row.key == "warrant" and palette.gold or palette.muted, 10, true)
+        label(b, "#" .. row.id .. " " .. row.title .. (row.identityMatch == "legacyUsername" and " [csak névegyezés]" or ""), UDim2.fromOffset(10, 29), UDim2.new(1, -20, 0, 22), palette.text, 13)
+    end
+    if #records == 0 then label(pane, "Nincs ehhez az ID-hez kapcsolt MDT-irat.\nA fenti gombokkal adhatsz hozzá.", UDim2.fromOffset(12, 20), UDim2.new(1, -24, 0, 72), palette.muted, 13).TextWrapped = true end
+    pane.CanvasSize = UDim2.fromOffset(0, math.max(90, #records * 67))
+end
+showPlayerProfile = function(person)
+    if state.busy or not state.token or not playerDetail or not playerDetail.Parent then return end
+    state.person = person; state.personRecords = {}; state.personNext = nil
+    for _, child in ipairs(playerDetail:GetChildren()) do if not child:IsA("UICorner") then child:Destroy() end end
+    label(playerDetail, person.displayName, UDim2.fromOffset(16, 12), UDim2.fromOffset(548, 29), palette.gold, 22, true)
+    label(playerDetail, "@" .. person.username .. " • Roblox-ID: " .. person.id, UDim2.fromOffset(16, 48), UDim2.fromOffset(548, 21), palette.text, 13)
+    playerInfoLabel = label(playerDetail, person.online and ("Ebben a szerverben • Csapat: " .. person.team) or "Nincs ebben a szerverben • játékállapot ismeretlen", UDim2.fromOffset(16, 77), UDim2.fromOffset(548, 21), palette.muted, 12)
+    local snapshot = wantedSnapshot(gamePlayers())
+    local text, color = wantedLabel(snapshot[person.id])
+    playerWantedLabel = label(playerDetail, text, UDim2.fromOffset(16, 105), UDim2.fromOffset(548, 21), color, 13, true)
+    local profile = textbox(playerDetail, "Roblox-profil", UDim2.fromOffset(16, 137), UDim2.fromOffset(548, 31), false)
+    profile.Text = "https://www.roblox.com/users/" .. person.id .. "/profile"; profile.TextEditable = false
+    for index, choice in ipairs({ { "person", "+ Személyadat" }, { "warrant", "+ MDT-körözés" }, { "case", "+ Ügyirat" } }) do
+        local key = choice[1]
+        button(playerDetail, choice[2], UDim2.fromOffset(16 + (index - 1) * 184, 181), UDim2.fromOffset(172, 34), function() beginPersonEntry(person, key) end, index == 1 and palette.gold or nil)
+    end
+    label(playerDetail, "Saját MDT-iratok • a játék körözését nem módosítják", UDim2.fromOffset(16, 229), UDim2.fromOffset(548, 21), palette.muted, 11, true)
+    local pane = scroll(playerDetail, "PersonRecords", UDim2.fromOffset(16, 260), UDim2.fromOffset(548, 186))
+    label(pane, "Személyhez kapcsolt MDT-iratok lekérése…", UDim2.fromOffset(12, 20), UDim2.fromOffset(520, 30), palette.muted, 13)
+    local epoch = state.listEpoch
+    local function fetch(append)
+        run(function()
+            local path = "/people/lookup?robloxId=" .. HttpService:UrlEncode(person.id) .. "&username=" .. HttpService:UrlEncode(person.username)
+            if append and state.personNext then path = path .. "&before=" .. state.personNext end
+            local result, err = api("GET", path)
+            if not alive or not state.token or epoch ~= state.listEpoch or state.person ~= person or not pane.Parent then return end
+            if not result then
+                for _, child in ipairs(pane:GetChildren()) do child:Destroy() end
+                label(pane, "A lekérdezés nem sikerült; ez nem jelent üres nyilvántartást.", UDim2.fromOffset(12, 20), UDim2.fromOffset(520, 75), palette.red, 13).TextWrapped = true
+                notifyError(err); return
+            end
+            if not append then state.personRecords = {} end
+            for _, row in ipairs(result.records or {}) do table.insert(state.personRecords, row) end
+            state.personNext = result.next
+            displayPersonRecords(person, state.personRecords, pane)
+            setStatus("Személy lekérdezve • " .. tostring(#state.personRecords) .. " kapcsolt MDT-irat", palette.green)
+        end)
+    end
+    button(playerDetail, "Iratok frissítése", UDim2.fromOffset(16, 459), UDim2.fromOffset(260, 28), function() fetch(false) end)
+    button(playerDetail, "További iratok", UDim2.fromOffset(304, 459), UDim2.fromOffset(260, 28), function() if state.personNext then fetch(true) else setStatus("Nincs további kapcsolt MDT-irat.") end end)
+    fetch(false)
+end
+refreshPlayersPage = function()
+    if not state.token or not playerList or not playerList.Parent then return end
+    local players = gamePlayers()
+    local snapshot, sourceError = wantedSnapshot(players)
+    if state.person and playerWantedLabel and playerWantedLabel.Parent then
+        local text, color = wantedLabel(snapshot[state.person.id])
+        playerWantedLabel.Text = text; playerWantedLabel.TextColor3 = color
+        local connected = nil
+        for _, person in ipairs(players) do if person.id == state.person.id then connected = person; break end end
+        if playerInfoLabel and playerInfoLabel.Parent then
+            playerInfoLabel.Text = connected and ("Ebben a szerverben • Csapat: " .. connected.team) or "Nincs ebben a szerverben • játékállapot ismeretlen"
+        end
+    end
+    local query = trim(playerSearch and playerSearch.Text or ""):lower()
+    local wanted, unknown, clear = 0, 0, 0
+    for _, person in ipairs(players) do
+        local value = snapshot[person.id]
+        if not value.known then unknown = unknown + 1 elseif value.wanted then wanted = wanted + 1 else clear = clear + 1 end
+    end
+    playerSummary.Text = "Körözésjelzés: " .. wanted .. " • Nincs jelzés: " .. clear .. " • Ismeretlen: " .. unknown
+    playerSourceLabel.Text = sourceError or ("Játékforrás: " .. (wantedSourcePath or "—") .. " • olvasva " .. os.date("%H:%M:%S"))
+    for _, child in ipairs(playerList:GetChildren()) do child:Destroy() end
+    table.sort(players, function(a, b)
+        local sa, sb = snapshot[a.id], snapshot[b.id]
+        local ra, rb = sa.known and (sa.wanted and 2 or 0) or 1, sb.known and (sb.wanted and 2 or 0) or 1
+        if state.page == "gamewanted" and ra ~= rb then return ra > rb end
+        return a.username:lower() < b.username:lower()
+    end)
+    local count = 0
+    for _, person in ipairs(players) do
+        local value = snapshot[person.id]
+        local match = query == "" or person.id == query or person.username:lower():find(query, 1, true) or person.displayName:lower():find(query, 1, true)
+        if match and (state.page ~= "gamewanted" or not value.known or value.wanted) then
+            local selected = person
+            local b = button(playerList, "", UDim2.fromOffset(0, count * 85), UDim2.new(1, -5, 0, 77), function() showPlayerProfile(selected) end)
+            local text, color = wantedLabel(value)
+            label(b, "@" .. person.username, UDim2.fromOffset(10, 8), UDim2.new(1, -20, 0, 22), palette.text, 13, true)
+            label(b, person.id .. " • " .. person.team, UDim2.fromOffset(10, 34), UDim2.new(1, -20, 0, 17), palette.muted, 10)
+            label(b, text:gsub("Játék körözése: ", ""), UDim2.fromOffset(10, 55), UDim2.new(1, -20, 0, 16), color, 10, true)
+            count = count + 1
+        end
+    end
+    if count == 0 then label(playerList, "Nincs a szűréshez illeszkedő játékos.\nAz ismeretlen állapot nem jelent körözésmentességet.", UDim2.fromOffset(12, 20), UDim2.new(1, -24, 0, 100), palette.muted, 13).TextWrapped = true end
+    playerList.CanvasSize = UDim2.fromOffset(0, math.max(110, count * 85))
+end
+local function playersPage()
+    label(body, state.page == "gamewanted" and "A játék körözöttjei" or "Játékoskereső és személyadatlap", UDim2.fromOffset(0, 0), UDim2.fromOffset(680, 31), palette.text, 24, true)
+    subtitle("Játék szerinti jelzés: a kiválasztott rendőrségi telefonlistából • saját MDT-adatok külön")
+    button(body, "Lista kapcsolása", UDim2.fromOffset(704, 0), UDim2.fromOffset(190, 35), choosePoliceList, palette.gold)
+    playerSummary = label(body, "Játékadatok ellenőrzése…", UDim2.fromOffset(0, 68), UDim2.fromOffset(890, 22), palette.gold, 12, true)
+    playerSummary.Size = UDim2.fromOffset(300, 30); playerSummary.TextWrapped = true; playerSummary.TextTruncate = Enum.TextTruncate.None
+    playerSourceLabel = label(body, "", UDim2.fromOffset(0, 98), UDim2.fromOffset(890, 44), palette.muted, 11)
+    playerSourceLabel.TextWrapped = true; playerSourceLabel.TextTruncate = Enum.TextTruncate.None
+    local left = frame(body, "PlayerListPanel", UDim2.fromOffset(0, 153), UDim2.fromOffset(300, 425), palette.panel); corner(left)
+    playerDetail = frame(body, "PlayerDetailPanel", UDim2.fromOffset(314, 80), UDim2.fromOffset(580, 498), palette.panel); corner(playerDetail)
+    -- A forras szovege a lista felett, a jobb oldali adatlap mellett jelenik meg.
+    playerSourceLabel.Size = UDim2.fromOffset(300, 44)
+    playerSearch = textbox(left, "Felhasználónév vagy Roblox-ID", UDim2.fromOffset(12, 12), UDim2.fromOffset(276, 38), false)
+    playerList = scroll(left, "LivePlayers", UDim2.fromOffset(12, 102), UDim2.fromOffset(276, 310))
+    button(left, "Profil lekérése", UDim2.fromOffset(12, 60), UDim2.fromOffset(168, 30), function()
+        if state.busy then return end
+        local query = trim(playerSearch.Text)
+        if query == "" then notifyError("Adj meg pontos felhasználónevet vagy Roblox-ID-t."); return end
+        for _, person in ipairs(gamePlayers()) do
+            if person.id == query or person.username:lower() == query:lower() then showPlayerProfile(person); return end
+        end
+        local epoch, profile = state.listEpoch, nil
+        run(function()
+            local ok, err = pcall(function()
+                local id
+                if query:match("^[1-9]%d*$") and #query <= 15 then id = tonumber(query)
+                elseif query:match("^[a-zA-Z0-9_]+$") and #query >= 3 and #query <= 20 then id = Players:GetUserIdFromNameAsync(query)
+                else error("Pontos Roblox-felhasználónevet vagy számazonosítót adj meg.") end
+                local name = Players:GetNameFromUserIdAsync(id)
+                profile = { id = string.format("%.0f", id), username = name, displayName = name, online = false, team = "Ismeretlen" }
+            end)
+            if not alive or not state.token or epoch ~= state.listEpoch then return end
+            if not ok then notifyError("A Roblox-profil nem kérhető le: " .. tostring(err):sub(1, 120)); return end
+            task.defer(function() if alive and state.token and epoch == state.listEpoch then showPlayerProfile(profile) end end)
+        end)
+    end)
+    button(left, "Frissít", UDim2.fromOffset(190, 60), UDim2.fromOffset(98, 30), function()
+        run(function() local result, err = api("GET", "/bootstrap"); if result then refreshPlayersPage(); setStatus("Játékoslista frissítve.", palette.green) else notifyError(err) end end)
+    end)
+    playerSearch:GetPropertyChangedSignal("Text"):Connect(refreshPlayersPage)
+    label(playerDetail, "Válassz játékost", UDim2.fromOffset(26, 165), UDim2.fromOffset(528, 38), palette.text, 23, true)
+    local help = label(playerDetail, "Lekérheted a nyilvános Roblox-profilt, a játékban látható csapatot, a körözésjelzést és a saját MDT-iratokat. Innen személyadatot, RP-körözést és ügyiratot is hozzáadhatsz.", UDim2.fromOffset(26, 221), UDim2.fromOffset(528, 111), palette.muted, 14)
+    help.TextWrapped = true; help.TextTruncate = Enum.TextTruncate.None
+    local epoch = state.listEpoch
+    task.spawn(function()
+        local result, err = api("GET", "/bootstrap")
+        if not alive or not state.token or epoch ~= state.listEpoch then return end
+        if result then refreshPlayersPage(); setStatus("Személyes owner-hozzáférés ellenőrizve.", palette.green) else notifyError(err) end
+    end)
+end
 renderPage = function()
     clearBody()
     if state.page == "overview" then
         label(body, "Műveleti áttekintés", UDim2.fromOffset(0, 0), UDim2.fromOffset(860, 36), palette.text, 27, true)
         subtitle("NEXA botkapcsolat • saját Belv Discord • kizárólag a fő botowner számára")
-        local cards = { { "IRATOK", "Kitöltés és keresés", "A bal oldali menüben válassz irattípust." }, { "DISCORD", "Automatikus közzététel", "A célcsatornákat a Discordon állítod be." }, { "ELLENŐRZÉS", "Vezetői jóváhagyás", "Az ügyirat és a körözés ellenőrzésre kerül." } }
+        local cards = { { "JÁTÉKOSOK", "Keresés és adatlap", "Név vagy Roblox-ID alapján kereshetsz." }, { "DISCORD", "Automatikus közzététel", "A célcsatornák az Owner Centerben készülnek." }, { "KÖRÖZÉS", "Játék és saját MDT", "A játék jelzése és a saját RP-irat külön látszik." } }
         for index, card in ipairs(cards) do
             local p = frame(body, "Info" .. index, UDim2.fromOffset((index - 1) * 302, 91), UDim2.fromOffset(290, 171), palette.panel); corner(p)
             label(p, card[1], UDim2.fromOffset(18, 18), UDim2.fromOffset(260, 22), palette.gold, 10, true)
@@ -400,6 +709,7 @@ renderPage = function()
         local instruction = label(p, "1. Válassz nyilvántartást vagy Belv-iratsablont.\n2. Töltsd ki az űrlapot, majd küldd be.\n3. A NEXA menti az iratot és megjeleníti Discordon.\n\nA panelben csak RP-adatokat adj meg. A Roblox-játék állapotát nem módosítja.", UDim2.fromOffset(24, 74), UDim2.fromOffset(820, 147), palette.muted, 15)
         instruction.TextWrapped = true; instruction.TextTruncate = Enum.TextTruncate.None
         button(p, "Belv-iratsablonok megnyitása", UDim2.fromOffset(24, 234), UDim2.fromOffset(298, 38), function() navigate("document") end, palette.gold)
+    elseif state.page == "players" or state.page == "gamewanted" then playersPage()
     elseif state.page == "document" and not state.template then
         label(body, "Belv-iratsablonok", UDim2.fromOffset(0, 0), UDim2.fromOffset(860, 36), palette.text, 27, true)
         subtitle("A NEXA Discordon beállított Belv-sablonjai • személyes owner hozzáférés")
@@ -483,8 +793,17 @@ connect(screen.Destroying, function()
 end)
 bindCamera(); showLogin()
 task.spawn(function()
+    local tick = 0
     while alive do
-        task.wait(30)
-        if alive and window.Visible and state.token and state.template and not state.busy then refreshList() end
+        task.wait(5); tick = tick + 1
+        if alive and window.Visible and state.token and not state.busy then
+            if state.page == "players" or state.page == "gamewanted" then
+                if tick % 6 == 0 then
+                    local result, err = api("GET", "/bootstrap")
+                    if not result then notifyError(err) end
+                end
+                if state.token then refreshPlayersPage() end
+            elseif state.template and tick % 6 == 0 then refreshList() end
+        end
     end
 end)

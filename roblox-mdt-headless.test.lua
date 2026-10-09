@@ -18,10 +18,11 @@ local function signal()
 end
 local methods = {}
 function methods:GetChildren() local r = {}; for _, c in ipairs(self._children) do if c.Parent == self then table.insert(r, c) end end; return r end
+function methods:GetDescendants() local r = {}; for _, c in ipairs(self:GetChildren()) do table.insert(r, c); for _, d in ipairs(c:GetDescendants()) do table.insert(r, d) end end; return r end
 function methods:FindFirstChild(name) for _, c in ipairs(self:GetChildren()) do if c.Name == name then return c end end end
 function methods:WaitForChild(name) return assert(self:FindFirstChild(name), name) end
 function methods:GetPropertyChangedSignal(name) if not self._signals[name] then self._signals[name] = signal() end; return self._signals[name] end
-function methods:IsA(class) return self.ClassName == class end
+function methods:IsA(class) return self.ClassName == class or class == "GuiObject" and ({Frame=true,ScrollingFrame=true,TextLabel=true,TextButton=true,TextBox=true})[self.ClassName] == true end
 function methods:Destroy()
     if self._destroyed then return end
     self.Destroying:Fire(); self._destroyed = true
@@ -31,6 +32,7 @@ end
 Instance = {}
 function Instance.new(class)
     local item = { _props = { ClassName = class, Name = class }, _children = {}, _signals = {}, _destroyed = false }
+    item._props.Visible = true; item._props.Enabled = true; item._props.RichText = false
     item._props.Activated = signal(); item._props.Destroying = signal()
     setmetatable(item, {
         __index = function(self, key) return methods[key] or self._props[key] end,
@@ -46,7 +48,7 @@ end
 UDim = { new = function(scale, offset) return { Scale = scale, Offset = offset } end }
 UDim2 = { new = function(...) return { ... } end, fromOffset = function(x,y) return {x,y} end, fromScale = function(x,y) return {x,y} end }
 Vector2 = { new = function(x,y) return { X=x,Y=y } end }
-Color3 = { fromRGB = function(r,g,b) return {r,g,b} end }
+Color3 = { fromRGB = function(r,g,b) return {R=r/255,G=g/255,B=b/255} end }
 Enum = setmetatable({}, { __index = function(self,k) local t = setmetatable({}, {__index=function(s,v) rawset(s,v,k..":"..v);return k..":"..v end});rawset(self,k,t);return t end })
 local function drain()
     while #tasks > 0 do
@@ -56,7 +58,7 @@ local function drain()
         assert(ok, err)
     end
 end
-task = { spawn = function(fn) table.insert(tasks, fn) end, delay = function(_,fn) table.insert(tasks, fn) end, wait = function() coroutine.yield("waiting") end }
+task = { spawn = function(fn) table.insert(tasks, fn) end, defer = function(fn) table.insert(tasks, fn) end, delay = function(_,fn) table.insert(tasks, fn) end, wait = function() coroutine.yield("waiting") end }
 warn = function(message) table.insert(warnings, message) end
 local function current(class, text)
     for i = #instances, 1, -1 do
@@ -66,11 +68,16 @@ local function current(class, text)
     error("Missing UI: " .. class .. " / " .. text)
 end
 local function click(text) current("TextButton",text).Activated:Fire(); drain() end
+local function clickPlayer(name)
+    local item=current("TextLabel","@"..name);assert(item.Parent:IsA("TextButton"));item.Parent.Activated:Fire();drain()
+end
 local function reset()
     instances={};tasks={};requests={};warnings={};services={};data={};revoked=false;offline=false
     local playerGui=Instance.new("PlayerGui")
-    local player={UserId=123456789,Name="OwnerTest",WaitForChild=function(_,name) assert(name=="PlayerGui");return playerGui end}
-    services.Players={LocalPlayer=player}
+    local player={UserId=123456789,Name="OwnerTest",DisplayName="Owner",Team={Name="Police"},WaitForChild=function(_,name) assert(name=="PlayerGui");return playerGui end}
+    local live={player,{UserId=777777,Name="WantedPlayer",DisplayName="Wanted",Team={Name="Citizen"}},{UserId=888888,Name="ClearPlayer",DisplayName="Clear",Team={Name="Citizen"}}}
+    services.Players={LocalPlayer=player,GetPlayers=function() return live end,GetNameFromUserIdAsync=function(_,id) assert(id==999999);return "OfflinePlayer" end,GetUserIdFromNameAsync=function(_,name) assert(name=="OfflinePlayer");return 999999 end}
+    data.live=live
     services.UserInputService={InputBegan=signal(),GetFocusedTextBox=function() return nil end}
     local encoded={},0
     local n=0
@@ -94,17 +101,24 @@ local function reset()
             assert(options.Headers.Authorization=="Bearer "..string.rep("T",43));assert(options.Headers["X-Mdt-Roblox-Id"]=="123456789")
             if revoked then return {StatusCode=403,Body=services.HttpService:JSONEncode({ok=false,error="Owner access revoked"})} end
             if options.Url:find("/bootstrap",1,true) then
-                response={ok=true,guild={id="100000000000000001",name="Belv"},officer={id="100000000000000002",name="Owner"},templates={{key="note",title="MDT feljegyzés",category="note",fields={{id="title",label="Feljegyzés címe",required=true},{id="content",label="Feljegyzés tartalma",style="paragraph",required=true},{id="reference",label="Hivatkozás",required=false}}}}}
+                response={ok=true,guild={id="100000000000000001",name="Belv"},officer={id="100000000000000002",name="Owner"},templates={
+                    {key="note",title="MDT feljegyzés",category="note",fields={{id="title",label="Feljegyzés címe",required=true},{id="content",label="Feljegyzés tartalma",style="paragraph",required=true},{id="reference",label="Hivatkozás",required=false}}},
+                    {key="person",title="Személynyilvántartás",category="person",fields={{id="username",label="Roblox-felhasználónév",required=true},{id="robloxId",label="Roblox-ID"},{id="name",label="RP-név",required=true},{id="state",label="RP-státusz",required=true},{id="notes",label="Megjegyzés",style="paragraph"}}},
+                    {key="warrant",title="MDT körözés",category="warrant",approval=true,fields={{id="target",label="Körözött RP-személy vagy jármű",required=true},{id="robloxId",label="Körözött Roblox-ID"},{id="reason",label="RP-körözés indoka",style="paragraph",required=true},{id="priority",label="Prioritás",required=true},{id="validity",label="Érvényesség",required=true}}},
+                    {key="case",title="MDT ügyirat",category="case",approval=true,fields={{id="title",label="Ügy tárgya",required=true},{id="persons",label="Érintettek",required=true},{id="robloxId",label="Érintett Roblox-ID"},{id="events",label="Tényállás",style="paragraph",required=true}}}
+                }}
             elseif options.Method=="POST" and options.Url:match("/records$") then
                 local payload=services.HttpService:JSONDecode(options.Body)
-                data.record={id="1",key="note",title=payload.fields.title,fields=payload.fields,status="published",revision=1,createdBy="100000000000000002",updatedAt="2026-10-09T00:00:00Z",discordState="synced",discordUrl="https://discord.com/channels/1/2/3",canEdit=true,canArchive=true,canSync=true}
+                data.record={id="1",key=payload.key,title=payload.fields.title or payload.fields.name or payload.fields.target,fields=payload.fields,status=payload.key=="warrant" and "pending" or "published",revision=1,createdBy="100000000000000002",updatedAt="2026-10-09T00:00:00Z",discordState="synced",discordUrl="https://discord.com/channels/1/2/3",canEdit=true,canArchive=true,canSync=true}
                 data.lastPayload=payload;response={ok=true,record=data.record}
             elseif options.Method=="PATCH" then
                 local payload=services.HttpService:JSONDecode(options.Body)
                 assert(payload.revision==data.record.revision)
                 data.record.fields=payload.fields;data.record.title=payload.fields.title;data.record.revision=data.record.revision+1
                 response={ok=true,record=data.record}
-            elseif options.Url:find("/records?",1,true) then response={ok=true,records=data.record and {data.record} or {}}
+            elseif options.Url:find("/people/lookup?",1,true) then data.lookupUrl=options.Url;response={ok=true,records=data.related or {}}
+            elseif options.Url:find("/records?",1,true) then
+                local key=options.Url:match("[?&]key=([^&]+)");response={ok=true,records=data.record and data.record.key==key and {data.record} or {}}
             elseif options.Url:find("/logout",1,true) then response={ok=true}
             else error("Unexpected request "..options.Method.." "..options.Url) end
         end
@@ -155,5 +169,65 @@ checked("a failed submit keeps the form and retry keeps the original request key
     offline=true;click("Beküldés a Discordra");local payload=services.HttpService:JSONDecode(requests[#requests].Body)
     assert(current("TextBox","Feljegyzés tartalma").Text=="Hálózati teszt")
     offline=false;click("Beküldés a Discordra");assert(data.lastPayload.clientKey==payload.clientKey)
+end)
+local function policeSource()
+    local gui=services.Players.LocalPlayer:WaitForChild("PlayerGui")
+    local phone=Instance.new("ScreenGui");phone.Name="GamePhone";phone.Parent=gui
+    local list=Instance.new("ScrollingFrame");list.Name="PolicePlayerList";list.Parent=phone
+    local names={}
+    for _,person in ipairs(data.live) do
+        local text=Instance.new("TextLabel");text.Text=person.Name;text.TextColor3=person.Name=="WantedPlayer" and Color3.fromRGB(255,60,70) or Color3.fromRGB(255,255,255);text.Parent=list;names[person.Name]=text
+    end
+    return phone,list,names
+end
+local function selectPoliceSource()
+    click("Lista kapcsolása")
+    local text=current("TextLabel","GamePhone / PolicePlayerList");assert(text.Parent:IsA("TextButton"));text.Parent.Activated:Fire();drain()
+end
+checked("missing game source stays unknown instead of reporting an empty wanted list",function()
+    reset();configured('"123456789"');login();data.live[2].Wanted=true
+    click("Játék körözései");assert(current("TextLabel","Körözésjelzés: 0 • Nincs jelzés: 0 • Ismeretlen: 3"))
+end)
+checked("only the explicitly selected visible police list supplies red and white wanted indicators",function()
+    local phone,list,names=policeSource();selectPoliceSource()
+    assert(current("TextLabel","Körözésjelzés: 1 • Nincs jelzés: 2 • Ismeretlen: 0"))
+    assert(names.WantedPlayer.Text=="WantedPlayer");assert(names.WantedPlayer.TextColor3.R==1);assert(phone.Enabled);assert(list.Visible)
+    clickPlayer("WantedPlayer");assert(current("TextLabel","Játék körözése: KÖRÖZÖTT"));assert(data.lookupUrl:find("robloxId=777777",1,true));assert(data.lookupUrl:find("username=WantedPlayer",1,true))
+    data.phone=phone;data.policeList=list;data.policeNames=names
+end)
+checked("a hidden police phone cannot keep stale wanted statuses",function()
+    data.phone.Enabled=false;click("Frissít");assert(current("TextLabel","Körözésjelzés: 0 • Nincs jelzés: 0 • Ismeretlen: 3"))
+    assert(current("TextLabel","Játék körözése: ismeretlen"))
+    data.phone.Enabled=true;click("Frissít");assert(current("TextLabel","Körözésjelzés: 1 • Nincs jelzés: 2 • Ismeretlen: 0"))
+end)
+checked("conflicting game labels are unknown and cannot clear an actual wanted signal",function()
+    local other=Instance.new("TextLabel");other.Text="WantedPlayer";other.TextColor3=Color3.fromRGB(255,255,255);other.Parent=data.policeList
+    click("Frissít");assert(current("TextLabel","Körözésjelzés: 0 • Nincs jelzés: 2 • Ismeretlen: 1"));other:Destroy();click("Frissít")
+end)
+checked("player lookup prefills the exact Roblox ID and can add an RP person record",function()
+    click("Játékoskereső");clickPlayer("WantedPlayer");click("+ Személyadat")
+    assert(current("TextBox","Roblox-ID").Text=="777777");assert(current("TextBox","Roblox-felhasználónév").Text=="WantedPlayer")
+    click("Beküldés a Discordra");assert(not data.lastPayload)
+    current("TextBox","RP-név").Text="RP Teszt";current("TextBox","RP-státusz").Text="Megfigyelt RP személy"
+    current("TextBox","Megjegyzés").Text="Saját RP-adat, nem játékállapot-módosítás"
+    click("Beküldés a Discordra");assert(data.lastPayload.key=="person");assert(data.lastPayload.fields.robloxId=="777777");assert(data.lastPayload.fields.notes:find("Saját",1,true))
+end)
+checked("offline public Roblox profile lookup still marks game status unknown",function()
+    click("Játékoskereső");current("TextBox","Felhasználónév vagy Roblox-ID").Text="999999";click("Profil lekérése")
+    assert(current("TextLabel","@OfflinePlayer • Roblox-ID: 999999"));assert(current("TextLabel","Nincs ebben a szerverben • játékállapot ismeretlen"));assert(current("TextLabel","Játék körözése: ismeretlen"))
+end)
+checked("a new manual warrant keeps the player ID and remains pending for owner review",function()
+    click("+ MDT-körözés");assert(current("TextBox","Körözött Roblox-ID").Text=="999999")
+    current("TextBox","RP-körözés indoka").Text="RP ügy";current("TextBox","Prioritás").Text="Normál";current("TextBox","Érvényesség").Text="RP esemény végéig"
+    click("Beküldés a Discordra");assert(data.lastPayload.key=="warrant");assert(data.record.status=="pending");assert(data.lastPayload.fields.robloxId=="999999")
+end)
+checked("approved-warrant filter can be enabled and disabled",function()
+    click("Összes / jóváhagyott");assert(requests[#requests].Url:find("status=published",1,true))
+    click("Összes / jóváhagyott");assert(not requests[#requests].Url:find("status=published",1,true))
+end)
+checked("the copy of a game list closes and private records clear on owner revocation",function()
+    click("Játék körözései");click("Lista kapcsolása");revoked=true
+    click("Frissít");assert(current("TextLabel","Az MDT-hozzáférés lezárva"))
+    for _,item in ipairs(instances) do assert(item._destroyed or item.Name~="PoliceSourcePicker") end
 end)
 print(tostring(checks).." headless client-flow checks passed.")

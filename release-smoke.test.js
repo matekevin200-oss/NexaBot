@@ -8,11 +8,11 @@ const source = fs.readFileSync(path.join(root, 'index.js'), 'utf8');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 
-test('release metadata is 20.2.0', () => {
-  assert.equal(pkg.version, '20.2.0');
-  assert.equal(lock.version, '20.2.0');
-  assert.equal(lock.packages[''].version, '20.2.0');
-  assert.match(source, /const APP_VERSION = '20\.2\.0'/);
+test('release metadata is 20.2.1', () => {
+  assert.equal(pkg.version, '20.2.1');
+  assert.equal(lock.version, '20.2.1');
+  assert.equal(lock.packages[''].version, '20.2.1');
+  assert.match(source, /const APP_VERSION = '20\.2\.1'/);
 });
 
 test('subscriptions replaces public pricing while preserving redirect', () => {
@@ -142,7 +142,7 @@ test('Stripe checkout gives visible feedback and a direct browser navigation', (
 
 test('Azure Command UI provides a calm professional unified workspace', () => {
   assert.match(source, /class="nexa-v153/);
-  assert.match(source, /NEXA Bot 20\.2\.0 • NEXA OS Studio/);
+  assert.match(source, /NEXA Bot 20\.2\.1 • NEXA OS Studio/);
   assert.match(source, /NEXA Azure Command — calm, desktop-first operations theme/);
   assert.match(source, /--primary:#4b9dff;--accent:#5ed8c4/);
   assert.match(source, /guild-settings\.view-control \.settings/);

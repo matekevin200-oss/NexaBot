@@ -1,5 +1,16 @@
 # NEXA Bot változásnapló
 
+## 20.2.1 — MDT-csatornák, játékoskereső és körözésjelzés
+
+- Csak a hiányzó privát MDT-szobák telepítése; a meglévő csatornák és rangok módosítása nélkül.
+- Párhuzamos futást védő adatbázis-zárolás, ismételhető és folytatható telepítés.
+- Owner Center telepítőgomb és külön másolható, személyes scriptkód-oldal.
+- Név/ID szerinti játékosadatlap, pontos Roblox-ID-hez kapcsolt saját MDT-iratok és új adatok felvitele.
+- A kiválasztott, megjelenített rendőrségi telefonlista piros/fehér színjelzésének olvasása; hiányzó/ellentmondó forrás ismeretlen.
+- Saját MDT-körözések külön listával, jóváhagyási szűrővel. Fő owner és Roblox-ID korlátozás megtartva.
+- 77 Node-teszt és 16 emulált kliensfolyamat sikeres. Élő Xeno/Emergency Hamburg próba és Render-deploy nem történt.
+- Útmutató: [BELV-MDT-UTMUTATO.md](BELV-MDT-UTMUTATO.md).
+
 ## 20.2.0 — Belv MDT
 
 - Owner-only Roblox MDT a NEXA Discord-iratrendszerével.
