@@ -1,14 +1,18 @@
-# NEXA Bot 20.3.0 — Belv állományi MDT / NEXA OS Studio
+# NEXA Bot 20.3.1 — Support moderációs kapcsoló és Belv MDT-javítás
 
-Az Owner Centerben **Discord-ID + Roblox-ID párral** vehetsz fel MDT-tagokat. Saját Discord-kódjukkal és saját ügyintézői nevükkel használják a Roblox-panelt. A Belv állomány kiválasztott rangja a közzétett iratokat Discordon olvashatja. A beállítások és a jóváhagyás a fő ownernél maradnak.
+A fő owner **egyetlen gombbal szüneteltetheti a Support szerver moderációját**. Nyisd meg: **Owner Center → Support műveletek → Minden moderáció kikapcsolása**. Kikapcsolja a NEXA automatikus és büntető kézi moderációját, valamint az aktív Discord AutoMod-szabályokat. Feloldja a korábbi raidlezárást és biztonsági karantént, kiüríti az észlelési számlálókat; a szünet alatti belépések nem kerülnek új büntetési listába.
 
-Új Discord MDT-központ és útmutató: privát személyes kód, betöltő, állapot és kijelentkezés gombjai. Helyi Roblox-betöltőképernyő animált állapotjelzéssel. Tagfelvétel és visszavonás megőrzi a többi Discord-jogot, a meglévő iratokat és csatornaszerkezetet.
+A **Moderáció visszakapcsolása** megőrzi a korábbi NEXA-beállításokat és csak az általa szüneteltetett AutoMod-szabályokat állítja vissza. A kapcsoló kizárólag a hivatalos Support szerveren és a fő `BOT_OWNER_ID` fiókkal használható. Ticketek, üdvözlés és tagellenőrzés tovább működhetnek. Más botok moderációját külön kell kezelni. Részleges hibánál külön jelzést és folytatógombot kapsz. A tartós állapothoz működő adatbázis kell.
 
-Az MDT egyetlen Belv Discord-szerverhez kötött. Beállítható `BELV_MDT_GUILD_ID` változóval; meglévő egyetlen aktív MDT-t automatikusan átvesz, új rendszerben az első owner-beállítás rögzíti. A tagok `/mdt script` és `/mdt belepes` paranccsal indulnak, saját fiókpárjukon.
+Discordról privát kapcsoló: **`/support-szerver moderacio`**, angol parancslistán **`/support-server moderation`**. Ez a parancs nem futtat telepítést; a választ adó panel gombját kell megnyomni.
 
-**102/102 Node-teszt (54 MDT), 22/22 emulált Roblox-folyamat** és szintaxisellenőrzés sikeres. Élő Discord/Roblox/Xeno-próba és Render-deploy nem történt. Nincs új npm-függőség.
+**Belv MDT-javítás:** a Discord–Roblox tagfelvételi űrlap a lap elejére került. A felvett tag a központban külön Alkalmazásparancsok használata jogot kap. A `/mdt` regisztrációját csatornafrissítési vagy globális parancsregisztrációs hiba nem hagyja ki. Az Owner Centerben a tag sorának **Hozzáférés ellenőrzése** nézete lekéri a jelenlegi parancsot, jogosultságokat és fiókpárt; nem ad ki belépőkódot.
 
-Beállítás és használat: [BELV-MDT-UTMUTATO.md](BELV-MDT-UTMUTATO.md). Kiadás: [RELEASE-20.3.0.md](RELEASE-20.3.0.md).
+Az MDT-t a fő owner által felvett **Discord-ID + Roblox-ID párok** használhatják, saját kóddal és ügyintézői névvel. A Belv állomány kiválasztott rangja a közzétett iratokat Discordon olvashatja. A jóváhagyás és beállítások a fő ownernél maradnak. Az MDT egyetlen Belv Discord-szerverhez kötött, `BELV_MDT_GUILD_ID` változóval vagy az első beállítással. A tagok `/mdt script`, `/mdt belepes` és a központ privát gombjaival indulnak; a helyi Roblox-betöltőképernyő megmarad.
+
+**129/129 Node-teszt (61 MDT, 20 Support), 22/22 emulált Roblox-folyamat** és JavaScript/Lua-szintaxisellenőrzés sikeres. A Support-próbák között 500 egyidejű ember/bot belépése, folyamatban lévő raidfeloldás, újraindítás és részleges visszaállítás szerepel. Élő Discord/Roblox/Xeno-próba és Render-deploy nem történt. Nincs új npm-függőség.
+
+A frissítéshez cseréld a projektfájlokat GitHub/Renderen és indíts deployt; a meglévő környezeti változókat tartsd meg. Ezután használd a Support kapcsolót, a Belv MDT-nél pedig a **Discord-nézet és MDT-gombok frissítése** gombot. Részletes lépések: [BELV-MDT-UTMUTATO.md](BELV-MDT-UTMUTATO.md). Kiadás: [RELEASE-20.3.1.md](RELEASE-20.3.1.md).
 
 ## Megtartott CIA-végleges telepítés
 

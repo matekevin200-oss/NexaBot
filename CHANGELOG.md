@@ -1,5 +1,17 @@
 # NEXA Bot változásnapló
 
+## 20.3.1 — Egygombos Support moderációs szünet és MDT-parancsjavítás
+
+- Fő owner kapcsoló az Owner Center Support műveletek oldalán és privát Discord-parancson.
+- Csak a hivatalos Supporton szünetelteti a NEXA moderációját; más szerverek, ticketek, üdvözlés és tagellenőrzés működését megőrzi.
+- Aktív Discord AutoMod-szabályok kikapcsolása, eredeti állapothoz kötött visszaállítás és tartós mentés.
+- Raidlezárás/karantén feloldása, észlelési ablakok kiürítése, régi büntetési gombok és parancsok blokkolása.
+- Folyamatban lévő intézkedések friss állapotellenőrzése, részleges hibák folytatása és újraindítás utáni helyreállítás.
+- MDT-tagfelvétel a beállításlap tetején; fő owner hozzáférési diagnosztika a tagokhoz.
+- Központbeli alkalmazásparancsjog a felvett tagoknak, külön jogonként mentett és visszaállított korábbi állapot.
+- MDT-regisztráció a csatornafrissítés előtt, más globális parancshibától független indulási szinkron.
+- 129 Node-teszt (61 MDT, 20 Support) és 22 emulált kliensfolyamat sikeres; élő deploy nem történt.
+
 ## 20.3.0 — Tagi Belv MDT, állományi Discord-központ és betöltőképernyő
 
 - Fő owner által felvett Discord–Roblox fiókpárok, saját tagi kódok és ügyintézői azonosítás.

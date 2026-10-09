@@ -1,8 +1,8 @@
 {
   "name": "nexabot",
-  "version": "20.3.0",
+  "version": "20.3.1",
   "private": true,
-  "description": "NEXA Bot 20.3.0 – Belv MDT Discord-Roblox member access, staff hub and loading screen",
+  "description": "NEXA Bot 20.3.1: Belv MDT member command repair and owner Support moderation pause",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {

@@ -1,4 +1,4 @@
--- BELV MDT 2.0 | NEXA Bot 20.3.0
+-- BELV MDT 2.0 | NEXA Bot 20.3.1
 -- Roblox kliensfelulet: csak a sajat NEXA MDT API-val kommunikal.
 -- Bot-token vagy Discord-webhook nem kell a scriptbe.
 -- A panel nyitasahoz F6 vagy a BELV MDT gomb hasznalhato.
@@ -152,7 +152,7 @@ local function loadingLabel(text, y, height, color, size, bold)
 end
 loadingLabel("BELVÉDELMI IGAZGATÓSÁG", 185, 24, palette.gold, 12, true)
 loadingLabel("BELV MDT", 233, 64, palette.text, 47, true)
-loadingLabel("MŰVELETI ADATTERMINÁL  /  20.3.0", 306, 24, palette.muted, 12)
+loadingLabel("MŰVELETI ADATTERMINÁL  /  20.3.1", 306, 24, palette.muted, 12)
 local loadingStage = loadingLabel("Kliens előkészítése", 372, 36, palette.text, 20, true)
 local loadingDetail = loadingLabel("Személyes Discord–Roblox hozzáférés", 415, 24, palette.muted, 12)
 local loadingTrack = frame(loading, "ProgressTrack", UDim2.fromOffset(280, 462), UDim2.fromOffset(560, 8), palette.field)

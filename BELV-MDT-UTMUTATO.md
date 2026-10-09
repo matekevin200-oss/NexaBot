@@ -1,6 +1,23 @@
-# Belv MDT • NEXA Bot 20.3.0
+# Belv MDT és Support kapcsoló • NEXA Bot 20.3.1
 
 A Belv MDT-t a fő owner és az általa felvett **Discord-ID + Roblox-ID párok** használhatják. Minden felvett tag a saját Discord-belépőkódját kéri, és saját ügyintézőként rögzít. A Belv állomány kiválasztott rangja a közzétett iratokat Discordon olvashatja. A jóváhagyás és a hozzáférések kezelése a fő ownernél marad.
+
+## Support: minden moderáció kikapcsolása egy gombbal
+
+1. Frissítsd a bot projektfájljait a 20.3.1 csomagból, majd indíts új deployt. A meglévő környezeti változókat tartsd meg.
+2. A fő owner fiókoddal nyisd meg: **Owner Center → Support műveletek**.
+3. A **Support moderációs kapcsoló** résznél kattints: **Minden moderáció kikapcsolása**. Várd meg az állapotjelzést. A gombot csak a fő `BOT_OWNER_ID` kezelheti, a hivatalos Support szerveren (`1556219615858655254`).
+4. A tömeges belépés után ugyanott a **Moderáció visszakapcsolása** állítja vissza a korábbi védelmet.
+
+Discordról is megnyitható a privát kapcsoló: magyar parancslistán **`/support-szerver moderacio`**, angol parancslistán **`/support-server moderation`**. A megnyitás nem telepíti újra a Support szervert; a kapott gombot kell megnyomni.
+
+A szünet alatt a NEXA nem indít automatikus kirúgást, kitiltást, timeoutot, figyelmeztetést, üzenettörlést, Anti-Nuke intézkedést vagy új raidlezárást. A büntető moderációs parancsok, modalok és a régi raid-gombok is blokkoltak. A korábbi raidlezárást és biztonsági karantént megpróbálja feloldani, a belépési és szabálysértési számlálókat kiüríti. A szünet alatti belépések nem kerülnek új büntetési listába.
+
+A gomb az éppen aktív **Discord AutoMod-szabályokat** is kikapcsolja. Ehhez a botnak **Szerver kezelése** jog kell. A szabályok tartalmát és a NEXA korábbi modulbeállításait megőrzi; visszakapcsoláskor csak az általa szüneteltetett szabályokat aktiválja újra. A korábban kikapcsolt szabályok kikapcsolva maradnak. Működő adatbázis mellett az állapot és a visszaállítási lista újraindítás után is megmarad.
+
+Jogosultsági hiba vagy hiányzó tartós mentés esetén **részleges műveletet** jelez. Ellenőrizd a jelzett hibát, majd nyomd meg a **Kikapcsolás folytatása** gombot. Sikertelen raidfeloldás vagy AutoMod-visszaállítás esetén a NEXA nem kapcsol vissza büntetést. A kapcsoló más botok moderációját és a Discord-adminok saját intézkedéseit nem vezérli. Más admin által később aktivált vagy újonnan létrehozott AutoMod-szabályt a következő kikapcsolási művelet kezeli.
+
+A ticketek, üdvözlés és tagellenőrzés a saját modulbeállításuk szerint tovább működhetnek. A Belv és más szerverek védelmét a Support kapcsoló nem módosítja. A már elküldött Discord-intézkedést nem vonja vissza; az aktív szünet megjelenése után új büntetést nem indít.
 
 ## Első indítás vagy frissítés
 
@@ -14,6 +31,14 @@ A Belv MDT-t a fő owner és az általa felvett **Discord-ID + Roblox-ID párok*
 8. Az **MDT-tagok • Discord-ID + Roblox-ID** részen add meg a tag Discord-ID-jét és saját Roblox-ID-jét, majd kattints a **Tag hozzáadása / saját fiókok frissítése** gombra. A tag legyen a Belv Discord-szerver tagja. Egy Roblox-ID egy Discord-fiókhoz tartozhat; egy taghoz legfeljebb öt saját fiók, összesen legfeljebb ötven MDT-tag vehető fel.
 
 A **Beállítások és állományi hozzáférés mentése** megőrzi a felvett tagokat. A **Discord-nézet és MDT-gombok frissítése** megismételhető: a bot saját korábbi központját frissíti, nem készít újabb üzenetet minden alkalommal.
+
+## Ha a felvett tag nem látja a belépés parancsot
+
+A 20.3.1-ben az **MDT-tagok • Discord-ID + Roblox-ID** űrlap a szerverbeállítások fölött van. A fő owner itt vegye fel a tag mindkét ID-jét, majd használja a **Discord-nézet és MDT-gombok frissítése** gombot. Ez az MDT-parancsot a csatornák frissítése előtt regisztrálja, és a központban a felvett tagoknak külön **Alkalmazásparancsok használata** jogot ad. A regisztráció induláskor más parancsok hibája mellett is lefut.
+
+A tag sorában a **Hozzáférés ellenőrzése** a friss Discord-tagságot, saját Roblox-párosítást, személyes belépési jogot, a szerveres `/mdt` regisztrációját, annak alapjogait és a központ láthatóságát/parancshasználatát vizsgálja. Belépőkódot nem készít. Az egyedi integrációs tiltásokat vagy a sikertelen lekérést külön jelzi; ezeket **Szerverbeállítások → Integrációk → NEXA → /mdt** alatt lehet ellenőrizni. Egymást felülbíráló integrációs szabályoknál az ellenőrzés nem állít biztos hozzáférési eredményt.
+
+A `#mdt-kozpont` **Belépőkód** gombja is saját, privát kódot ad a felvett tagnak. Az állományi rang önmagában olvasási hozzáférést ad; panelbelépéshez saját Discord–Roblox fiókpár kell.
 
 ## A felvett tag használata
 
@@ -54,7 +79,7 @@ Kategória: **BELV • MDT**. Legfeljebb tíz szöveges csatorna készül.
 | `mdt-szolgalati-naplo` | Szolgálati bejegyzések |
 | `mdt-feljegyzesek` | Belső RP-feljegyzések |
 
-A hiányzó szobák telepítése a meglévő szobát újra használja. Nem nevez át, nem mozgat és nem töröl csatornát, nem változtat rangot. Az új állományi kérésnek megfelelő **Discord-hozzáférésfrissítés** az MDT célcsatornáiban a felvett tagoknak és a kiválasztott rangnak látási és előzményolvasási jogot ad. Meglévő egyéb csatornajogot nem ír felül. A Belv-iratsablonok célcsatornáira is alkalmazza az olvasási jogot.
+A hiányzó szobák telepítése a meglévő szobát újra használja. Nem nevez át, nem mozgat és nem töröl csatornát, nem változtat rangot. A **Discord-hozzáférésfrissítés** az MDT célcsatornáiban a felvett tagoknak és a kiválasztott rangnak látási és előzményolvasási jogot ad. A központban a felvett tagok és a fő owner külön Alkalmazásparancsok használata jogot is kapnak. Az állományi rang ettől nem kap panelbelépést. Más jogot nem ír felül; a Belv-iratsablonok célcsatornáira is alkalmazza az olvasási jogot.
 
 A vezetői ellenőrzésnek külön csatornában kell lennie. Az állományi és tagi olvasási jogot nem adja hozzá ehhez a csatornához. Más, már meglévő Discord-jogosultságot nem töröl.
 
@@ -86,7 +111,7 @@ Saját MDT-körözés felvitele nem változtatja meg a játék valódi körözé
 
 Az Owner Center taglistájában a **Visszavonás** törli a tag személyes kódjait és munkameneteit. A következő API-kérés elutasítja a tagot, a panel pedig kiüríti a privát adatokat. Új felvétel nem éleszti újra a régi tokent.
 
-A Discord-frissítés a bot által hozzáadott látási és olvasási jogot állítja vissza a korábbi állapotra. Más rangból eredő jogot nem töröl; ha a tag továbbra is az állományi rangban van, Discordon a közzétett iratokat az állomány tagjaként láthatja. Ez nem ad vissza Roblox MDT-belépést. Ha a Discord-jogfrissítés hibával megáll, a tag panelhozzáférése már visszavont, a Discord-frissítést újra kell indítani.
+A Discord-frissítés a bot által hozzáadott látási, olvasási és központbeli parancshasználati jogot állítja vissza a korábbi állapotra. A későbbi kézi módosítást megőrzi. Más rangból eredő jogot nem töröl; ha a tag továbbra is az állományi rangban van, Discordon a közzétett iratokat az állomány tagjaként láthatja. Ez nem ad vissza Roblox MDT-belépést. Ha a Discord-jogfrissítés hibával megáll, a tag panelhozzáférése már visszavont, a Discord-frissítést újra kell indítani.
 
 Saját kijelentkezés: `/mdt kijelentkezes`, a központ **Belépések visszavonása** gombja vagy a panel **Kijelentkezés** gombja. Ez csak a kérő saját munkameneteit vonja vissza.
 
@@ -102,13 +127,13 @@ A **Régi betöltőlink visszavonása és új készítése** érvényteleníti a
 | Az állomány nem látja az iratokat | Válaszd ki a helyes állományi rangot, majd frissítsd a Discord-nézetet. |
 | A vezetői csatorna nem különálló | A review-csatornát válaszd külön, vagy futtasd a hiányzó MDT-szobák telepítését. |
 | Betöltés vagy belépés hibával leáll | Ellenőrizd a NEXA HTTPS-címét, adatbázisát, a saját fiókpárt és a bot naplóját. A személyes kód egyszer használható; kérj újat. |
-| Nem látszik `/mdt` | Ellenőrizd a 20.3.0 verziót és a Belv-kötést, majd frissítsd a Discord-nézetet. A központ gombjai is használhatók. |
+| Nem látszik `/mdt` | A 20.3.1 csomag telepítése után frissítsd a Discord-nézetet; a tag sorában nyisd meg a Hozzáférés ellenőrzése nézetet. A központ Belépőkód gombja is használható. |
 | Nincs HTTP-funkció a kliensben | A futtatókörnyezetnek `request`, `http_request`, `Xeno.request` vagy `http.request` HTTP-funkciót kell biztosítania. |
 | A Discord-frissítés félbeszakadt | Javítsd a bot célcsatornajogát, majd ismételd meg a frissítést; a mentett lista és a korábbi állapot megmarad. |
 
 ## Ellenőrzés és technikai korlátok
 
-**102 Node-teszt sikeres, ebből 54 MDT-teszt; 22 emulált Roblox-kliensfolyamat sikeres.** Ellenőrizve a saját tagi belépés, más fiók kódjának tiltása, szerverzár, tagi iratkezelés, vezetői jóváhagyás, visszavonás, a Discord-jogok helyreállítása és a részleges frissítés folytatása. Az emuláció a bot által generált egysoros kódot és tényleges személyes Lua-forrást futtatja, beleértve a tagi nézetet, a betöltőképernyőt és a hibás belépést.
+**129 Node-teszt sikeres, ebből 61 MDT- és 20 Support-kapcsolóteszt; 22 emulált Roblox-kliensfolyamat sikeres.** Az MDT-belépések mellett ellenőrizve a parancs regisztrációja hiba után, az örökölt parancsjog tiltásának feloldása, visszavonása és a friss tagi diagnosztika. A Support-próbák lefedik az 500 egyidejű ember/bot belépését büntetés nélkül, a spam és régi büntetési gombok blokkolását, az aktív és folyamatban lévő raidlezárás feloldását, részleges hibák folytatását, az AutoMod korábbi állapotának megőrzését és az újraindítást. Az emuláció a bot által generált egysoros kódot és tényleges személyes Lua-forrást futtatja.
 
 Élő Discord/Roblox/Xeno-próba és Render-deploy nem történt. A kompatibilitást emulált GUI- és HTTP-funkciókkal ellenőriztük. A szerverzár a **Belv Discord-szervert** ellenőrzi; egy konkrét Roblox privát szerverhez tartozást nem hitelesít. A kliens által jelentett Roblox-ID nem Roblox OAuth-bejelentkezés. A szerver minden API-kérésnél a friss Discord-tagságot, a regisztrált fiókpárt, az aktív jogosultságot és a munkamenetet ellenőrzi. A személyes kód egyszer használható, tízperces; a munkamenet legfeljebb hatórás.
 

@@ -16,7 +16,7 @@ class Builder {
   addSubcommand(fn) { const sub=fn(new Builder()); this.data.subcommands=[...(this.data.subcommands||[]),sub.data]; return this; }
   toJSON() { return this.data; }
 }
-const bits = { Administrator: 1n, ViewChannel: 2n, SendMessages: 4n, EmbedLinks: 8n, ReadMessageHistory: 16n, ManageChannels: 32n };
+const bits = { Administrator: 1n, ViewChannel: 2n, SendMessages: 4n, EmbedLinks: 8n, ReadMessageHistory: 16n, ManageChannels: 32n, UseApplicationCommands: 64n };
 const discord = { EmbedBuilder: Builder, ActionRowBuilder: Builder, ButtonBuilder: Builder, SlashCommandBuilder: Builder, ButtonStyle: { Primary: 1, Success: 3, Danger: 4, Secondary: 2 }, ChannelType: { GuildText: 0, GuildCategory: 4 }, MessageFlags: { Ephemeral: 64 }, PermissionFlagsBits: bits };
 function load(deps, name='belv-mdt') {
   const marker=`"src/${name}.js": function(module, exports, require) {\n`;
@@ -466,7 +466,7 @@ test('Belv staff gets a private status response but needs a registered ID pair f
 test('Discord hub grants staff and members view access without changing review-room or unrelated resources',async()=>{
   const f=fixture();await f.mdt.provisionMdtOwnerChannels(f.guild,f.user);await f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId,robloxIds:'987654321'});f.database.settings.staffRoleId='100000000000000011';
   const result=await f.discordModule.syncMdtDiscord(f.guild,f.user);assert.equal(result.readers,2);assert.equal(f.state.sends.length,2);assert.equal(f.state.mutations.length,0);
-  for(const changed of f.state.permissionChanges){assert.notEqual(changed.channel,f.database.settings.reviewChannelId);assert.deepEqual(Object.keys(changed.values).sort(),['ReadMessageHistory','ViewChannel']);}
+  for(const changed of f.state.permissionChanges){assert.notEqual(changed.channel,f.database.settings.reviewChannelId);const keys=['ReadMessageHistory','ViewChannel'];if(changed.channel===f.database.settings.discordChannelIds.hub&&[f.user,f.managerId].includes(changed.target))keys.push('UseApplicationCommands');assert.deepEqual(Object.keys(changed.values).sort(),keys.sort());}
   const hub=f.state.sends.find(s=>s.channel===f.database.settings.discordChannelIds.hub);assert.ok(hub.message.payload.components[0].data.components.some(b=>b.data.custom_id==='mdt_hub:belepes'));assert.deepEqual(hub.message.payload.allowedMentions,{parse:[]});
   const count=f.state.permissionChanges.length;await f.discordModule.syncMdtDiscord(f.guild,f.user);assert.equal(f.state.sends.length,2);assert.equal(f.state.messageEdits.length,2);assert.equal(f.state.permissionChanges.length,count);
   await assert.rejects(f.discordModule.syncMdtDiscord(f.guild,f.managerId),e=>e.status===403);
@@ -476,7 +476,7 @@ test('Discord member removal restores prior permissions and preserves unrelated 
   await channel.permissionOverwrites.edit(f.managerId,{ViewChannel:false,SendMessages:true},{type:1});
   await f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId,robloxIds:'987654321'});await f.discordModule.syncMdtDiscord(f.guild,f.user);
   await f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId},true);await f.discordModule.syncMdtDiscord(f.guild,f.user);
-  const overwrite=channel.permissionOverwrites.cache.get(f.managerId);assert.equal(overwrite.deny.has(bits.ViewChannel),true);assert.equal(overwrite.allow.has(bits.SendMessages),true);assert.equal(overwrite.allow.has(bits.ReadMessageHistory),false);assert.equal(f.database.discordStates.get(f.guild.id).overwrites.length,0);
+  const overwrite=channel.permissionOverwrites.cache.get(f.managerId);assert.equal(overwrite.deny.has(bits.ViewChannel),true);assert.equal(overwrite.allow.has(bits.SendMessages),true);assert.equal(overwrite.allow.has(bits.ReadMessageHistory),false);assert.ok(f.database.discordStates.get(f.guild.id).overwrites.every(x=>x.targetId===f.user));
 });
 test('a partial Discord update persists permission snapshots and resumes without duplicates',async()=>{
   const f=fixture();await f.mdt.provisionMdtOwnerChannels(f.guild,f.user);await f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId,robloxIds:'987654321'});f.state.failPermission=true;
@@ -495,4 +495,67 @@ test('MDT guild-command synchronization updates Belv only and leaves other bot c
   const manager={fetch:async()=>commands,create:async(p)=>created.push(p)};
   await f.mdt.syncMdtGuildCommand({...f.guild,commands:manager});assert.equal(edited.length,1);assert.equal(edited[0].default_member_permissions,null);assert.equal(deleted.length,0);
   await f.mdt.syncMdtGuildCommand({...f.guild,id:'100000000000000099',commands:manager});assert.deepEqual(deleted,['mdt']);assert.equal(created.length,0);
+});
+test('MDT refresh overrides inherited application-command denial in the hub and revocation restores it',async()=>{
+  const f=fixture();await f.mdt.provisionMdtOwnerChannels(f.guild,f.user);
+  const hub=f.guild.channels.cache.get(f.database.settings.discordChannelIds.hub);
+  hub.permissionsFor=(member)=>({has:(bit)=>bit===bits.UseApplicationCommands?hub.permissionOverwrites.cache.get(member.id)?.allow.has(bit)===true:true});
+  await hub.permissionOverwrites.edit(f.managerId,{UseApplicationCommands:false,SendMessages:false},{type:1});
+  assert.equal(hub.permissionsFor(f.managerCtx.member).has(bits.UseApplicationCommands),false);
+  await f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId,robloxIds:'987654321'});await f.discordModule.syncMdtDiscord(f.guild,f.user);
+  assert.equal(hub.permissionsFor(f.managerCtx.member).has(bits.UseApplicationCommands),true);
+  assert.equal(hub.permissionOverwrites.cache.get(f.managerId).deny.has(bits.SendMessages),true);
+  await f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId},true);await f.discordModule.syncMdtDiscord(f.guild,f.user);
+  assert.equal(hub.permissionOverwrites.cache.get(f.managerId).deny.has(bits.UseApplicationCommands),true);
+  assert.equal(hub.permissionOverwrites.cache.get(f.managerId).deny.has(bits.SendMessages),true);
+});
+test('moving the MDT hub removes its command grant while keeping the old room readable',async()=>{
+  const f=fixture();await f.mdt.provisionMdtOwnerChannels(f.guild,f.user);await f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId,robloxIds:'987654321'});await f.discordModule.syncMdtDiscord(f.guild,f.user);
+  const oldHub=f.database.settings.discordChannelIds.hub,newHub=f.database.settings.discordChannelIds.help;
+  f.database.settings.channelIds.note=oldHub;f.database.settings.discordChannelIds.hub=newHub;
+  await f.discordModule.syncMdtDiscord(f.guild,f.user);
+  const overwrite=f.guild.channels.cache.get(oldHub).permissionOverwrites.cache.get(f.managerId);
+  assert.equal(overwrite.allow.has(bits.UseApplicationCommands),false);assert.equal(overwrite.deny.has(bits.UseApplicationCommands),false);
+  assert.equal(overwrite.allow.has(bits.ViewChannel),true);assert.equal(overwrite.allow.has(bits.ReadMessageHistory),true);
+  assert.equal(f.guild.channels.cache.get(newHub).permissionOverwrites.cache.get(f.managerId).allow.has(bits.UseApplicationCommands),true);
+});
+test('MDT upgrades old permission snapshots and preserves a later manual denial on removal',async()=>{
+  const f=fixture();await f.mdt.provisionMdtOwnerChannels(f.guild,f.user);await f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId,robloxIds:'987654321'});
+  const hub=f.guild.channels.cache.get(f.database.settings.discordChannelIds.hub);
+  f.database.discordStates.set(f.guild.id,{messages:{},overwrites:[{channelId:hub.id,targetId:f.managerId,type:1,before:{ViewChannel:null,ReadMessageHistory:null}}]});
+  await hub.permissionOverwrites.edit(f.managerId,{ViewChannel:true,ReadMessageHistory:true,UseApplicationCommands:false},{type:1});
+  await f.discordModule.syncMdtDiscord(f.guild,f.user);
+  assert.equal(f.database.discordStates.get(f.guild.id).overwrites.find(x=>x.channelId===hub.id&&x.targetId===f.managerId).before.UseApplicationCommands,false);
+  await hub.permissionOverwrites.edit(f.managerId,{UseApplicationCommands:false,SendMessages:true},{type:1});
+  await f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId},true);await f.discordModule.syncMdtDiscord(f.guild,f.user);
+  assert.equal(hub.permissionOverwrites.cache.get(f.managerId).deny.has(bits.UseApplicationCommands),true);assert.equal(hub.permissionOverwrites.cache.get(f.managerId).allow.has(bits.SendMessages),true);
+});
+test('MDT command registration completes before a failing Discord channel refresh',async()=>{
+  const f=fixture(),edits=[];f.guild.commands={fetch:async()=>new Map([['mdt',{name:'mdt',edit:async(x)=>edits.push(x)}]])};f.state.failFetch=true;
+  await assert.rejects(f.discordModule.syncMdtDiscord(f.guild,f.user),e=>e.status===503);
+  assert.equal(edits.length,1);assert.equal(edits[0].default_member_permissions,null);assert.equal(f.database.locks.size,0);
+});
+test('one failed guild registration does not skip later MDT registrations',async()=>{
+  const f=fixture(),created=[];f.guild.commands={fetch:async()=>new Map(),create:async(x)=>created.push(x)};
+  const other={id:'100000000000000099',commands:{fetch:async()=>{throw new Error('command fetch unavailable');}}};
+  const result=await f.mdt.syncMdtGuildCommands({guilds:{cache:new Map([[other.id,other],[f.guild.id,f.guild]])}});
+  assert.deepEqual(result.failed,[other.id]);assert.deepEqual(result.synced,[f.guild.id]);assert.equal(created[0].name,'mdt');
+});
+test('owner access diagnostics detect registration, hub and integration restrictions without issuing codes',async()=>{
+  const f=fixture();await f.mdt.provisionMdtOwnerChannels(f.guild,f.user);await f.mdt.updateMdtMember(f.guild,f.user,{discordId:f.managerId,robloxIds:'987654321'});
+  const command={id:'100000000000000088',name:'mdt',defaultMemberPermissions:{bitfield:0n}};
+  f.guild.commands={fetch:async()=>new Map([[command.id,command]]),permissions:{fetch:async()=>new Map([[command.id,[{id:f.managerId,type:2,permission:false}]]])}};
+  const hub=f.guild.channels.cache.get(f.database.settings.discordChannelIds.hub);hub.permissionsFor=()=>({has:(bit)=>bit!==bits.UseApplicationCommands});
+  const report=await f.mdt.inspectMdtMemberAccess(f.guild,f.user,f.managerId),checks=Object.fromEntries(report.checks.map(x=>[x.key,x]));
+  assert.equal(checks.code.ok,true);assert.equal(checks.command.ok,true);assert.equal(checks.defaults.ok,false);assert.equal(checks.application.ok,false);assert.equal(checks.integration.ok,null);assert.match(checks.integration.detail,/tiltás/);assert.equal(f.database.codes.size,0);
+  await assert.rejects(f.mdt.inspectMdtMemberAccess(f.guild,f.managerId,f.managerId),e=>e.status===403);
+  const escape=(x)=>String(x).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+  const html=await f.owner.mdtOwnerPage(f.client,{user:{id:f.user},csrf:'<unsafe>'},f.guild.id,{layout:(_t,x)=>x,escapeHtml:escape,inspectMemberId:f.managerId});
+  assert.ok(html.indexOf('name="discord_id"')<html.indexOf('name="roblox_ids"'));assert.match(html,/id="mdt-access-check"/);assert.match(html,/&lt;unsafe&gt;/);assert.equal(f.database.codes.size,0);
+});
+test('startup still synchronizes MDT after global command registration fails',async()=>{
+  const marker='client.once(Events.ClientReady, async (readyClient) => {',start=source.indexOf(marker),end=source.indexOf('\n});',start);
+  assert.ok(start>=0&&end>start);const calls=[],deps={readyClient:{guilds:{cache:{reduce:()=>0,size:1,get:()=>null}},user:{setPresence:()=>{},tag:'test'}},ActivityType:{Watching:3},setInterval:()=>({unref:()=>{}}),registerCommands:async()=>{throw new Error('Global commands unavailable');},recordError:async()=>calls.push('error'),syncMdtGuildCommands:async()=>calls.push('mdt'),console:{log:()=>{},error:()=>{}},SUPPORT_GUILD_ID:'1556219615858655254'};
+  const names=Object.keys(deps);await new Function(...names,`return (async()=>{${source.slice(start+marker.length,end)}})();`)(...names.map(x=>deps[x]));
+  assert.deepEqual(calls,['error','mdt']);
 });
