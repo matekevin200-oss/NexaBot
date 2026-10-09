@@ -1,8 +1,8 @@
 {
   "name": "nexabot",
-  "version": "20.2.1",
+  "version": "20.2.2",
   "private": true,
-  "description": "NEXA Bot 20.2.1 – Belv MDT missing-channel installer, owner-only Roblox panel and people lookup",
+  "description": "NEXA Bot 20.2.2 – Belv MDT private one-line loader and owner-only Roblox panel",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {

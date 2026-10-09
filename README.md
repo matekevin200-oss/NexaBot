@@ -1,14 +1,14 @@
-# NEXA Bot 20.2.1 — Belv MDT / NEXA OS Studio
+# NEXA Bot 20.2.2 — Belv MDT / NEXA OS Studio
 
-A Belv MDT telepítője csak a hiányzó, owner számára látható szobákat hozza létre. A meglévő csatornákat, rangokat és üzeneteket a telepítés nem módosítja. Az Owner Centerben a Roblox-ID megadása után egy gomb készíti el a csatornákat és kapcsolja be az MDT-t. Az ismételt vagy megszakadt telepítés nem duplikál; adatbázis-zárolás védi a párhuzamos futást.
+Az MDT indításához elég egy saját `loadstring(game:HttpGet("…"))()` sor. Másold az Owner Center **Egysoros MDT-betöltő** mezőjéből, vagy kérd el a fő owner fiókkal: **`/mdt script`**. A teljes panelkód is megnyitható és letölthető.
 
-Új Játékoskereső kér le személyadatlapot név vagy ID szerint; az ID-hez kapcsolt saját személy-, körözés- és ügyiratok kereshetők, hozzáadhatók. A játék körözési színjelzését a tulajdonos által kiválasztott, megjelenített rendőrségi telefonlistából olvassa. Hiányzó vagy ellentmondó jelzés ismeretlen, a saját RP-körözések külön jelennek meg. A játék rendőrségi felületének elrendezését élőben nem ellenőriztük.
+A betöltőlink a saját bot HTTPS-webcímére mutat, újraindítás után megmarad, az aktuális Roblox-ID-listával tölt be, és Owner Centerben visszavonható. Az MDT-adatokhoz külön **`/mdt belepes`** kód kell. Másnak átadott személyes kóddal a másik felvett fiók a te fő owner-jogoddal használhatja az MDT-t; csak saját ID-ket adj hozzá.
 
-Új, másolható, személyre beállított scriptoldal: `/owner/mdt/SZERVER_ID/script`. `.lua` letöltés változatlanul elérhető. A script nem tartalmaz bot-tokent vagy belépőkódot. Fő owner és az Owner Centerben felvett Roblox-ID szükséges. A CIA végső telepítési zárát és korábbi működést a kiadás megtartja.
+A bot csak a hiányzó privát MDT-csatornákat hozza létre. A meglévő rangokat és csatornákat a telepítő nem módosítja; ismételt vagy megszakadt telepítés folytatható. A játékoskereső és a kiválasztott, megjelenített játékbeli rendőrségi lista színjelzésének olvasása megmarad. Hiányzó vagy ellentmondó játékjelzés ismeretlen.
 
-Ellenőrzés: 77/77 Node-teszt (29 MDT), 16/16 emulált Roblox-kliensfolyamat, JavaScript- és Lua-szintaxis. Élő Discord/Roblox/Xeno próba és Render-deploy nem történt. Nincs új npm-függőség.
+Ellenőrzés: 89/89 Node-teszt (41 MDT), 18/18 emulált Roblox-folyamat, JavaScript- és Lua-szintaxis. Az egysoros indítást a bot által előállított kóddal és személyes Lua-forrással is ellenőriztük. Élő Discord/Roblox/Xeno-próba és Render-deploy nem történt. Nincs új npm-függőség.
 
-Teljes beállítás: [BELV-MDT-UTMUTATO.md](BELV-MDT-UTMUTATO.md).
+Használat: [BELV-MDT-UTMUTATO.md](BELV-MDT-UTMUTATO.md). Kiadás: [RELEASE-20.2.2.md](RELEASE-20.2.2.md).
 
 ## Megtartott CIA-végleges telepítés
 

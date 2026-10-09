@@ -1,5 +1,13 @@
 # NEXA Bot változásnapló
 
+## 20.2.2 — Saját egysoros MDT-betöltő
+
+- `/mdt script`: privát, kész `loadstring(game:HttpGet("…"))()` sor a fő ownernek.
+- Egysoros kód, letöltés és a régi betöltőlink visszavonása az Owner Centerben; a teljes script megmarad.
+- Újraindítás után megmaradó, saját HTTPS-betöltőlink; minden letöltés a mentett Roblox-ID-listát és a fő owner Discord-tagságát ellenőrzi.
+- A betöltő nem ad irathozzáférést; külön személyes belépőkód és fő owner-jog kell.
+- 89 Node-teszt és 18 emulált Roblox-folyamat sikeres; az egysoros kódot a ténylegesen kiszolgált személyes Lua-forrással is futtatja az ellenőrzés.
+
 ## 20.2.1 — MDT-csatornák, játékoskereső és körözésjelzés
 
 - Csak a hiányzó privát MDT-szobák telepítése; a meglévő csatornák és rangok módosítása nélkül.

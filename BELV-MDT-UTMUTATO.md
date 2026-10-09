@@ -1,4 +1,4 @@
-# Belv MDT • NEXA Bot 20.2.1
+# Belv MDT • NEXA Bot 20.2.2
 
 Magyar, személyes MDT-panel az Emergency Hamburg RP-hez. A bot csak a hiányzó MDT-csatornákat hozza létre a kiválasztott Belv-szerveren. A panelben játékost kereshetsz, a saját MDT-iratokat lekérheted és bővítheted, valamint a megnyitott játékbeli rendőrségi telefonlista körözési színjelzését olvashatod. Az MDT kizárólag a **fő botowner Discord-fiókjával** és az **Owner Centerben felvett Roblox-ID-kkel** használható.
 
@@ -9,11 +9,19 @@ Magyar, személyes MDT-panel az Emergency Hamburg RP-hez. A bot csak a hiányzó
 3. A NEXA weben lépj be a fő owner fiókoddal: **Owner Center → Belv-szerver → Belv MDT**. Közvetlenül a saját NEXA-webcímed után `/owner/mdt` is megnyitható.
 4. Add hozzá a saját **Roblox User ID-det**. A profilcímben a `/users/` és `/profile` közötti szám: `https://www.roblox.com/users/123456789/profile` → `123456789`. Legfeljebb 10 saját fiók vehető fel, külön sorokban.
 5. Kattints a **Hiányzó csatornák létrehozása és MDT indítása** gombra. A bot menti a megadott ID-ket, létrehozza a hiányzó szobákat, hozzárendeli a célcsatornákat és bekapcsolja az MDT-t. Ha meglévő szobát szeretnél célként használni, előtte válaszd ki a megfelelő listából.
-6. Nyisd meg a **Script kód megnyitása és másolása** oldalt. Jelöld ki és másold a teljes kódot. A **Saját Belv MDT script letöltése** ugyanazt `.lua` fájlként adja. A kód már tartalmazza a saját webcímedet, szerveredet és engedélyezett Roblox-ID-idet.
+6. Az **Egysoros MDT-betöltő** mezőből másold le az egyetlen `loadstring(game:HttpGet("…"))()` sort. Discordon a **`/mdt script`** is privát válaszban adja meg ugyanezt a kész sort. Az **Egysoros betöltő letöltése** gomb ezt `.lua` fájlként adja. A **Betöltő és teljes script megnyitása** oldalon a teljes panelkód is megmaradt, ha azt szeretnéd másolni.
 7. A Belv Discord-szerveren kérj személyes, privát belépőkódot: `/mdt belepes`. A zárolt Discord-parancs láthatóságához adminjog vagy külön parancsengedély szükséges; a bot ezen felül a fő `BOT_OWNER_ID` fiókot is ellenőrzi.
-8. Az Emergency Hamburg kliensében futtasd a saját scriptet a választott, `request` HTTP-funkciót biztosító környezetben. A panelben add meg a személyes Discord-kódot. Nyitás és elrejtés: **F6** vagy **BELV MDT**.
+8. Az Emergency Hamburg kliensében másold az egysoros betöltőt Xeno-ba, majd futtasd. Ehhez `loadstring`, `game:HttpGet` és a panel botkapcsolatához `request` HTTP-funkció kell. A panelben add meg a személyes Discord-kódot. Nyitás és elrejtés: **F6** vagy **BELV MDT**. Az egysoros indítást emulált Roblox-környezetben ellenőriztük; élő Xeno-próba nem történt.
 
-A külön átadott `Belv-MDT-Emergency-Hamburg.lua` és a ZIP azonos nevű `roblox/` forrásfájlja üres konfigurációval indul, ezért senkinek sem hoz létre panelt. **A saját, használatra beállított kód az Owner Centerben készül.** Roblox-ID módosítása után másold vagy töltsd le újra.
+A külön átadott `Belv-MDT-Emergency-Hamburg.lua` és a ZIP azonos nevű `roblox/` forrásfájlja üres konfigurációval indul, ezért senkinek sem hoz létre panelt. **A saját, használatra beállított kód az Owner Centerben vagy a `/mdt script` paranccsal készül.** A teljes kód kézi másolása esetén Roblox-ID módosítása után újra kell másolni. Az egysoros betöltő minden indításkor az aktuális ID-listával tölti le a panelt; ugyanaz a sor botújraindítás után is használható.
+
+## Egysoros betöltő és visszavonás
+
+A bot a saját HTTPS-webcímére mutató, egyedi betöltőlinket készít. Nem kell más scriptoldal címét, bot-tokent vagy belépőkódot beleírnod. A kész sor a saját szerveredhez tartozó panelt tölti be.
+
+Az Owner Centerben a **Régi betöltőlink visszavonása és új készítése** gomb érvényteleníti a korábbi sort. Ezután másold az új sort, vagy kérd le újra: `/mdt script`. A betöltőlink visszavonása a már bejelentkezett panelt nem zárja be; a személyes hozzáférés visszavonásához a **Minden saját MDT-belépés visszavonása** gomb vagy `/mdt kijelentkezes` szükséges.
+
+A betöltőlink csak a felület kódját és a beállított Roblox-ID-ket szolgálja ki. Önmagában nem ad hozzáférést az MDT-adatokhoz. Az MDT kikapcsolása, az ID-lista kiürítése, a fő owner cseréje vagy a Discord-tagság elvesztése után a régi link nem tölti be a panelt. A linket tartsd magadnál, és visszavonhatod, ha máshoz kerül.
 
 ## A hiányzó Discord-szobák
 
@@ -93,7 +101,7 @@ A **Lezárás** archivál, az irat és Discord-bejegyzése megmarad. Verzióelle
 - Csak a fő `BOT_OWNER_ID` használhatja a teljes MDT-t, a konfigurációt, telepítést és a scriptoldalt. Más admin, szervertulaj vagy delegált owner nem kap MDT-jogot.
 - A script a felület létrehozása előtt ellenőrzi a `LocalPlayer.UserId` értékét. A panel a saját `PlayerGui` felületeden jelenik meg, más játékosok képernyőjére nem kerül.
 - A bot minden API-kérésben frissen ellenőrzi a fő owner Discord-fiókját, az engedélyezett Roblox-ID-t és a szerverhez tartozó munkamenetet. ID-törlés vagy belépésvisszavonás után a következő kérés lezárja és kiüríti az MDT-t.
-- A kliens által küldött Roblox-ID nem hiteles Roblox OAuth-bejelentkezés. A tényleges hozzáférést a fő owner Discordon kapott személyes kódja is védi. A kódot ne oszd meg.
+- A kliens által küldött Roblox-ID nem hiteles Roblox OAuth-bejelentkezés. A tényleges hozzáférést a fő owner Discordon kapott személyes kódja is védi. Egy ID hozzáadása önmagában nem ad MDT-belépést. Ha más felvett fióknak átadod a személyes kódot, a te fő owner-jogoddal használhatja az MDT-t. Ha csak te használhatod, kizárólag a saját ID-idet add hozzá, és a személyes kódot tartsd magadnál.
 - A személyes kód tíz percig, egyszer használható; a munkamenet legfeljebb hatórás. Új bejelentkezés a korábbi saját munkamenetet visszavonja. A titkos token csak a kliens memóriájában van, az adatbázis lenyomatot tárol.
 
 Kijelentkezés: `/mdt kijelentkezes`, a panel **Kijelentkezés** gombja vagy az Owner Center **Minden saját MDT-belépés visszavonása** gombja.
@@ -102,8 +110,10 @@ Kijelentkezés: `/mdt kijelentkezes`, a panel **Kijelentkezés** gombja vagy az 
 
 | Helyzet | Teendő |
 | --- | --- |
-| Roblox-ID nincs felvéve / nincs panel | Owner Centerben add hozzá az ID-t, mentsd, majd másold le újra a saját scriptet. |
-| Nincs MDT-telepítő vagy scriptoldal | Ellenőrizd, hogy a 20.2.1 botverzió fut és a fő owner fiókkal léptél be. |
+| Roblox-ID nincs felvéve / nincs panel | Owner Centerben add hozzá a saját ID-t, mentsd, majd futtasd újra a betöltőt. Teljes kód kézi másolásakor másold le újra a saját scriptet. |
+| Nincs `/mdt script` vagy egysoros betöltő | Ellenőrizd, hogy a 20.2.2 botverzió fut és a fő owner fiókkal léptél be. |
+| Régi vagy érvénytelen betöltőlink | Kérj új saját sort: `/mdt script`. Ellenőrizd, hogy a linket nem vontad vissza és az MDT be van kapcsolva. |
+| A betöltő HTTP-hibát jelez | Ellenőrizd a bot HTTPS-webcímét, működő adatbázisát és a fő owner Discord-tagságát. Ismételt letöltések után várj egy percet. |
 | Hiányzik a csatornalétrehozási jog | A botnak Csatornák kezelése jog kell. A meglévő csatornákat a telepítő nem javítja át. |
 | Már folyamatban van a telepítés | A futó telepítés végét várd meg. Megszakadt botfolyamat zárolása legfeljebb öt perc után lejár. |
 | Több azonos nevű MDT-szoba van | A megfelelő célcsatornát válaszd ki az Owner Centerben, majd futtasd újra. |
@@ -116,12 +126,12 @@ Kijelentkezés: `/mdt kijelentkezes`, a panel **Kijelentkezés** gombja vagy az 
 
 ## Ellenőrzés és technikai részletek
 
-**77 Node-teszt sikeres**, köztük 29 MDT-futási teszt; **16 emulált Roblox-kliensfolyamat sikeres**, valamint JavaScript- és Lua-szintaxisellenőrzés. A tesztek a meglévő csatornák nulla módosítását, részleges és párhuzamos telepítést, owner/ID-korlátozást, keresést, űrlapbeküldést, jóváhagyást, körözésszűrést, látható/hiányzó/ellentmondó játékforrást és hozzáférés-visszavonást is vizsgálják. A CIA végső telepítési zárát a kiadás megtartja.
+**89 Node-teszt sikeres**, köztük 41 MDT-futási teszt; **18 emulált Roblox-kliensfolyamat sikeres**, valamint JavaScript- és Lua-szintaxisellenőrzés. A tesztek a meglévő csatornák nulla módosítását, részleges és párhuzamos telepítést, owner/ID-korlátozást, keresést, űrlapbeküldést, jóváhagyást, körözésszűrést, látható/hiányzó/ellentmondó játékforrást és hozzáférés-visszavonást is vizsgálják. A betöltőlink érvénytelenítését, tulajdonoshoz és szerverhez kötését, a titkos belépési adatok hiányát, valamint a bot által ténylegesen generált egysoros kód futtatását is ellenőriztük. A CIA végső telepítési zárát a kiadás megtartja.
 
 Élő Discord/Roblox/Xeno integrációs próba és Render-deploy ebben a beszélgetésben nem történt. A kliens a rendelkezésre álló `request`, `http_request`, `Xeno.request` vagy `http.request` funkcióval kapcsolódik a saját NEXA API-hoz. A kompatibilitás feltétele a Roblox GUI- és HTTP-funkciók rendelkezésre állása.
 
-Node: `npm test`, szintaxis: `node --check index.js`. A fej nélküli klienspróba valódi Roblox helyett emulált UI-val és HTTP-val fut: `lua test/roblox-mdt-headless.test.lua roblox/Belv-MDT-Emergency-Hamburg.lua` (Lua 5.4).
+Node: `npm test`, szintaxis: `node --check index.js`. A fej nélküli klienspróba valódi Roblox helyett emulált UI-val és HTTP-val fut: `lua test/roblox-mdt-headless.test.lua roblox/Belv-MDT-Emergency-Hamburg.lua` (Lua 5.4). Ez a 16 alapfolyamatot ellenőrzi. A további két betöltőpróbához az emuláció a Node-teszt által előállított egysoros kódot és személyes Lua-forrást kapta meg.
 
-Adattáblák: `nexabot_mdt_settings`, `nexabot_mdt_codes`, `nexabot_mdt_sessions`, `nexabot_mdt_records`, `nexabot_mdt_provision_locks`. A bot induláskor előkészíti ezeket; a csatornalétrehozás külön kézi művelet. API: `/api/mdt/v1/...`; új személylekérdezés: `GET /people/lookup?robloxId=...&username=...` a fő owner személyes munkamenetével.
+Adattáblák: `nexabot_mdt_settings`, `nexabot_mdt_codes`, `nexabot_mdt_sessions`, `nexabot_mdt_records`, `nexabot_mdt_provision_locks`, `nexabot_mdt_loader_links`. A bot induláskor előkészíti ezeket; a csatornalétrehozás külön kézi művelet. API: `/api/mdt/v1/...`; személylekérdezés: `GET /people/lookup?robloxId=...&username=...` a fő owner személyes munkamenetével. A saját, aláírt klienslink a `/mdt/client/...` útvonalon kizárólag Lua-kódot szolgál ki.
 
 A játékjelzés leírásának forrása: [Emergency Hamburg – Police Department](https://wiki.emergency-hamburg.com/en/jobs/police). A nyilvános játékos- és névlekérdezés API-ja: [Roblox Creator Hub – Players](https://create.roblox.com/docs/reference/engine/classes/Players).

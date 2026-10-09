@@ -230,4 +230,22 @@ checked("the copy of a game list closes and private records clear on owner revoc
     click("Frissít");assert(current("TextLabel","Az MDT-hozzáférés lezárva"))
     for _,item in ipairs(instances) do assert(item._destroyed or item.Name~="PoliceSourcePicker") end
 end)
+if arg[2] then
+    local fixture=arg[2]
+    local function runLoader()
+        local downloads=0
+        game.HttpGet=function(_,url) assert(url==fixture.url);downloads=downloads+1;return fixture.source end
+        loadstring=function(code) return load(code,"@BelvMdtDownloadedClient","t",_G) end
+        local fn,err=load(fixture.code,"@BelvMdtOneLineLoader","t",_G);assert(fn,err);fn();drain()
+        assert(downloads==1)
+    end
+    checked("the actual generated one-line loader downloads the personalized client and opens login",function()
+        local gui=reset();runLoader();assert(gui:FindFirstChild("BelvMdtNexaV1"));assert(#requests==0)
+        login();assert(current("TextLabel","Műveleti áttekintés"));assert(#requests==2)
+    end)
+    checked("the downloaded client refuses an unlisted actual Roblox account before creating its panel",function()
+        local gui=reset();services.Players.LocalPlayer.UserId=987654321;runLoader()
+        assert(not gui:FindFirstChild("BelvMdtNexaV1"));assert(#requests==0);assert(#warnings==1)
+    end)
+end
 print(tostring(checks).." headless client-flow checks passed.")

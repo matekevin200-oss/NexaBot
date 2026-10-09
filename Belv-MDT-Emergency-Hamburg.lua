@@ -1,4 +1,4 @@
--- BELV MDT 1.1 | NEXA Bot 20.2.1
+-- BELV MDT 1.1 | NEXA Bot 20.2.2
 -- Roblox kliensfelulet: csak a sajat NEXA MDT API-val kommunikal.
 -- Bot-token vagy Discord-webhook nem kell a scriptbe.
 -- A panel nyitasahoz F6 vagy a BELV MDT gomb hasznalhato.
