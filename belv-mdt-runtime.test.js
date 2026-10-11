@@ -555,7 +555,7 @@ test('owner access diagnostics detect registration, hub and integration restrict
 });
 test('startup still synchronizes MDT after global command registration fails',async()=>{
   const marker='client.once(Events.ClientReady, async (readyClient) => {',start=source.indexOf(marker),end=source.indexOf('\n});',start);
-  assert.ok(start>=0&&end>start);const calls=[],deps={readyClient:{guilds:{cache:{reduce:()=>0,size:1,get:()=>null}},user:{setPresence:()=>{},tag:'test'}},ActivityType:{Watching:3},setInterval:()=>({unref:()=>{}}),registerCommands:async()=>{throw new Error('Global commands unavailable');},recordError:async()=>calls.push('error'),syncMdtGuildCommands:async()=>calls.push('mdt'),console:{log:()=>{},error:()=>{}},SUPPORT_GUILD_ID:'1556219615858655254'};
+  assert.ok(start>=0&&end>start);const calls=[],deps={readyClient:{guilds:{cache:{reduce:()=>0,size:1,get:()=>null}},user:{setPresence:()=>{},tag:'test'}},ActivityType:{Watching:3},setInterval:()=>({unref:()=>{}}),registerCommands:async()=>{throw new Error('Global commands unavailable');},recordError:async()=>calls.push('error'),syncMdtGuildCommands:async()=>calls.push('mdt'),registerCrownCityInOwnerGuilds:async()=>calls.push('crown'),console:{log:()=>{},error:()=>{}},SUPPORT_GUILD_ID:'1556219615858655254'};
   const names=Object.keys(deps);await new Function(...names,`return (async()=>{${source.slice(start+marker.length,end)}})();`)(...names.map(x=>deps[x]));
-  assert.deepEqual(calls,['error','mdt']);
+  assert.deepEqual(calls,['error','mdt','crown']);
 });

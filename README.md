@@ -1,4 +1,25 @@
-# NEXA Bot 20.3.1 — Support moderációs kapcsoló és Belv MDT-javítás
+# NEXA Bot 20.4.0 — Crown City RP
+
+A NEXA fő tulajdonosa a `/crown-city telepites` paranccsal kész Crown City RP struktúrát telepíthet egy meglévő Discord-szerverre: **69 rang, 15 kategória, 98 szoba, 81 panel és 5 jelentkezési sablon**.
+
+A részlegek: vezetőség, Staff, CCPD, CCSO, CCFD / EMS, CCDOT, civil RP, közös diszpécser, ügyintézés és privát archívum. Arany–palakék Crown City arculat, magyar szövegek, külön Discord- és RP-szabályzat, frakciókézikönyvek, jelentés- és állománysablonok.
+
+- `/crown-city telepites`: teljes telepítés; opcionális `szerverkod` mező.
+- `/crown-city javitas`: hiányok pótlása, saját botpanelek frissítése; a kód később is megadható.
+- `/crown-city ellenorzes`: szerverstruktúra, privát hozzáférések és modulok ellenőrzése.
+
+A telepítő a `BOT_OWNER_ID` elsődleges tulajdonoshoz kötött; a cél Discord-szerveren Rendszergazda vagy szervertulajdonosi jog kell. A NEXA botnak Rendszergazda és megfelelő ranghely szükséges. A jelentkezésekhez és az újraindítás utáni mentéshez működő PostgreSQL adatbázis kell.
+
+Az új lakosok hitelesítés után kapnak Állampolgár rangot. A Staff-rangok a privát ticketekben hozzáférést kapnak; a frakciórangok nem kapnak adminjogot. A session gombjait a Staff vagy a Session Host használhatja. A sessionnyitás Discordon közzéteszi a kódot és értesíti az önként felvett sessionrang tagjait; a játékbeli privátszervert továbbra is az ER:LC-ben kell kezelni.
+
+A telepítő mentett azonosítókat használ, megszakítás után folytatható, és nem töröl rangot, csatornát vagy üzenetet. A meglevő csatornák egyedi neveit, leírásait és jogosultságait megőrzi. Saját, törölt kategóriához tartozó árva csatornákat javításkor visszarendezhet. NEXA Support- vagy telepített CIA-szerveren a Crown City telepítés tiltott.
+
+**151/151 automatikus Node-teszt sikeres**, ebből **22 Crown City**. A próbák a Discord működését modellezik; valódi Discord-szervertelepítés és Render-deploy nem történt. `node --check index.js` sikeres. Új npm-függőség nincs.
+
+Részletes használat: [CROWN-CITY-RP-UTMUTATO.md](CROWN-CITY-RP-UTMUTATO.md).
+A kész `index.js` egyetlen futtatható botfájl; a `development/` mappa tartalmazza az újraszerkeszthető forrást és a bundlert. Telepítéskor nem kell Python: `npm ci`, majd `npm start`.
+
+## Megmaradó Support és Belv MDT funkciók
 
 A fő owner **egyetlen gombbal szüneteltetheti a Support szerver moderációját**. Nyisd meg: **Owner Center → Support műveletek → Minden moderáció kikapcsolása**. Kikapcsolja a NEXA automatikus és büntető kézi moderációját, valamint az aktív Discord AutoMod-szabályokat. Feloldja a korábbi raidlezárást és biztonsági karantént, kiüríti az észlelési számlálókat; a szünet alatti belépések nem kerülnek új büntetési listába.
 

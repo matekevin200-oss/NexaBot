@@ -1,0 +1,18 @@
+
+};
+const __cache = Object.create(null);
+function __resolve(from, request) {
+  const resolved = __path.normalize(__path.join(__path.dirname(from), request));
+  return resolved.endsWith('.js') ? resolved : resolved + '.js';
+}
+function __load(id) {
+  if (__cache[id]) return __cache[id].exports;
+  const factory = __modules[id];
+  if (!factory) return __nativeRequire(id);
+  const module = { exports: {} };
+  __cache[id] = module;
+  const localRequire = (request) => request.startsWith('.') ? __load(__resolve(id, request)) : __nativeRequire(request);
+  factory(module, module.exports, localRequire);
+  return module.exports;
+}
+__load('src/index.js');
