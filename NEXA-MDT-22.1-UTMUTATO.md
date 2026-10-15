@@ -1,4 +1,4 @@
-# NEXA Bot 22.1.0 — MDT Network
+# NEXA Bot 22.1.1 — MDT Network
 
 Az MDT web a meglévő NEXA bot **Render-szolgáltatásán belül**, a `/mdt-web` útvonalon működik. A NEXA web MDT Network menüpontja ide vezet. Külön szolgáltatás nem szükséges.
 
@@ -142,3 +142,6 @@ Az OAuth ugyanazt a meglévő NEXA `/oauth/callback` visszatérési címet haszn
 - A kapcsolatfrissítés vendégként is újrakéri a hálózat állapotát. Hibás HTML/JSON, időtúllépés és szerverhiba nem mutat sikeres kapcsolatot.
 - A megjelenés saját NEXA-felület. A Galaxy RP zárt paneljéről nem állt rendelkezésre ellenőrzött kép vagy forráskód.
 - A körözések RP-bejegyzések; nincs automatikus Emergency Hamburg-adatkinyerés. Az élő Roblox-próba külön ellenőrzés.
+
+## 22.1.1 · IC-kezelőfelület
+A napi ügyintézésben személyi adatlap, személyi igazolvány, körözés és szolgálati bejegyzés szerepel. A technikai Discord/Roblox-azonosítók a jogosultságkezelésben maradnak meg. A háttérben megőrzött RP-metaadatok és az adatbázis-azonosítók nem változnak.
