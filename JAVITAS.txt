@@ -1,0 +1,18 @@
+NEXA MDT 22.1.3 – TELEPÍTÉSI GYORSJAVÍTÁS
+
+Javított hiba: Invalid Form Body nonce[NONCE_TYPE_TOO_LONG].
+A Discord MDT-központ paneljei most legfeljebb 24 karakteres üzenetazonosítót kapnak. A Discord határa 25 karakter.
+
+TEENDŐ
+1. Csomagold ki a ZIP-et.
+2. Csak a ZIP legfelső szintjén lévő index.js fájlt töltsd fel a matekevin200-oss/NexaBot tároló main ágába, a meglévő index.js helyére.
+3. A Render automatikus telepítése után ellenőrizd: /health verzió 22.1.3.
+4. Az Owner Centerben ismételd meg a Discord MDT-központ frissítését / telepítését.
+
+A package.json és package-lock.json most nem változtatandó, nincs új függőség.
+A már mentett hozzáférési lista és PostgreSQL-adatok megmaradnak; nem kell törölni vagy újra felvenni a tagokat.
+A forras mappa csak a javított forrásmodul és regressziós teszt másolata, nem kell feltölteni.
+
+ELLENŐRZÉS
+109/109 automatizált teszt sikeres. Az új tesztek mind az öt engedélyezett szerver MDT-panelküldését, az ismételt frissítést és a törölt panel újraküldését ellenőrzik szimulált Discorddal.
+A teljes index.js és Lua 5.4 szintaxis ellenőrizve. Ez a javítócsomag nincs élesítve; a működést a feltöltés után kell visszaellenőrizni.
