@@ -1,8 +1,8 @@
 {
   "name": "nexabot",
-  "version": "22.1.0",
+  "version": "22.1.1",
   "private": true,
-  "description": "NEXA Bot 22.1.0 — five-faction RP MDT network and police operations terminal",
+  "description": "NEXA Bot 22.1.1 — in-character law enforcement MDT network",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {

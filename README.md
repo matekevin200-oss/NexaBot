@@ -1,6 +1,6 @@
-# Aktuális kiadás: NEXA 22.1.0
+# Aktuális kiadás: NEXA 22.1.1
 
-Az éles bot a gyökérben lévő `index.js` fájlt futtatja. Az új rendvédelmi MDT elérése a bot webcímén: `/mdt-web`. A 22.1-es kiadás részletes használata: [NEXA-MDT-22.1-UTMUTATO.md](NEXA-MDT-22.1-UTMUTATO.md). A visszaépíthető forrás és a 99 ellenőrzés a `releases/NEXA-MDT-22.1.0-source.zip` mentésben található. A lentebb szereplő régebbi kiadási leírások történeti előzmények.
+Az éles bot a gyökérben lévő `index.js` fájlt futtatja. Az új rendvédelmi MDT elérése a bot webcímén: `/mdt-web`. A 22.1-es kiadás részletes használata: [NEXA-MDT-22.1-UTMUTATO.md](NEXA-MDT-22.1-UTMUTATO.md). A visszaépíthető forrás és a 99 ellenőrzés a `releases/NEXA-MDT-22.1.1-source.zip` mentésben található. A lentebb szereplő régebbi kiadási leírások történeti előzmények.
 
 ---
 
