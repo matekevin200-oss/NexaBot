@@ -1,8 +1,8 @@
 {
   "name": "nexabot",
-  "version": "20.4.0",
+  "version": "22.1.0",
   "private": true,
-  "description": "NEXA Bot 20.4.0: Crown City RP ER:LC installer, faction recruitment and session controls",
+  "description": "NEXA Bot 22.1.0 — five-faction RP MDT network and police operations terminal",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {

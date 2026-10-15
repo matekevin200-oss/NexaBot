@@ -1,3 +1,9 @@
+# Aktuális kiadás: NEXA 22.1.0
+
+Az éles bot a gyökérben lévő `index.js` fájlt futtatja. Az új rendvédelmi MDT elérése a bot webcímén: `/mdt-web`. A 22.1-es kiadás részletes használata: [NEXA-MDT-22.1-UTMUTATO.md](NEXA-MDT-22.1-UTMUTATO.md). A visszaépíthető forrás és a 99 ellenőrzés a `releases/NEXA-MDT-22.1.0-source.zip` mentésben található. A lentebb szereplő régebbi kiadási leírások történeti előzmények.
+
+---
+
 # NEXA Bot 20.4.0 — Crown City RP
 
 A NEXA fő tulajdonosa a `/crown-city telepites` paranccsal kész Crown City RP struktúrát telepíthet egy meglévő Discord-szerverre: **69 rang, 15 kategória, 98 szoba, 81 panel és 5 jelentkezési sablon**.
