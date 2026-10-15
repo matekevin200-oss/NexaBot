@@ -1,0 +1,39 @@
+NEXA MDT 22.1.2 – TELJES FRISSÍTÉS
+
+A ZIP a teljes NEXA botot és a hozzá kapcsolódó MDT-t tartalmazza.
+A letöltés önmagában nem frissíti az élő Render-szolgáltatást.
+
+MEGLÉVŐ BOT FRISSÍTÉSE
+1. Mentsd el a jelenlegi kódot. Az adatbázist és a Render környezeti változóit tartsd meg.
+2. A projekt index.js fájlját cseréld a ZIP gyökerében lévő index.js-re.
+3. Új telepítéshez a mellékelt package.json és package-lock.json is szükséges.
+4. Node.js 22 vagy újabb: npm ci, majd npm start.
+5. Renderen a meglévő NEXA szolgáltatást használd; ne készíts második botpéldányt.
+
+Az éles GitHub main frissítése újraindítja a közös Render-botot. Ez a kiadás jelenleg előkészített, nem élesített csomag.
+A meglévő PostgreSQL-adatok megmaradnak; a szükséges sémabővítéseket a bot induláskor végzi. Új függőség nincs.
+Bot-tokent, Discord OAuth titkot és DATABASE_URL-t kizárólag a meglévő szerveres környezeti változókban használj. A ZIP nem tartalmaz hitelesítő adatot.
+
+MDT WEB
+https://nexabot-25vo.onrender.com/mdt-web
+Az öt engedélyezett szerver: Belv, FBI, ARFK, TEK, CIA. Az MDT csatlakoztatása a fő botowner joga; az állomány hozzáférését a beállított jogosultságok szabályozzák.
+A mindennapi felület IC: személyi adatlapok, igazolványok, körözések, ügyiratok, járművek és szolgálat.
+A Discord/Roblox azonosítók a hozzáférés-kezelésben szerepelnek.
+
+JÁTÉKBELI KLIENS
+A mdt-client.lua szerkeszthető alapfájl. Közvetlen használat előtt konfigurálni kell.
+A saját szerverhez és engedélyezett Roblox ID-khoz beállított változatot az Owner Center MDT-oldaláról töltsd le. Belépés: /mdt belepes. Más személy belépőkódját ne oszd meg.
+Nem tartalmaz automatikus hozzáférést az Emergency Hamburg belső rendőrségi adatbázisához. A NEXA-ba felvett körözések jelennek meg. Élő Roblox/Xeno-próba nem történt.
+
+TICKET HELYREÁLLÍTÁSA
+Discord-ticket: staffként a ticketcsatornában /ticket javitas.
+Webes ticket: Owner Center → Support → adott ticket → Discord-szinkron javítása.
+A javítás megőrzi az eredeti leírást és újrahasználja a vezérlőt. Törölt webes csatornánál visszaküldi a tárolt nyilvános üzeneteket; belső jegyzetet nem.
+Ha az állapot mentve van, de a Discord-hívás hibás, figyelmeztetés jelenik meg. A bot csatornajogait ezután javítani kell.
+Külső bot vagy ember üzenettörlését a frissítés nem tudja megakadályozni. Az egy másodperc után eltűnő panel korábbi hibája élőben nem lett reprodukálva.
+
+ELLENŐRZÉS
+107/107 automatizált teszt sikeres, 8 külön ticket regressziós esettel; PostgreSQL-motor és szimulált Discord.
+54 JavaScript-modul, teljes index.js és Lua 5.4 szintaxis ellenőrizve.
+A forras mappában a szerkeszthető modulok, web és tesztek találhatók. Újraépítés: python embed-web.py, majd python bundle.py. Tesztek: npm ci && npm test a forras mappában.
+Éles Discord-jogosultságok, csatornaútvonalak és Roblox-működés külön helyszíni ellenőrzést igényelnek.
