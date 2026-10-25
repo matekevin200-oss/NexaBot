@@ -346,50 +346,25 @@ module.exports.priorityValue=priorityValue;
 'use strict';
 const {ActionRowBuilder,ButtonBuilder,ButtonStyle,ChannelType,EmbedBuilder,MessageFlags,ModalBuilder,SlashCommandBuilder,TextInputBuilder,TextInputStyle,PermissionFlagsBits}=require('discord.js');
 const core=require('./platform-core');
-const BELV='1517509643734221030',PASS_MARK=45,PER_PAGE=5;
+const BELV='1517509643734221030',PER_PAGE=5,PASS_MARK=15;
 const SECTIONS=Object.freeze([
- {key:'motivation',title:'Motiváció és szerepfelfogás',questions:[
-  'Miért szeretnél a Belvédelmi Igazgatóság állományába kerülni?',
-  'Miben más a Belv feladata, mint egy járőröző rendvédelmi frakcióé?',
-  'Mit jelent számodra a pártatlan, bizonyítékokra épülő döntés?',
-  'Hogyan választanád külön a karaktered IC érdekeit a játékos OOC érzéseitől?',
-  'Mit tennél, ha egy ügyben az ismerősöd vagy a saját karaktered érintett?',
-  'Milyen visszajelzést kérnél a kiképződtől egy hibás intézkedés után?'
+ {key:'tgf-core',title:'Belv-alapismeretek',questions:[
+  'Miért szeretnél a Belvédelmi Igazgatósághoz csatlakozni?',
+  'Mit gondolsz, mi a Belvédelmi Igazgatóság legfontosabb feladata?',
+  'Mit tennél, ha szolgálat közben azt látnád, hogy egy rendvédelmi dolgozó visszaél a jogkörével?',
+  'Mit tennél, ha egy nálad magasabb rangú személy olyan utasítást adna, amely szerinted szabályellenes?',
+  'Mit jelent számodra a szolgálati hierarchia, és miért fontos annak betartása?'
  ]},
- {key:'authority',title:'Szabályzat, hatáskör és felelősség',questions:[
-  'Mi a különbség egy belső vizsgálat és egy fegyelmi eljárás között?',
-  'Milyen jelzés vagy bizonyíték indokolhat egy belső vizsgálat megkezdését?',
-  'Hogyan jársz el, ha egy magasabb rangú személy szabálytalan utasítást ad?',
-  'Milyen feltételekkel koordinálhat vagy ellenőrizhet a Belv más frakciót?',
-  'Mit jelent a mentelmi jog az RP-ben, és mit nem jelent?',
-  'Mikor kell az ügyet más illetékes szervnek átadni?'
- ]},
- {key:'scenarios',title:'Intézkedési helyzetek',questions:[
-  'Egy állománytag szerint az ARFK indokolatlanul igazoltatta. Mi az első három teendőd?',
-  'Két eltérő beszámoló érkezik ugyanarról az eseményről. Hogyan tisztázod az eltérést?',
-  'Egy érintett nem akar együttműködni a karaktereddel. Hogyan tartod szabályosan az RP-t?',
-  'Az egyik bizonyíték ellentmond a tanú állításának. Mit rögzítesz és hogyan folytatod?',
-  'A vizsgálat közben új, másik frakciót érintő adat kerül elő. Mi legyen a következő lépés?',
-  'Egy játékos OOC vitába viszi át az IC intézkedést. Hogyan választod szét és kezeled a helyzetet?'
- ]},
- {key:'casework',title:'Discord, kommunikáció és ügykezelés',questions:[
-  'Milyen adatokat rögzítenél egy vizsgálati feljegyzésben, és mit hagynál ki belőle?',
-  'Hogyan kezeled a képernyőképet vagy videót, hogy később visszakereshető legyen?',
-  'Mit teszel, ha egy ügyhöz kapcsolódó üzenetet vagy bizonyítékot törölnek?',
-  'Hogyan adsz át egy folyamatban lévő ügyet a következő szolgálatosnak?',
-  'Mikor indokolt vezetőségi segítséget kérni, és mit küldesz el nekik?',
-  'Miért fontos az IC/OOC jelölés és a csatornák rendeltetésszerű használata?'
- ]},
- {key:'judgement',title:'Alkalmasság és döntéshozatal',questions:[
-  'Mit tennél, ha az ügyben nem áll rendelkezésre elég bizonyíték?',
-  'Hogyan reagálsz, ha a vezetői döntéssel nem értesz egyet?',
-  'Hogyan akadályoznád meg, hogy a rangoddal nyomást gyakorolj egy érintettre?',
-  'Mi a teendőd, ha a saját korábbi intézkedésedet kellene kivizsgálnod?',
-  'Hogyan javítasz ki egy tévesen rögzített adatot úgy, hogy az előzmény követhető maradjon?',
-  'A vizsga végén milyen szempontok alapján mondanád ki, hogy egy jelölt önállóan alkalmas?'
+ {key:'tgf-situations',title:'Szolgálati helyzetek és felelősség',questions:[
+  'Mit tennél, ha egy másik Belvédelmi tag bizalmas információt adna ki illetéktelen személynek?',
+  'Hogyan járnál el, ha egy ellenőrzés során szabálytalanságot észlelnél egy másik rendvédelmi szervezetnél?',
+  'Mit jelent a jogkörrel való visszaélés? Írj rá egy példát!',
+  'Miért fontos a bizonyítékok és a szolgálati intézkedések megfelelő dokumentálása?',
+  'Miért gondolod úgy, hogy alkalmas lennél a Belvédelmi Igazgatóság tagjának?'
  ]}
 ]);
-const QUESTIONS=Object.freeze(SECTIONS.flatMap(section=>section.questions.map((text,index)=>Object.freeze({section:section.key,sectionTitle:section.title,text,number:SECTIONS.slice(0,SECTIONS.indexOf(section)).reduce((n,s)=>n+s.questions.length,0)+index+1}))));
+const QUESTIONS=Object.freeze(SECTIONS.flatMap((section,sectionIndex)=>section.questions.map((text,index)=>Object.freeze({section:section.key,sectionTitle:section.title,text,number:SECTIONS.slice(0,sectionIndex).reduce((n,item)=>n+item.questions.length,0)+index+1}))));
+const PAGE_COUNT=Math.ceil(QUESTIONS.length/PER_PAGE),MAX_SCORE=QUESTIONS.length*2;
 function fail(status,message){core.fail(status,message);}
 function channelKey(value){return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');}
 function trainingCategory(guild){return [...(guild?.channels?.cache?.values?.()||[])].find(channel=>channel.type===ChannelType.GuildCategory&&channelKey(channel.name)==='kikepzesiterv')||null;}
@@ -401,13 +376,13 @@ async function syncGuildCommand(guild){if(!guild?.commands)return;let commands;t
 function trainer(member,settings){return Boolean(member&&(member.permissions?.has(PermissionFlagsBits.Administrator)||member.permissions?.has(PermissionFlagsBits.ManageGuild)||member.roles?.cache?.some(role=>['kikepzotiszt','belvedelmivezetoseg'].includes(channelKey(role.name)))||require('./belv-mdt').isMdtReviewer(member,settings)));}
 async function authorize(guild,actorId,channel){if(guild?.id!==BELV)fail(403,'A szóbeli vizsga kizárólag a Belv szerveren használható.');if(!trainingChannel(channel))fail(400,'A szóbeli vizsga a 📚 KIKÉPZÉSI TERV kategóriában használható.');const dedicated=oralChannel(guild);if(dedicated&&channel.id!==dedicated.id)fail(400,'A vizsgát a 🎙┃szóbeli-kérdések csatornában indítsd.');const member=await guild.members.fetch(actorId).catch(()=>null);if(!member)fail(403,'A kiképző tagsága nem ellenőrizhető.');const settings=await require('./belv-mdt').getSettings(guild.id);if(!trainer(member,settings))fail(403,'Szóbeli vizsgát a Kiképző Tiszt vagy a Belv vezetősége indíthat.');const bot=await guild.members.fetchMe().catch(()=>null),permissions=bot&&channel.permissionsFor(bot);if(!permissions?.has(PermissionFlagsBits.ViewChannel)||!permissions.has(PermissionFlagsBits.SendMessages)||!permissions.has(PermissionFlagsBits.EmbedLinks))fail(403,'A botnak megtekintési, üzenetküldési és beágyazás-jog kell ebben a csatornában, hogy az eredményt oda tegye ki.');return{member,settings};}
 function summary(exam,page){const from=page*PER_PAGE,until=Math.min(from+PER_PAGE,QUESTIONS.length),scores=Array.isArray(exam.scores)?exam.scores:[],pageQuestions=QUESTIONS.slice(from,until),sectionNames=[...new Set(pageQuestions.map(q=>q.sectionTitle))];return`**Belv szóbeli vizsga · ${sectionNames.join(' / ')}**\nJelölt: <@${exam.candidate_id}> · Kiképző: <@${exam.trainer_id}>\nKérdések ${from+1}–${until} / ${QUESTIONS.length}\n\n${pageQuestions.map((q,i)=>`**${q.number}.** ${q.text}  ·  ${scores[from+i]===0||scores[from+i]?`**${scores[from+i]}/2 pont**`:'*még nincs pontozva*'}`).join('\n\n')}\n\nPontozás: 0 = hibás / nincs válasz · 1 = részben helyes · 2 = helyes, önálló és kellően indokolt válasz.`;}
-function controls(exam,page){const prev=Math.max(0,page-1),next=Math.min(5,page+1),rows=[];rows.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`belv_oral:score:${exam.id}:${page}:${exam.revision}`).setLabel('Ezen az oldalon pontozás').setStyle(ButtonStyle.Primary),new ButtonBuilder().setCustomId(`belv_oral:page:${exam.id}:${prev}:${exam.revision}`).setLabel('← Előző').setStyle(ButtonStyle.Secondary).setDisabled(page===0),new ButtonBuilder().setCustomId(`belv_oral:page:${exam.id}:${next}:${exam.revision}`).setLabel('Következő →').setStyle(ButtonStyle.Secondary).setDisabled(page===5)));if(page===5)rows.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`belv_oral:finish:${exam.id}:0:${exam.revision}`).setLabel('Vizsga lezárása és eredmény').setStyle(ButtonStyle.Success)));return rows;}
+function controls(exam,page){const prev=Math.max(0,page-1),next=Math.min(PAGE_COUNT-1,page+1),rows=[];rows.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`belv_oral:score:${exam.id}:${page}:${exam.revision}`).setLabel('Ezen az oldalon pontozás').setStyle(ButtonStyle.Primary),new ButtonBuilder().setCustomId(`belv_oral:page:${exam.id}:${prev}:${exam.revision}`).setLabel('← Előző').setStyle(ButtonStyle.Secondary).setDisabled(page===0),new ButtonBuilder().setCustomId(`belv_oral:page:${exam.id}:${next}:${exam.revision}`).setLabel('Következő →').setStyle(ButtonStyle.Secondary).setDisabled(page===PAGE_COUNT-1)));if(page===PAGE_COUNT-1)rows.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`belv_oral:finish:${exam.id}:0:${exam.revision}`).setLabel('Vizsga lezárása és eredmény').setStyle(ButtonStyle.Success)));return rows;}
 function view(exam,page){return{content:summary(exam,page),components:controls(exam,page),allowedMentions:{parse:[]}};}
 async function get(examId,guildId,actorId){const row=(await core.query('SELECT * FROM nexabot_belv_oral_exams WHERE id=$1 AND guild_id=$2',[String(examId),guildId])).rows[0];if(!row)fail(404,'Ez a Belv szóbeli vizsga nem található.');if(row.trainer_id!==actorId)fail(403,'Ezt a vizsgát csak az azt indító kiképző kezelheti.');if(row.status!=='in_progress')fail(409,'Ez a vizsga már le van zárva.');return row;}
 async function start(guild,actorId,candidate,channel){if(!candidate||candidate.bot)fail(400,'Válassz egy valódi Belv-jelöltet.');const {member}=await authorize(guild,actorId,channel);const row=(await core.query("INSERT INTO nexabot_belv_oral_exams(guild_id,candidate_id,trainer_id,scores,status) VALUES($1,$2,$3,$4::jsonb,'in_progress') RETURNING *",[guild.id,candidate.id,member.id,JSON.stringify(Array(QUESTIONS.length).fill(null))])).rows[0];return row;}
-async function savePage(guild,actorId,examId,page,revision,values,channel){if(!Number.isInteger(page)||page<0||page>5)fail(400,'Érvénytelen vizsgaoldal.');const exam=await get(examId,guild.id,actorId);await authorize(guild,actorId,channel);if(Number(exam.revision)!==Number(revision))fail(409,'A vizsga közben frissült. Nyisd meg a legfrissebb pontozópanelt.');const scores=Array.isArray(exam.scores)?exam.scores:Array(QUESTIONS.length).fill(null);for(let i=0;i<PER_PAGE;i++){const raw=String(values[i]??'').trim();if(!/^[012]$/.test(raw))fail(400,`A(z) ${page*PER_PAGE+i+1}. kérdés pontja 0, 1 vagy 2 lehet.`);scores[page*PER_PAGE+i]=Number(raw);}const updated=(await core.query("UPDATE nexabot_belv_oral_exams SET scores=$1::jsonb,revision=revision+1,updated_at=NOW() WHERE id=$2 AND guild_id=$3 AND trainer_id=$4 AND status='in_progress' AND revision=$5 RETURNING *",[JSON.stringify(scores),examId,guild.id,actorId,Number(revision)])).rows[0];if(!updated)fail(409,'A pontozás közben frissült. Nyisd meg újra a vizsgát.');return updated;}
-async function finish(guild,actorId,examId,revision,channel){const exam=await get(examId,guild.id,actorId);await authorize(guild,actorId,channel);if(Number(exam.revision)!==Number(revision))fail(409,'A vizsga közben frissült. Nyisd meg a legfrissebb pontozópanelt.');const scores=Array.isArray(exam.scores)?exam.scores:[];if(scores.length!==QUESTIONS.length||scores.some(score=>![0,1,2].includes(Number(score))))fail(409,'Előbb pontozd mind a 30 kérdést.');const total=scores.reduce((sum,value)=>sum+Number(value),0),passed=total>=PASS_MARK,sections=SECTIONS.map((section,index)=>({title:section.title,score:scores.slice(index*6,index*6+6).reduce((sum,value)=>sum+Number(value),0)}));const completed=(await core.query("UPDATE nexabot_belv_oral_exams SET status='completed',score_total=$1,passed=$2,completed_at=NOW(),revision=revision+1 WHERE id=$3 AND guild_id=$4 AND trainer_id=$5 AND status='in_progress' AND revision=$6 RETURNING id",[total,passed,examId,guild.id,actorId,Number(revision)])).rows[0];if(!completed)fail(409,'Ezt a vizsgát már lezárták egy másik műveletben.');const embed=new EmbedBuilder().setColor(passed?0x3bbf8a:0xe6a84a).setTitle('BELV · SZÓBELI VIZSGA EREDMÉNY').setDescription(`**Jelölt:** <@${exam.candidate_id}>\n**Kiképző:** <@${exam.trainer_id}>\n**Összpontszám:** ${total} / 60\n**Eredmény:** ${passed?'MEGFELELT':'ISMÉTLÉS SZÜKSÉGES'} · ponthatár: ${PASS_MARK}/60`).addFields(sections.map((section,index)=>({name:`${index+1}. ${section.title}`,value:`${section.score}/12 pont`,inline:true}))).setFooter({text:'Belv kiképzési terv · 0/1/2 pontos kérdésenkénti értékelés'}).setTimestamp(new Date());await channel.send({embeds:[embed],allowedMentions:{users:[exam.candidate_id,exam.trainer_id]}});await core.audit('belv_oral_exam_completed',{guildId:guild.id,actorId,metadata:{examId:String(exam.id),candidateId:exam.candidate_id,total,passed}});return{total,passed,sections,examId:String(exam.id)};}
-async function handleCommand(interaction){const target=interaction.options.getUser('jelolt');const row=await start(interaction.guild,interaction.user.id,target,interaction.channel);return interaction.editReply(view(row,0));}
+async function savePage(guild,actorId,examId,page,revision,values,channel){if(!Number.isInteger(page)||page<0||page>=PAGE_COUNT)fail(400,'Érvénytelen vizsgaoldal.');const exam=await get(examId,guild.id,actorId);await authorize(guild,actorId,channel);if(Number(exam.revision)!==Number(revision))fail(409,'A vizsga közben frissült. Nyisd meg a legfrissebb pontozópanelt.');const scores=Array.isArray(exam.scores)?exam.scores:Array(QUESTIONS.length).fill(null);for(let i=0;i<PER_PAGE;i++){const raw=String(values[i]??'').trim();if(!/^[012]$/.test(raw))fail(400,`A(z) ${page*PER_PAGE+i+1}. kérdés pontja 0, 1 vagy 2 lehet.`);scores[page*PER_PAGE+i]=Number(raw);}const updated=(await core.query("UPDATE nexabot_belv_oral_exams SET scores=$1::jsonb,revision=revision+1,updated_at=NOW() WHERE id=$2 AND guild_id=$3 AND trainer_id=$4 AND status='in_progress' AND revision=$5 RETURNING *",[JSON.stringify(scores),examId,guild.id,actorId,Number(revision)])).rows[0];if(!updated)fail(409,'A pontozás közben frissült. Nyisd meg újra a vizsgát.');return updated;}
+async function finish(guild,actorId,examId,revision,channel){const exam=await get(examId,guild.id,actorId);await authorize(guild,actorId,channel);if(Number(exam.revision)!==Number(revision))fail(409,'A vizsga közben frissült. Nyisd meg a legfrissebb pontozópanelt.');const scores=Array.isArray(exam.scores)?exam.scores:[];if(scores.length!==QUESTIONS.length||scores.some(score=>!Number.isInteger(score)||score<0||score>2))fail(409,'Előbb pontozd mind a 10 kérdést.');const total=scores.reduce((sum,value)=>sum+Number(value),0),passed=total>=PASS_MARK;let sectionOffset=0;const sections=SECTIONS.map(section=>{const start=sectionOffset;sectionOffset+=section.questions.length;return{title:section.title,score:scores.slice(start,sectionOffset).reduce((sum,value)=>sum+Number(value),0),max:section.questions.length*2};});const completed=(await core.query("UPDATE nexabot_belv_oral_exams SET status='completed',score_total=$1,passed=$2,completed_at=NOW(),revision=revision+1 WHERE id=$3 AND guild_id=$4 AND trainer_id=$5 AND status='in_progress' AND revision=$6 RETURNING id",[total,passed,examId,guild.id,actorId,Number(revision)])).rows[0];if(!completed)fail(409,'Ezt a vizsgát már lezárták egy másik műveletben.');const embed=new EmbedBuilder().setColor(passed?0x3bbf8a:0xe6a84a).setTitle('BELV · SZÓBELI VIZSGA EREDMÉNY').setDescription(`**Jelölt:** <@${exam.candidate_id}>\n**Kiképző:** <@${exam.trainer_id}>\n**Összpontszám:** ${total} / ${MAX_SCORE}\n**Eredmény:** ${passed?'MEGFELELT':'ISMÉTLÉS SZÜKSÉGES'} · ponthatár: ${PASS_MARK}/${MAX_SCORE}`).addFields(sections.map((section,index)=>({name:`${index+1}. ${section.title}`,value:`${section.score}/${section.max} pont`,inline:true}))).setFooter({text:'Belv TGF · 0/1/2 pont kérdésenként'}).setTimestamp(new Date());await channel.send({embeds:[embed],allowedMentions:{users:[exam.candidate_id,exam.trainer_id]}});await core.audit('belv_oral_exam_completed',{guildId:guild.id,actorId,metadata:{examId:String(exam.id),candidateId:exam.candidate_id,total,passed}});return{total,passed,sections,examId:String(exam.id)};}
+async function handleCommand(interaction){await interaction.deferReply({flags:MessageFlags.Ephemeral});const target=interaction.options.getUser('jelolt');const row=await start(interaction.guild,interaction.user.id,target,interaction.channel);return interaction.editReply(view(row,0));}
 async function handleButton(interaction){
  const m=String(interaction.customId||'').match(/^belv_oral:(page|score|finish):(\d{1,19}):(\d{1,2})(?::(\d{1,10}))?$/);
  if(!m)return false;
@@ -418,7 +393,7 @@ async function handleButton(interaction){
   if(Number(exam.revision)!==revision)fail(409,'A vizsga közben frissült. A legfrissebb pontozópanelt használd.');
   const modal=new ModalBuilder().setCustomId(`belv_oral_score:${exam.id}:${page}:${revision}`).setTitle(`Belv szóbeli · ${page*PER_PAGE+1}–${page*PER_PAGE+PER_PAGE}.`);
   for(let i=0;i<PER_PAGE;i++){
-   const n=page*PER_PAGE+i,input=new TextInputBuilder().setCustomId(`q${i}`).setLabel(`${n+1}. kérdés pontja (0/1/2)`).setPlaceholder('0 = hibás · 1 = részleges · 2 = helyes').setStyle(TextInputStyle.Short).setMinLength(1).setMaxLength(1).setRequired(true);
+   const n=page*PER_PAGE+i,input=new TextInputBuilder().setCustomId(`q${i}`).setLabel(`${n+1}. ${QUESTIONS[n].text}`.slice(0,45)).setPlaceholder('0 = hibás · 1 = részleges · 2 = helyes').setStyle(TextInputStyle.Short).setMinLength(1).setMaxLength(1).setRequired(true);
    if(exam.scores?.[n]===0||exam.scores?.[n])input.setValue(String(exam.scores[n]));
    modal.addComponents(new ActionRowBuilder().addComponents(input));
   }
@@ -427,10 +402,10 @@ async function handleButton(interaction){
  if(action==='page'){
   const exam=await get(examId,interaction.guild.id,interaction.user.id);
   if(Number(exam.revision)!==revision)fail(409,'A pontozás frissült. Használd a legfrissebb vizsgapanelt.');
-  await interaction.update(view(exam,Math.min(5,page)));return true;
+  await interaction.update(view(exam,Math.min(PAGE_COUNT-1,page)));return true;
  }
  const exam=await get(examId,interaction.guild.id,interaction.user.id),result=await finish(interaction.guild,interaction.user.id,examId,revision,interaction.channel);
- await interaction.update({content:`✅ A vizsga lezárva. Eredmény: **${result.total}/60 · ${result.passed?'MEGFELELT':'ISMÉTLÉS SZÜKSÉGES'}**. A részletes eredmény a KIKÉPZÉSI TERV kategóriában jelent meg.`,embeds:[],components:[],allowedMentions:{parse:[]}});return true;
+ await interaction.update({content:`✅ A vizsga lezárva. Eredmény: **${result.total}/${MAX_SCORE} · ${result.passed?'MEGFELELT':'ISMÉTLÉS SZÜKSÉGES'}**. A részletes eredmény a KIKÉPZÉSI TERV kategóriában jelent meg.`,embeds:[],components:[],allowedMentions:{parse:[]}});return true;
 }
 async function handleModal(interaction){
  const m=String(interaction.customId||'').match(/^belv_oral_score:(\d{1,19}):(\d):(\d{1,10})$/);
@@ -445,7 +420,7 @@ async function handleModal(interaction){
   await interaction.followUp({content:`❌ ${message}`,flags:MessageFlags.Ephemeral});return true;
  }
 }
-module.exports={BELV,SECTIONS,QUESTIONS,PASS_MARK,PER_PAGE,channelKey,trainingCategory,trainingChannel,oralChannel,ensureTrainingChannel,buildCommand,syncGuildCommand,trainer,authorize,start,savePage,finish,view,handleCommand,handleButton,handleModal};
+module.exports={BELV,SECTIONS,QUESTIONS,PASS_MARK,PER_PAGE,PAGE_COUNT,MAX_SCORE,channelKey,trainingCategory,trainingChannel,oralChannel,ensureTrainingChannel,buildCommand,syncGuildCommand,trainer,authorize,start,savePage,finish,view,handleCommand,handleButton,handleModal};
 
 },
 "src/belv-mdt.js": function(module, exports, require) {
@@ -21897,7 +21872,7 @@ module.exports={render,post,route,esc,chart};
 
 },
 "src/release-manifest.js": function(module, exports, require) {
-module.exports={"version":"25.10.1","title":"NEXA 25.10.1 · Belv szóbeli a Kiképzési Terv kategóriában","visibility":"public","supportAnnouncement":false,"notes":["A szóbeli vizsga kikerült az MDT-ből; külön /szobeli parancsként jelenik meg kizárólag a Belv szerveren.","A bot a 📚 KIKÉPZÉSI TERV kategóriában létrehozza a 🎙┃szóbeli-kérdések csatornát, ha még hiányzik.","A vizsga és az eredmény ebben a kategóriában használható; a meglévő csatornákat nem módosítja."],"notesEn":["The oral exam is no longer part of MDT. It is a separate /szobeli command registered only on the Belv server.","The bot creates 🎙┃szóbeli-kérdések under 📚 KIKÉPZÉSI TERV if it is missing.","The exam and result are handled in that category; existing channels are not changed."]};
+module.exports={"version":"25.10.2","title":"NEXA 25.10.2 · Belv TGF szóbeli pontozópanel","visibility":"public","supportAnnouncement":false,"notes":["A Belv TGF korábbi 10 kérdése bekerült a szóbeli panelbe, két ötös oldalra rendezve.","A kiképző minden kérdésre 0–2 pontot adhat; 15/20 ponttól megfelelt az eredmény.","A panel csak a kiképzőnek látható; az összesített eredmény a Belv KIKÉPZÉSI TERV kategóriájában jelenik meg."],"notesEn":["The Belv TGF oral panel now uses the original 10 questions in two pages of five.","Trainers score each question from 0 to 2; 15/20 is the passing score.","The scoring panel is private to the trainer; the final result appears in the Belv training-plan category."]};
 
 },
 "src/platform-helpdesk.js": function(module, exports, require) {
