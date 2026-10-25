@@ -481,6 +481,8 @@ const SESSION_MS = 6 * 60 * 60 * 1000;
 const windows = new Map();
 const syncLocks = new Map();
 const belvRosterLocks = new Set();
+const belvRosterMonitorClients = new WeakSet();
+const belvRosterNoticeAt = new Map();
 const field = (id, label, paragraph = false, required = true, maxLength = paragraph ? 1000 : 160) => ({ id, label, style: paragraph ? 'paragraph' : 'short', required, maxLength, placeholder: label });
 const TYPES = Object.freeze([
   { key: 'person', title: 'Személynyilvántartás', fields: [field('username', 'Roblox-felhasználónév'), field('robloxId', 'Roblox-ID', false, false, 20), field('name', 'Teljes név'), field('state', 'Nyilvántartási státusz'), field('notes', 'Megjegyzés', true, false)] },
@@ -1230,6 +1232,51 @@ async function syncBelvRoster(guild, actorId, botUserId) {
   try { return await syncBelvRosterUnlocked(guild, actorId, botUserId); }
   finally { belvRosterLocks.delete(guild?.id); }
 }
+function startBelvRosterMonitor(client) {
+  if (!client || belvRosterMonitorClients.has(client)) return false;
+  belvRosterMonitorClients.add(client);
+  let pending = null, running = false;
+  const notifyOwner = async (guild, message) => {
+    if (!guild) return;
+    const now = Date.now(), last = belvRosterNoticeAt.get(guild.id) || 0;
+    if (now - last < 30 * 60 * 1000) return;
+    belvRosterNoticeAt.set(guild.id, now);
+    const owner = await guild.fetchOwner().catch(() => null);
+    await owner?.send(`🏛️ **Belv állományfigyelő**\n${message}`).catch(() => null);
+  };
+  const run = async (reason) => {
+    if (running) return;
+    running = true;
+    try {
+      const guild = client.guilds.cache.get(BELV_GUILD_ID);
+      if (!guild) return;
+      const result = await syncBelvRoster(guild, client.user.id, client.user.id);
+      const blocked = result.failed.filter((item) => item.reason.includes('szerepköre nem jogosult'));
+      if (blocked.length) await notifyOwner(guild, `A rangsorrend miatt **${blocked.length}** tagnál nem tudtam becenevet frissíteni. Tedd a bot rangját az érintett tagok rangjai fölé, és ellenőrizd a „Becenevek kezelése” jogosultságot. A következő ellenőrzés automatikusan újrapróbálja.`);
+    } catch (error) {
+      await recordError(error, { command: 'belv_roster_monitor', guildId: BELV_GUILD_ID, reason }).catch(() => null);
+      await notifyOwner(client.guilds.cache.get(BELV_GUILD_ID), 'Az automatikus állományfrissítés nem sikerült. Ellenőrizd az állományi-nyilvántartás csatornát és a bot jogosultságait. A bot később újra próbálja.');
+    } finally { running = false; }
+  };
+  const schedule = (reason) => {
+    if (pending) clearTimeout(pending);
+    pending = setTimeout(() => { pending = null; run(reason); }, 5000);
+    pending.unref?.();
+  };
+  client.on('guildMemberUpdate', (oldMember, newMember) => {
+    if (newMember.guild?.id !== BELV_GUILD_ID || !BELV_ROSTER.some((entry) => entry.id === newMember.id)) return;
+    const rolesChanged = oldMember.roles.cache.size !== newMember.roles.cache.size
+      || [...oldMember.roles.cache.keys()].some((id) => !newMember.roles.cache.has(id));
+    if (rolesChanged) schedule('member-rank-change');
+  });
+  client.on('guildRoleUpdate', (_oldRole, newRole) => { if (newRole.guild?.id === BELV_GUILD_ID) schedule('role-position-change'); });
+  client.on('guildRoleCreate', (role) => { if (role.guild?.id === BELV_GUILD_ID) schedule('role-created'); });
+  client.on('guildRoleDelete', (role) => { if (role.guild?.id === BELV_GUILD_ID) schedule('role-deleted'); });
+  if (client.guilds.cache.has(BELV_GUILD_ID)) schedule('startup-reconcile');
+  const interval = setInterval(() => schedule('periodic-reconcile'), 15 * 60 * 1000);
+  interval.unref?.();
+  return true;
+}
 
 function buildMdtCommand(guildId = null) {
   const command = new SlashCommandBuilder().setName('mdt').setDescription('NEXA MDT • személyes belépés és nyilvántartás.').setDMPermission(false).setDefaultMemberPermissions(null)
@@ -1425,7 +1472,7 @@ async function handleMdtButton(interaction) {
     return interaction.editReply(`❌ ${error.status ? error.message : 'Az MDT-művelet nem sikerült.'}`);
   }
 }
-module.exports = { recordHistory, mdtSummary, exportMdtRecords, mdtCsv, handleMdtReviewModal, BELV_GUILD_ID, PREFIX, TYPES, MDT_CHANNELS, MDT_CATEGORY, MdtError, buildMdtCommand, buildBelvRosterCommand, handleBelvRosterCommand, syncBelvRoster, handleMdtApi, handleMdtCommand, handleMdtButton, definitions, cleanFields, createRecord, mutateRecord, getRecord, syncRecord, issueCode, login, authorize, getSettings, publicRecord, saveMdtOwnerConfig, provisionMdtOwnerChannels, revokeMdtOwnerSessions, updateMdtMember, robloxIdsFor, allRobloxIds, assertAccess, requireBelvGuild, isMdtStaff, textChannel, writable, syncMdtGuildCommand, syncMdtGuildCommands, inspectMdtMemberAccess };
+module.exports = { recordHistory, mdtSummary, exportMdtRecords, mdtCsv, handleMdtReviewModal, BELV_GUILD_ID, PREFIX, TYPES, MDT_CHANNELS, MDT_CATEGORY, MdtError, buildMdtCommand, buildBelvRosterCommand, handleBelvRosterCommand, syncBelvRoster, startBelvRosterMonitor, handleMdtApi, handleMdtCommand, handleMdtButton, definitions, cleanFields, createRecord, mutateRecord, getRecord, syncRecord, issueCode, login, authorize, getSettings, publicRecord, saveMdtOwnerConfig, provisionMdtOwnerChannels, revokeMdtOwnerSessions, updateMdtMember, robloxIdsFor, allRobloxIds, assertAccess, requireBelvGuild, isMdtStaff, textChannel, writable, syncMdtGuildCommand, syncMdtGuildCommands, inspectMdtMemberAccess };
 
 module.exports.isMdtReviewer=leader;
 
@@ -13982,6 +14029,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   } finally {
     await retireLegacyCommands(readyClient);
     await syncMdtGuildCommands(readyClient);
+    require('./belv-mdt').startBelvRosterMonitor(readyClient);
     for(const faction of FACTIONS){
       const guild=readyClient.guilds.cache.get(faction.guildId);if(!guild)continue;
       try{const settings=await getMdtSettings(faction.guildId);if(settings.enabled)await syncMdtDiscord(guild,getBotOwnerId());}
