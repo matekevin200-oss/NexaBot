@@ -13655,6 +13655,22 @@ async function registerCommands(readyClient) {
     }
   );
 
+  // Global slash-command updates can take a while to propagate in Discord.
+  // Publish the complete /nexa command at guild scope as well so `/nexa elo`
+  // appears immediately without replacing any of the guild's other commands.
+  const nexaGuildPayload = localizeCommandJson(buildAiCommand().toJSON());
+  for (const guild of readyClient?.guilds?.cache?.values?.() || []) {
+    try {
+      await rest.post(Routes.applicationGuildCommands(process.env.CLIENT_ID, guild.id), {
+        body: nexaGuildPayload
+      });
+      console.log(`A /nexa parancs azonnali guild-regisztrációja kész: ${guild.id}`);
+    } catch (error) {
+      console.error(`A /nexa guild-regisztrációja sikertelen (${guild.id}):`, error);
+      await recordError(error, { command: 'nexa_guild_registration', guildId: guild.id });
+    }
+  }
+
   const ownerGuildRegistration = await registerSupportCommandInOwnerGuilds({
     rest,
     guilds: readyClient?.guilds?.cache,
@@ -21932,7 +21948,7 @@ module.exports={render,post,route,esc,chart};
 
 },
 "src/release-manifest.js": function(module, exports, require) {
-module.exports={"version":"25.12.0","title":"NEXA 25.12.0 · Folyamatos élő szervercsatornák","visibility":"public","supportAnnouncement":true,"notes":["A NEXA most hat külön csatornában jeleníti meg a szerver élő állapotát: áttekintés, taglétszám, tickettek, szolgálat, staff-feladatok és moderáció.","A státuszüzenetek automatikusan, 30 másodpercenként frissülnek; a bot a törölt saját státuszüzenetet vagy csatornát helyreállítja.","A telepítő külön NEXA LIVE kategóriát készít, és nem módosítja a meglévő szervercsatornákat. A frissítés bármikor leállítható."],"notesEn":["NEXA now shows live server status across six separate channels: overview, member count, tickets, shifts, staff tasks, and moderation.","Status messages refresh automatically every 30 seconds; the bot restores its own deleted status messages or channels.","Setup creates a dedicated NEXA LIVE category and leaves existing server channels untouched. Live updates can be stopped at any time."]};
+module.exports={"version":"25.12.1","title":"NEXA 25.12.1 · Azonnali Discord-parancsok","visibility":"public","supportAnnouncement":true,"notes":["Javítottuk a /nexa parancs Discord-megjelenését: a teljes parancs szerverenként külön is regisztrálódik, így az /nexa elo azonnal kereshető.","A műveletek csak a megfelelő szerverjogosultsággal hajthatók végre; a szerver többi slash parancsa és beállítása érintetlen marad."],"notesEn":["Fixed Discord command visibility: the complete /nexa command is now registered per server so /nexa elo is immediately discoverable.","Actions still require the right server permissions; other slash commands and server settings remain untouched."]};
 
 },
 "src/platform-helpdesk.js": function(module, exports, require) {
