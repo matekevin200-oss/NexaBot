@@ -18,6 +18,7 @@ const { COLORS } = require('./constants');
 const { recordAudit, recordError } = require('./telemetry');
 
 const SNAPSHOT_SCHEMA = 1;
+const CHRONOGUARD_DISABLED_GUILDS = new Set(['1517509643734221030']);
 const SEVERITY_WEIGHT = Object.freeze({ critical: 30, high: 16, medium: 8, low: 3 });
 
 function canonicalize(value) {
@@ -516,6 +517,23 @@ function alertEmbed(scan, guild) {
     .setTimestamp();
 }
 
+async function removeChronoGuardAlerts(guild, botUserId) {
+  const channel = configuredChannel(guild, 'securityLogs');
+  if (!channel?.isTextBased?.() || !channel.messages?.fetch) return 0;
+  const messages = await channel.messages.fetch({ limit: 100 }).catch(() => null);
+  if (!messages) return 0;
+  let removed = 0;
+  for (const message of messages.values()) {
+    const belongsToBot = message.author?.id === botUserId;
+    const isChronoGuardAlert = (message.embeds || []).some((embed) =>
+      (embed.title || embed.data?.title) === '🕰️ ChronoGuard szervereltérés'
+      && String(embed.footer?.text || embed.data?.footer?.text || '').startsWith('NEXA ChronoGuard')
+    );
+    if (belongsToBot && isChronoGuardAlert && await message.delete('ChronoGuard riasztás eltávolítása a Belv szerverről').then(() => true).catch(() => false)) removed += 1;
+  }
+  return removed;
+}
+
 function ownerChronoGuardUrl(guildId) {
   return `${dashboardUrl().replace(/\/dashboard\/?$/, '')}/owner/chronoguard/${guildId}`;
 }
@@ -566,11 +584,20 @@ async function handleChronoGuardCommand(interaction) {
 
 function startChronoGuardJobs(client) {
   let running = false;
+  const cleanedGuilds = new Set();
   const execute = async () => {
-    if (running || !client.isReady() || !isPersistentStore()) return;
+    if (running || !client.isReady()) return;
     running = true;
     try {
       for (const guild of client.guilds.cache.values()) {
+        if (CHRONOGUARD_DISABLED_GUILDS.has(guild.id)) {
+          if (!cleanedGuilds.has(guild.id)) {
+            await removeChronoGuardAlerts(guild, client.user.id).catch((error) => recordError(error, { command: 'chronoguard_alert_cleanup', guildId: guild.id }));
+            cleanedGuilds.add(guild.id);
+          }
+          continue;
+        }
+        if (!isPersistentStore()) continue;
         const settings = getGuildConfig(guild.id).chronoGuard;
         if (!settings?.enabled) continue;
         try {
@@ -622,6 +649,7 @@ module.exports = {
   restoreSnapshot,
   buildIncidentCapsule,
   chronoguardOverview,
+  removeChronoGuardAlerts,
   buildChronoGuardCommand,
   handleChronoGuardCommand,
   startChronoGuardJobs
