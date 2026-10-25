@@ -4216,8 +4216,7 @@ const TRANSLATIONS = Object.freeze({
   szolgalat: ['shift', 'Shift and duty management.'],
   'szolgalat.panel': ['panel', 'Post the shift control panel.'],
   'szolgalat.idomodositas': ['time-adjustment', 'Correct a shift record by exact minutes (Staff).'],
-  'szolgalat.idomodositas.ugy_id': ['record_id', 'Optional: exact shift record ID.'],
-  'szolgalat.idomodositas.tag': ['member', 'Optional: choose a member; without a record ID, their latest closed shift is selected.'],
+  'szolgalat.idomodositas.tag': ['member', 'Member whose latest closed shift will be adjusted.'],
   'szolgalat.idomodositas.irany': ['direction', 'Add or subtract time.'],
   'szolgalat.idomodositas.perc': ['minutes', 'Minutes to adjust (1–10080).'],
   'szolgalat.idomodositas.indok': ['reason', 'Required reason for the correction.'],
@@ -18202,9 +18201,8 @@ function buildShiftCommand() {
       .setDescription('Megnyitja a függő távolléti kérelmek vezetői paneljét.'))
     .addSubcommand((subcommand) => subcommand
       .setName('idomodositas')
-      .setDescription('Lezárt szolgálati idő korrigálása rekord vagy megjelölt tag alapján (Staff).')
-      .addIntegerOption((option) => option.setName('ugy_id').setDescription('Opcionális: pontos szolgálati rekord azonosítója.').setMinValue(1))
-      .addUserOption((option) => option.setName('tag').setDescription('Opcionális: az utolsó lezárt rekordját választja ki.'))
+      .setDescription('A megjelölt tag legutóbbi lezárt szolgálati idejének korrigálása (Staff).')
+      .addUserOption((option) => option.setName('tag').setDescription('A tag, akinek a legutóbbi lezárt szolgálatát módosítod.').setRequired(true))
       .addStringOption((option) => option.setName('irany').setDescription('Hozzáadás vagy levonás.').setRequired(true).addChoices({name:'Idő hozzáadása',value:'add'},{name:'Idő levonása',value:'remove'}))
       .addIntegerOption((option) => option.setName('perc').setDescription('Korrigálandó percek száma (1–10080).').setRequired(true).setMinValue(1).setMaxValue(10080))
       .addStringOption((option) => option.setName('indok').setDescription('A korrekció indoka (kötelező).').setRequired(true).setMinLength(5).setMaxLength(500)))
@@ -18787,9 +18785,8 @@ async function handleShiftCommand(interaction) {
     if(!isStaff(interaction.member))return interaction.reply({content:'❌ A szolgálati idő módosításához Staff vagy Szerver kezelése jogosultság szükséges.',flags:EPHEMERAL});
     await interaction.deferReply({flags:EPHEMERAL});
     try{
-      const recordId=interaction.options.getInteger('ugy_id'),target=interaction.options.getUser('tag'),direction=interaction.options.getString('irany',true),amount=interaction.options.getInteger('perc',true),reason=interaction.options.getString('indok',true),minutes=direction==='remove'?-amount:amount;
-      if(!recordId&&!target)throw new Error('Jelölj meg egy tagot, vagy adj meg szolgálati rekordazonosítót.');
-      const result=await adjustShiftMinutes(interaction.guildId,recordId,minutes,reason,interaction.user.id,target?.id||null);
+      const target=interaction.options.getUser('tag',true),direction=interaction.options.getString('irany',true),amount=interaction.options.getInteger('perc',true),reason=interaction.options.getString('indok',true),minutes=direction==='remove'?-amount:amount;
+      const result=await adjustShiftMinutes(interaction.guildId,null,minutes,reason,interaction.user.id,target.id);
       await logShift(interaction.guild,'🛠️ Szolgálati idő korrigálva',`**Tag:** <@${result.userId}>\n**Rekord:** #${result.id}\n**Korrekció:** ${minutes>0?'+':''}${minutes} perc\n**Új aktív idő:** ${formatDuration(result.activeSeconds)}\n**Indok:** ${reason}\n**Végrehajtotta:** ${interaction.user}`,COLORS.warning);
       return interaction.editReply({content:`✅ <@${result.userId}> · a #${result.id} szolgálati rekordot ${minutes>0?'+':''}${minutes} perccel korrigáltam. Új aktív idő: **${formatDuration(result.activeSeconds)}**. Az indok bekerült az auditnaplóba.`,allowedMentions:{parse:[]}});
     }catch(error){return interaction.editReply({content:`❌ ${error.message}`,allowedMentions:{parse:[]}});}
