@@ -1,20 +1,21 @@
 {
-  "name": "nexabot",
-  "version": "22.1.2",
+  "name": "nexa-bot",
+  "version": "25.10.0",
   "private": true,
-  "description": "NEXA Bot 22.1.2 – IC MDT és ticket-helyreállítás",
-  "main": "index.js",
-  "type": "commonjs",
-  "scripts": {
-    "start": "node index.js",
-    "test": "node --test"
-  },
   "engines": {
     "node": ">=22"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "test": "node test/run-checks.js"
   },
   "dependencies": {
     "discord.js": "14.27.0",
     "dotenv": "16.6.1",
     "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.9",
+    "@sparticuz/chromium": "^153.0.0"
   }
 }
