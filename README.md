@@ -1,4 +1,4 @@
-# NEXA 5.0 Next Generation · build 25.13.1
+# NEXA 5.0 Next Generation · build 25.14.0
 
 A meglévő NEXA továbbfejlesztése. Teljes állapot és telepítés: `NEXA-5-ALLAPOT.md`.
 
@@ -8,4 +8,4 @@ Build: `python3 embed-web.py`, `python3 bundle.py`. Tesztek: `npm test`. Lua: `p
 
 Új felület: `/dashboard/guild/<id>/next`. Külön MDT: `/mdt-web`. Discord-központ: `/nexa panel`, állapot: `/nexa status`. A korábbi parancsok megmaradnak. Publikus changelog: `/changelog`, sablonkönyvtár: `/workflows`, tagi jelentkezés/esemény: `/community/<id>`.
 
-A helyi tesztek szimulált Discord- és AI-kapcsolattal futnak. Az új kiadás nincs élesítve; a teljes 28 pontos specifikáció fennmaradó elemei az állapotjelentésben szerepelnek.
+A helyi tesztek szimulált Discord- és AI-kapcsolattal futnak. Az élesítés és a Discord-funkciók ellenőrzési állapotát a Render deployment naplója és a kiadási jegyzetek igazolják; a teljes 28 pontos specifikáció fennmaradó elemei az állapotjelentésben szerepelnek.

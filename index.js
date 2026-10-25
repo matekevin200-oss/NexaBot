@@ -3977,6 +3977,12 @@ const TRANSLATIONS = Object.freeze({
   'szolgalat.naplo': ['records', 'Show recent shift records and their IDs.'],
   'szolgalat.naplo.tag': ['member', 'View another member with Staff permission.'],
   'szolgalat.naplo.darab': ['count', 'Number of records (1–20).'],
+  'szolgalat.aktivak': ['active-duty', 'Show the active duty roster privately (Staff).'],
+  'szolgalat.osszesito': ['roster-summary', 'Show the staff duty summary for 7, 30 or 90 days.'],
+  'szolgalat.osszesito.napok': ['days', 'Choose the reporting period.'],
+  ticket: ['ticket', 'NEXA ticket controls and staff statistics.'],
+  'ticket.statisztika': ['statistics', 'Show private ticket statistics for ticket staff.'],
+  'ticket.statisztika.napok': ['days', 'Choose the reporting period.'],
   'szolgalat.szabadsag': ['leave-request', 'Submit a leave or absence request.'],
   'szolgalat.szabadsag.kezdet': ['start', 'First day: YYYY-MM-DD'],
   'szolgalat.szabadsag.vege': ['end', 'Last day: YYYY-MM-DD'],
@@ -22012,7 +22018,7 @@ module.exports={render,post,route,esc,chart};
 
 },
 "src/release-manifest.js": function(module, exports, require) {
-module.exports={"version":"25.13.1","title":"NEXA 25.13.1 · Percpontos szolgálati korrekció","visibility":"public","supportAnnouncement":true,"notes":["A Staff és szerverkezelő most Discord-paranccsal, perc pontossággal módosíthat lezárt szolgálati rekordot.","A /szolgalat naplo megmutatja a legutóbbi rekordok azonosítóját; más tag naplóját csak Staff vagy szerverkezelő láthatja.","Minden korrekcióhoz indok kell; az időváltozás és a végrehajtó az auditnaplóba, beállított szolgálati naplócsatornára is bekerül. Legfeljebb hét nap korrigálható."],"notesEn":["Staff and server managers can now adjust a closed shift record to the exact minute using a Discord command.","/szolgalat naplo shows recent record IDs; only Staff or server managers can view another member's log.","Each change requires a reason and is recorded in the audit log and configured shift log channel. Adjustments are limited to seven days."]};
+module.exports={"version":"25.14.0","title":"NEXA 25.14.0 · Szolgálati és ticket műveleti frissítés","visibility":"public","supportAnnouncement":true,"notes":["A /szolgalat aktivak privát névsort ad a szolgálatban lévőkről; az /szolgalat osszesito 7, 30 vagy 90 napra rangsorolja az állomány szolgálati idejét.","A /ticket statisztika 7, 30 vagy 90 nap ticketforgalmát, kategóriáit és átlagos első válaszát mutatja, kizárólag ticket-staffnak.","A lezárt szolgálati rekordok percre pontos korrekciója kötelező indokkal, auditnaplóval és szolgálati naplóval működik."],"notesEn":["/szolgalat aktivak gives staff a private active-duty roster; /szolgalat osszesito ranks duty time over 7, 30 or 90 days.","/ticket statisztika shows 7, 30 or 90 day ticket volume, categories and average first response, visible only to ticket staff.","Closed shift records can be corrected to exact minutes with a required reason and audit logging."]};
 
 },
 "src/platform-helpdesk.js": function(module, exports, require) {
