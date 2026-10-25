@@ -21884,7 +21884,7 @@ module.exports={render,post,route,esc,chart};
 
 },
 "src/release-manifest.js": function(module, exports, require) {
-module.exports={"version":"25.10.5","title":"NEXA 25.10.4 · Belv szóbeli indítópanel","visibility":"public","supportAnnouncement":false,"notes":["A Belv szóbeli csatornájába automatikusan bekerül vagy frissül az egyetlen indítópanel.","A kiképző a panel gombjával kiválaszthatja a jelöltet; a privát pontozó 30 kérdést, kérdésenkénti 0–2 pontot és automatikus 45/60-as megfelelési eredményt használ."],"notesEn":["The Belv oral-exam channel now receives or refreshes one persistent launcher panel.","Trainers select a candidate from the panel; the private scorer contains 30 questions with per-question 0–2 scoring and automatic 45/60 pass results."]};
+module.exports={"version":"25.10.5","title":"NEXA 25.10.5 · Egyoldalas Belv szóbeli vizsga","visibility":"public","supportAnnouncement":false,"notes":["A Belv szóbeli pontozópanelje mind a 30 kérdést egyetlen nézetben mutatja, lapozás nélkül.","Négy csoportos menüből kérdésenként 0–2 pont adható; a mentés után az összpontszám és a 45/60-as megfelelési eredmény frissül."],"notesEn":["The Belv oral exam scoring panel shows all 30 questions in one view without pagination.","Four grouped menus score each question from 0–2; saving refreshes the total and the 45/60 pass decision."]};
 
 },
 "src/platform-helpdesk.js": function(module, exports, require) {
