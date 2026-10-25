@@ -2597,6 +2597,21 @@ const cooldowns = new Map();
 const privateHistory = new Map();
 const privateDmAutoReplyAt = new Map();
 
+function basicConversationReply(content, user) {
+  const text = String(content || '').trim().toLocaleLowerCase('hu-HU')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[!?.,;:]+/g, ' ').replace(/\s+/g, ' ');
+  const name = String(user?.globalName || user?.username || '').trim().slice(0, 60);
+  if (/^(szia|sziasztok|hello|helo|hell[oó]|hali|csao|szevasz|jo napot)(\s|$)/.test(text)) return `Szia${name ? `, ${name}` : ''}! Miben segíthetek?`;
+  if (/\b(hogy vagy|mizu|mi ujsag|hogy megy)\b/.test(text)) return 'Köszi, jól működöm és készen állok segíteni. Veled mi újság?';
+  if (/\b(ki vagy|mi vagy te|mit tudsz|miben tudsz segiteni|mit csinalsz)\b/.test(text)) return 'A NEXA Discord bot vagyok. Tudok segíteni a szerver funkcióival, parancsaival és a használatukkal kapcsolatos alapvető kérdésekben. Írd le nyugodtan, mire vagy kíváncsi.';
+  if (/^(koszi|koszonom|kossz|thx|thanks)(\s|$)/.test(text)) return 'Szívesen! Ha van még kérdésed, írj nyugodtan.';
+  if (/\b(viszlat|csao|jo ejt|majd kesobb|bye)\b/.test(text)) return 'Rendben, szia! Írj, amikor újra szükséged van rám.';
+  if (/\b(help|segitseg|parancsok|mit irjak|hogyan hasznaljam)\b/.test(text)) return 'Írd le természetesen, miben akadtál el. A szerverparancsok listáját a `/help` paranccsal nyithatod meg; support ügyben a NEXA Support szerveren tudsz ticketet nyitni.';
+  if (/\b(jo reggelt|jo estet|jo napot)\b/.test(text)) return 'Neked is szép napot! Miben segítsek?';
+  return 'Értem. Alap beszélgetésben és a NEXA használatával kapcsolatos kérdésekben tudok segíteni. Próbáld például: „Mit tudsz?”, „Hogy használom a /help-et?” vagy írd le pontosabban a kérdésed. A teljes Nexa AI külön, engedélyezett hozzáféréssel használható.';
+}
+
 function requireAiAccess(userId) {
   if (!isAiAllowedUser(userId)) throw new Error('A Nexa AI használatához a bot tulajdonosának engedélye szükséges.');
 }
@@ -2968,10 +2983,10 @@ async function handleAiMessage(message) {
   if (!isAiAllowedUser(message.author.id)) {
     if (isPrivate) {
       const now = Date.now(), lastReply = privateDmAutoReplyAt.get(message.author.id) || 0;
-      if (now - lastReply >= 10 * 60 * 1000) {
+      if (now - lastReply >= 3_000) {
         privateDmAutoReplyAt.set(message.author.id, now);
         if (privateDmAutoReplyAt.size > 5000) privateDmAutoReplyAt.delete(privateDmAutoReplyAt.keys().next().value);
-        await message.reply('Szia! Megkaptam az üzeneted. A bot privát üzenetben nem tud ügyet továbbítani vagy ügyintézni. Segítségért nyiss ticketet a NEXA Support szerveren.\n\nHi! I received your message. The bot cannot forward or handle support requests through DMs. Please open a ticket on the NEXA Support server.').catch(() => null);
+        await message.reply(basicConversationReply(message.content, message.author)).catch(() => null);
       }
     }
     return;
@@ -22369,7 +22384,7 @@ module.exports={render,post,route,esc,chart};
 
 },
 "src/release-manifest.js": function(module, exports, require) {
-module.exports={"version":"25.15.0","title":"NEXA 25.15.0 · Staff Feladatközpont","visibility":"public","supportAnnouncement":true,"notes":["A /feladat kiosztas feladatot, felelőst, elfogadási feltételt és opcionális, magyar időzónás határidőt rögzít.","A felelős privát értesítést és Átveszem / Készre jelölöm műveleteket kap; saját feladatait a /feladat sajat mutatja.","A Staff a /feladat attekintes paranccsal követheti az aktív és lezárt feladatokat. Az állapotváltások szerverenként mentődnek és auditálódnak."],"notesEn":["/feladat kiosztas creates a task with an assignee, completion criteria and optional Budapest-time deadline.","Assignees receive a private notification and can accept or complete tasks; /feladat sajat shows their own open tasks.","Staff can review active and completed tasks with /feladat attekintes. Changes are guild-scoped and audited."]};
+module.exports={"version":"25.15.1","title":"NEXA 25.15.1 · Alap beszélgetés","visibility":"public","supportAnnouncement":false,"notes":["A NEXA privát üzenetben alapvető beszélgetésekre is válaszol magyarul, például köszönésre, egyszerű kérdésekre és súgáskérésre.","A rövid, beépített válaszok nem használják az AI API-t; személyenkénti válaszkorlát védi a botot a túlterheléstől.","A teljes Nexa AI továbbra is csak Owner által engedélyezett fiókoknak érhető el."] ,"notesEn":["NEXA now replies to basic conversations in direct messages, including greetings, simple questions and help requests.","Built-in short replies do not use the AI API; a per-user cooldown helps prevent spam.","Full Nexa AI remains restricted to accounts explicitly approved by the Owner."]};
 
 },
 "src/platform-helpdesk.js": function(module, exports, require) {
