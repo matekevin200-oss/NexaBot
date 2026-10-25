@@ -7983,6 +7983,7 @@ body.nexa-v153:not(.nexa-settings-page) .server-network-result{margin:0 0 12px;c
 @media(max-width:760px){body.nexa-v153:not(.nexa-settings-page) .grid:has(>.dashboard-server){grid-template-columns:1fr}}
 body.nexa-v153:not(.nexa-settings-page) .locale-switch a.active{background:#1b3826!important;border-color:#3c6949!important;color:#c9efd3!important}
 body.nexa-v153:not(.nexa-settings-page) .live-dot{background:#72d39a!important;box-shadow:0 0 10px #72d39a55!important}
+body.nexa-v153:not(.nexa-settings-page) .live-pill::before{background:#72d39a!important;box-shadow:0 0 10px #72d39a55!important}
 body.nexa-v153:not(.nexa-settings-page) .n5-kpi-icon{background:#193023!important;border-color:#355742!important;color:#a8ddb5!important}
 body.nexa-v153:not(.nexa-settings-page) .n5-case-avatar{background:#193023!important;border-color:#41634a!important;color:#c5e6cc!important}
 body.nexa-v153:not(.nexa-settings-page) .n5-widget.is-drop-target{border-color:#79c995!important;box-shadow:0 0 0 2px #69c9852a!important}
