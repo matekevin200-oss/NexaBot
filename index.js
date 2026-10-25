@@ -3966,9 +3966,17 @@ const TRANSLATIONS = Object.freeze({
   'nexa.beleegyezes.engedelyezve': ['enabled', 'May NEXA AI store personal memories for you on this server?'],
   szolgalat: ['shift', 'Shift and duty management.'],
   'szolgalat.panel': ['panel', 'Post the shift control panel.'],
+  'szolgalat.idomodositas': ['time-adjustment', 'Correct a shift record by exact minutes (Staff).'],
+  'szolgalat.idomodositas.ugy_id': ['record_id', 'Shift record ID.'],
+  'szolgalat.idomodositas.irany': ['direction', 'Add or subtract time.'],
+  'szolgalat.idomodositas.perc': ['minutes', 'Minutes to adjust (1–10080).'],
+  'szolgalat.idomodositas.indok': ['reason', 'Required reason for the correction.'],
   'szolgalat.statisztika': ['statistics', 'Show duty time and shift statistics.'],
   'szolgalat.statisztika.tag': ['member', 'View another member with Staff permission.'],
   'szolgalat.ranglista': ['leaderboard', 'Show the monthly duty leaderboard.'],
+  'szolgalat.naplo': ['records', 'Show recent shift records and their IDs.'],
+  'szolgalat.naplo.tag': ['member', 'View another member with Staff permission.'],
+  'szolgalat.naplo.darab': ['count', 'Number of records (1–20).'],
   'szolgalat.szabadsag': ['leave-request', 'Submit a leave or absence request.'],
   'szolgalat.szabadsag.kezdet': ['start', 'First day: YYYY-MM-DD'],
   'szolgalat.szabadsag.vege': ['end', 'Last day: YYYY-MM-DD'],
@@ -17901,6 +17909,13 @@ function buildShiftCommand() {
       .setName('panel')
       .setDescription('Kihelyezi a szolgálati vezérlőpanelt.'))
     .addSubcommand((subcommand) => subcommand
+      .setName('idomodositas')
+      .setDescription('Pontos percben korrigál egy lezárt szolgálati rekordot (Staff).')
+      .addIntegerOption((option) => option.setName('ugy_id').setDescription('A szolgálati rekord azonosítója.').setRequired(true).setMinValue(1))
+      .addStringOption((option) => option.setName('irany').setDescription('Hozzáadás vagy levonás.').setRequired(true).addChoices({name:'Idő hozzáadása',value:'add'},{name:'Idő levonása',value:'remove'}))
+      .addIntegerOption((option) => option.setName('perc').setDescription('Korrigálandó percek száma (1–10080).').setRequired(true).setMinValue(1).setMaxValue(10080))
+      .addStringOption((option) => option.setName('indok').setDescription('A korrekció indoka (kötelező).').setRequired(true).setMinLength(5).setMaxLength(500)))
+    .addSubcommand((subcommand) => subcommand
       .setName('statisztika')
       .setDescription('Megmutatja a szolgálati időt és műszakokat.')
       .addUserOption((option) => option
@@ -17909,6 +17924,11 @@ function buildShiftCommand() {
     .addSubcommand((subcommand) => subcommand
       .setName('ranglista')
       .setDescription('Megmutatja a havi szolgálati ranglistát.'))
+    .addSubcommand((subcommand) => subcommand
+      .setName('naplo')
+      .setDescription('Megmutatja a legutóbbi szolgálati rekordokat és azok azonosítóját.')
+      .addUserOption((option) => option.setName('tag').setDescription('Másik tag rekordjait Staff jogosultsággal.'))
+      .addIntegerOption((option) => option.setName('darab').setDescription('Rekordok száma (1–20).').setMinValue(1).setMaxValue(20)))
     .addSubcommand((subcommand) => subcommand
       .setName('szabadsag')
       .setDescription('Szabadság- vagy távolléti kérelmet küld.')
@@ -18265,7 +18285,24 @@ async function updateShiftRecord(guildId, recordId, values, actorId = null) {
     }
     if (!found) throw new Error('A szolgálati rekord nem található.');
   } else if (!result.rowCount) throw new Error('A szolgálati rekord nem található.');
-  await recordAudit('owner_shift_update', { actorId, guildId, targetId: String(id), metadata: { breakSeconds, adjustmentMinutes } });
+  await recordAudit('owner_shift_update', { actorId, guildId, targetId: String(id), metadata: { breakSeconds, adjustmentMinutes, reason: String(values.adjustmentReason||'').slice(0,500), userId: values.adjustedUserId||null } });
+}
+
+async function adjustShiftMinutes(guildId,recordId,adjustmentMinutes,reason,actorId){
+  const id=Number.parseInt(recordId,10),minutes=Number(adjustmentMinutes),why=String(reason||'').trim();
+  if(!Number.isSafeInteger(id)||id<=0)throw new Error('Érvénytelen szolgálati rekordazonosító.');
+  if(!Number.isSafeInteger(minutes)||minutes===0||Math.abs(minutes)>10080)throw new Error('A korrekció 1 és 10080 perc közötti egész idő legyen.');
+  if(why.length<5||why.length>500)throw new Error('Adj meg 5–500 karakteres indokot.');
+  const result=await dbQuery('SELECT id,user_id,started_at,ended_at,break_seconds FROM nexabot_shifts WHERE id=$1 AND guild_id=$2',[id,guildId]);
+  const row=result?.rows?.[0]||(!result?(await listShiftRecords(guildId,{limit:250})).find(item=>Number(item.id)===id):null);
+  if(!row)throw new Error('A megadott szolgálati rekord nem található ezen a szerveren.');
+  const startedAt=new Date(row.started_at),endedAt=row.ended_at?new Date(row.ended_at):null;
+  if(!Number.isFinite(startedAt.getTime())||(endedAt&&!Number.isFinite(endedAt.getTime())))throw new Error('A rekord időadata hibás, ezért nem módosítottam.');
+  if(!endedAt)throw new Error('Csak lezárt szolgálati rekord időtartama korrigálható.');
+  await updateShiftRecord(guildId,id,{startedAt,endedAt,breakSeconds:Number(row.break_seconds||0),adjustmentMinutes:minutes,adjustmentReason:why,adjustedUserId:row.user_id},actorId);
+  const end=endedAt?new Date(endedAt.getTime()+minutes*60000):null,adjustedStart=endedAt?startedAt:new Date(startedAt.getTime()-minutes*60000);
+  const activeSeconds=Math.max(0,Math.floor(((end||new Date())-adjustedStart)/1000)-Number(row.break_seconds||0));
+  return{id,userId:row.user_id,adjustmentMinutes:minutes,activeSeconds};
 }
 
 async function deleteShiftRecord(guildId, recordId, actorId = null) {
@@ -18394,6 +18431,16 @@ async function handleShiftCommand(interaction) {
     return interaction.reply({ content: '❌ A szolgálatkezelő ezen a szerveren ki van kapcsolva.', flags: EPHEMERAL });
   }
   const subcommand = interaction.options.getSubcommand();
+  if(subcommand==='idomodositas'){
+    if(!isStaff(interaction.member))return interaction.reply({content:'❌ A szolgálati idő módosításához Staff vagy Szerver kezelése jogosultság szükséges.',flags:EPHEMERAL});
+    await interaction.deferReply({flags:EPHEMERAL});
+    try{
+      const recordId=interaction.options.getInteger('ugy_id',true),direction=interaction.options.getString('irany',true),amount=interaction.options.getInteger('perc',true),reason=interaction.options.getString('indok',true),minutes=direction==='remove'?-amount:amount;
+      const result=await adjustShiftMinutes(interaction.guildId,recordId,minutes,reason,interaction.user.id);
+      await logShift(interaction.guild,'🛠️ Szolgálati idő korrigálva',`**Tag:** <@${result.userId}>\n**Rekord:** #${result.id}\n**Korrekció:** ${minutes>0?'+':''}${minutes} perc\n**Új aktív idő:** ${formatDuration(result.activeSeconds)}\n**Indok:** ${reason}\n**Végrehajtotta:** ${interaction.user}`,COLORS.warning);
+      return interaction.editReply({content:`✅ A #${result.id} szolgálati rekordot ${minutes>0?'+':''}${minutes} perccel korrigáltam. Új aktív idő: **${formatDuration(result.activeSeconds)}**. Az indok bekerült az auditnaplóba.`,allowedMentions:{parse:[]}});
+    }catch(error){return interaction.editReply({content:`❌ ${error.message}`,allowedMentions:{parse:[]}});}
+  }
   if (subcommand === 'panel') {
     if (!interaction.member.permissions.has(PermissionFlagsBits.ManageGuild)) {
       return interaction.reply({ content: '❌ A panel kihelyezéséhez Szerver kezelése jogosultság szükséges.', flags: EPHEMERAL });
@@ -18450,6 +18497,14 @@ async function handleShiftCommand(interaction) {
     const rows = await shiftLeaderboard(interaction.guildId);
     const text = rows.map((row, index) => `**${index + 1}.** <@${row.userId}> — ${formatDuration(row.seconds)} (${row.shifts} műszak)`).join('\n');
     return interaction.reply({ embeds: [baseEmbed('🏆 Havi szolgálati ranglista', text || 'Még nincs lezárt szolgálat.', COLORS.primary)] });
+  }
+  if(subcommand==='naplo'){
+    const requested=interaction.options.getUser('tag'),staff=isStaff(interaction.member);
+    if(requested&&requested.id!==interaction.user.id&&!staff)return interaction.reply({content:'❌ Más tag szolgálati naplóját csak Staff vagy admin nézheti meg.',flags:EPHEMERAL});
+    const target=requested||interaction.user,limit=interaction.options.getInteger('darab')||10;
+    const rows=await listShiftRecords(interaction.guildId,{limit,userId:staff&&!requested?null:target.id});
+    const lines=rows.map(row=>`• **#${row.id}** · <@${row.user_id}> · ${formatDuration(row.active_seconds||0)} · ${row.ended_at?'Lezárt':'Aktív'} · <t:${Math.floor(new Date(row.started_at).getTime()/1000)}:d>`);
+    return interaction.reply({embeds:[baseEmbed(`📒 Szolgálati napló · ${rows.length} rekord`,lines.join('\n')||'Nincs megjeleníthető szolgálati rekord.',COLORS.primary)],flags:EPHEMERAL,allowedMentions:{parse:[]}});
   }
   const target = interaction.options.getUser('tag') || interaction.user;
   if (target.id !== interaction.user.id && !isStaff(interaction.member)) {
@@ -21957,7 +22012,7 @@ module.exports={render,post,route,esc,chart};
 
 },
 "src/release-manifest.js": function(module, exports, require) {
-module.exports={"version":"25.13.0","title":"NEXA 25.13.0 · Élő működési központ","visibility":"public","supportAnnouncement":true,"notes":["Két új élő csatorna: a NEXA-használat az elmúlt 24 óra rögzített interakcióit, a rendszerállapot pedig a botot, adatbázist, Discord-késleltetést és futási időt mutatja.","Az áttekintő oldal új parancsforgalom- és rendszerállapot-adatokat kapott.","A hiányzó új csatornákat a bot automatikusan létrehozza minden aktív NEXA LIVE telepítésben."],"notesEn":["Two new live channels: NEXA usage shows recorded interactions over the last 24 hours, and system status reports the bot, database, Discord latency and uptime.","The overview now includes command traffic and system health.","Missing new channels are automatically created for every active NEXA LIVE installation."]};
+module.exports={"version":"25.13.1","title":"NEXA 25.13.1 · Percpontos szolgálati korrekció","visibility":"public","supportAnnouncement":true,"notes":["A Staff és szerverkezelő most Discord-paranccsal, perc pontossággal módosíthat lezárt szolgálati rekordot.","A /szolgalat naplo megmutatja a legutóbbi rekordok azonosítóját; más tag naplóját csak Staff vagy szerverkezelő láthatja.","Minden korrekcióhoz indok kell; az időváltozás és a végrehajtó az auditnaplóba, beállított szolgálati naplócsatornára is bekerül. Legfeljebb hét nap korrigálható."],"notesEn":["Staff and server managers can now adjust a closed shift record to the exact minute using a Discord command.","/szolgalat naplo shows recent record IDs; only Staff or server managers can view another member's log.","Each change requires a reason and is recorded in the audit log and configured shift log channel. Adjustments are limited to seven days."]};
 
 },
 "src/platform-helpdesk.js": function(module, exports, require) {
