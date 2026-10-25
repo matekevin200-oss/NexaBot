@@ -2595,6 +2595,7 @@ const consentFallback = new Map();
 const historyFallback = new Map();
 const cooldowns = new Map();
 const privateHistory = new Map();
+const privateDmAutoReplyAt = new Map();
 
 function requireAiAccess(userId) {
   if (!isAiAllowedUser(userId)) throw new Error('A Nexa AI használatához a bot tulajdonosának engedélye szükséges.');
@@ -2965,7 +2966,14 @@ async function handleAiMessage(message) {
     if (!moduleEnabled(message.guild.id, 'ai') || !config.channels.ai || message.channel.id !== config.channels.ai) return;
   }
   if (!isAiAllowedUser(message.author.id)) {
-    if (isPrivate) await message.reply('🔒 A Nexa AI használatához a bot tulajdonosának engedélye szükséges.').catch(() => null);
+    if (isPrivate) {
+      const now = Date.now(), lastReply = privateDmAutoReplyAt.get(message.author.id) || 0;
+      if (now - lastReply >= 10 * 60 * 1000) {
+        privateDmAutoReplyAt.set(message.author.id, now);
+        if (privateDmAutoReplyAt.size > 5000) privateDmAutoReplyAt.delete(privateDmAutoReplyAt.keys().next().value);
+        await message.reply('Szia! Megkaptam az üzeneted. A bot privát üzenetben nem tud ügyet továbbítani vagy ügyintézni. Segítségért nyiss ticketet a NEXA Support szerveren.\n\nHi! I received your message. The bot cannot forward or handle support requests through DMs. Please open a ticket on the NEXA Support server.').catch(() => null);
+      }
+    }
     return;
   }
   await message.channel.sendTyping().catch(() => null);
