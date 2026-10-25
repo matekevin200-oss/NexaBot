@@ -1,4 +1,4 @@
-# NEXA 5.0 Next Generation · build 25.14.0
+# NEXA 5.0 Next Generation · build 25.15.0
 
 A meglévő NEXA továbbfejlesztése. Teljes állapot és telepítés: `NEXA-5-ALLAPOT.md`.
 
