@@ -4208,7 +4208,8 @@ const TRANSLATIONS = Object.freeze({
   szolgalat: ['shift', 'Shift and duty management.'],
   'szolgalat.panel': ['panel', 'Post the shift control panel.'],
   'szolgalat.idomodositas': ['time-adjustment', 'Correct a shift record by exact minutes (Staff).'],
-  'szolgalat.idomodositas.ugy_id': ['record_id', 'Shift record ID.'],
+  'szolgalat.idomodositas.ugy_id': ['record_id', 'Optional: exact shift record ID.'],
+  'szolgalat.idomodositas.tag': ['member', 'Optional: choose a member; without a record ID, their latest closed shift is selected.'],
   'szolgalat.idomodositas.irany': ['direction', 'Add or subtract time.'],
   'szolgalat.idomodositas.perc': ['minutes', 'Minutes to adjust (1–10080).'],
   'szolgalat.idomodositas.indok': ['reason', 'Required reason for the correction.'],
@@ -18193,8 +18194,9 @@ function buildShiftCommand() {
       .setDescription('Megnyitja a függő távolléti kérelmek vezetői paneljét.'))
     .addSubcommand((subcommand) => subcommand
       .setName('idomodositas')
-      .setDescription('Pontos percben korrigál egy lezárt szolgálati rekordot (Staff).')
-      .addIntegerOption((option) => option.setName('ugy_id').setDescription('A szolgálati rekord azonosítója.').setRequired(true).setMinValue(1))
+      .setDescription('Lezárt szolgálati idő korrigálása rekord vagy megjelölt tag alapján (Staff).')
+      .addIntegerOption((option) => option.setName('ugy_id').setDescription('Opcionális: pontos szolgálati rekord azonosítója.').setMinValue(1))
+      .addUserOption((option) => option.setName('tag').setDescription('Opcionális: az utolsó lezárt rekordját választja ki.'))
       .addStringOption((option) => option.setName('irany').setDescription('Hozzáadás vagy levonás.').setRequired(true).addChoices({name:'Idő hozzáadása',value:'add'},{name:'Idő levonása',value:'remove'}))
       .addIntegerOption((option) => option.setName('perc').setDescription('Korrigálandó percek száma (1–10080).').setRequired(true).setMinValue(1).setMaxValue(10080))
       .addStringOption((option) => option.setName('indok').setDescription('A korrekció indoka (kötelező).').setRequired(true).setMinLength(5).setMaxLength(500)))
@@ -18603,21 +18605,27 @@ async function updateShiftRecord(guildId, recordId, values, actorId = null) {
   await recordAudit('owner_shift_update', { actorId, guildId, targetId: String(id), metadata: { breakSeconds, adjustmentMinutes, reason: String(values.adjustmentReason||'').slice(0,500), userId: values.adjustedUserId||null } });
 }
 
-async function adjustShiftMinutes(guildId,recordId,adjustmentMinutes,reason,actorId){
-  const id=Number.parseInt(recordId,10),minutes=Number(adjustmentMinutes),why=String(reason||'').trim();
-  if(!Number.isSafeInteger(id)||id<=0)throw new Error('Érvénytelen szolgálati rekordazonosító.');
+async function adjustShiftMinutes(guildId,recordId,adjustmentMinutes,reason,actorId,targetUserId=null){
+  const hasRecordId=recordId!==null&&recordId!==undefined,id=hasRecordId?Number.parseInt(recordId,10):null,minutes=Number(adjustmentMinutes),why=String(reason||'').trim();
+  if(hasRecordId&&(!Number.isSafeInteger(id)||id<=0))throw new Error('Érvénytelen szolgálati rekordazonosító.');
+  if(!hasRecordId&&!/^\d{16,22}$/.test(String(targetUserId||'')))throw new Error('Jelölj meg egy tagot, vagy adj meg szolgálati rekordazonosítót.');
   if(!Number.isSafeInteger(minutes)||minutes===0||Math.abs(minutes)>10080)throw new Error('A korrekció 1 és 10080 perc közötti egész idő legyen.');
   if(why.length<5||why.length>500)throw new Error('Adj meg 5–500 karakteres indokot.');
-  const result=await dbQuery('SELECT id,user_id,started_at,ended_at,break_seconds FROM nexabot_shifts WHERE id=$1 AND guild_id=$2',[id,guildId]);
-  const row=result?.rows?.[0]||(!result?(await listShiftRecords(guildId,{limit:250})).find(item=>Number(item.id)===id):null);
+  const result=hasRecordId
+    ? await dbQuery('SELECT id,user_id,started_at,ended_at,break_seconds FROM nexabot_shifts WHERE id=$1 AND guild_id=$2',[id,guildId])
+    : await dbQuery('SELECT id,user_id,started_at,ended_at,break_seconds FROM nexabot_shifts WHERE guild_id=$1 AND user_id=$2 AND ended_at IS NOT NULL ORDER BY ended_at DESC,id DESC LIMIT 1',[guildId,String(targetUserId)]);
+  const fallbackRows=!result?await listShiftRecords(guildId,{limit:250,userId:hasRecordId?undefined:String(targetUserId)}):[];
+  const row=result?.rows?.[0]||(hasRecordId?fallbackRows.find(item=>Number(item.id)===id):fallbackRows.filter(item=>item.ended_at).sort((a,b)=>new Date(b.ended_at)-new Date(a.ended_at))[0]);
   if(!row)throw new Error('A megadott szolgálati rekord nem található ezen a szerveren.');
+  if(targetUserId&&String(row.user_id)!==String(targetUserId))throw new Error('A megadott rekord nem a megjelölt taghoz tartozik.');
   const startedAt=new Date(row.started_at),endedAt=row.ended_at?new Date(row.ended_at):null;
   if(!Number.isFinite(startedAt.getTime())||(endedAt&&!Number.isFinite(endedAt.getTime())))throw new Error('A rekord időadata hibás, ezért nem módosítottam.');
   if(!endedAt)throw new Error('Csak lezárt szolgálati rekord időtartama korrigálható.');
-  await updateShiftRecord(guildId,id,{startedAt,endedAt,breakSeconds:Number(row.break_seconds||0),adjustmentMinutes:minutes,adjustmentReason:why,adjustedUserId:row.user_id},actorId);
+  const recordIdValue=Number(row.id);
+  await updateShiftRecord(guildId,recordIdValue,{startedAt,endedAt,breakSeconds:Number(row.break_seconds||0),adjustmentMinutes:minutes,adjustmentReason:why,adjustedUserId:row.user_id},actorId);
   const end=endedAt?new Date(endedAt.getTime()+minutes*60000):null,adjustedStart=endedAt?startedAt:new Date(startedAt.getTime()-minutes*60000);
   const activeSeconds=Math.max(0,Math.floor(((end||new Date())-adjustedStart)/1000)-Number(row.break_seconds||0));
-  return{id,userId:row.user_id,adjustmentMinutes:minutes,activeSeconds};
+  return{id:recordIdValue,userId:row.user_id,adjustmentMinutes:minutes,activeSeconds};
 }
 
 async function deleteShiftRecord(guildId, recordId, actorId = null) {
@@ -18771,10 +18779,11 @@ async function handleShiftCommand(interaction) {
     if(!isStaff(interaction.member))return interaction.reply({content:'❌ A szolgálati idő módosításához Staff vagy Szerver kezelése jogosultság szükséges.',flags:EPHEMERAL});
     await interaction.deferReply({flags:EPHEMERAL});
     try{
-      const recordId=interaction.options.getInteger('ugy_id',true),direction=interaction.options.getString('irany',true),amount=interaction.options.getInteger('perc',true),reason=interaction.options.getString('indok',true),minutes=direction==='remove'?-amount:amount;
-      const result=await adjustShiftMinutes(interaction.guildId,recordId,minutes,reason,interaction.user.id);
+      const recordId=interaction.options.getInteger('ugy_id'),target=interaction.options.getUser('tag'),direction=interaction.options.getString('irany',true),amount=interaction.options.getInteger('perc',true),reason=interaction.options.getString('indok',true),minutes=direction==='remove'?-amount:amount;
+      if(!recordId&&!target)throw new Error('Jelölj meg egy tagot, vagy adj meg szolgálati rekordazonosítót.');
+      const result=await adjustShiftMinutes(interaction.guildId,recordId,minutes,reason,interaction.user.id,target?.id||null);
       await logShift(interaction.guild,'🛠️ Szolgálati idő korrigálva',`**Tag:** <@${result.userId}>\n**Rekord:** #${result.id}\n**Korrekció:** ${minutes>0?'+':''}${minutes} perc\n**Új aktív idő:** ${formatDuration(result.activeSeconds)}\n**Indok:** ${reason}\n**Végrehajtotta:** ${interaction.user}`,COLORS.warning);
-      return interaction.editReply({content:`✅ A #${result.id} szolgálati rekordot ${minutes>0?'+':''}${minutes} perccel korrigáltam. Új aktív idő: **${formatDuration(result.activeSeconds)}**. Az indok bekerült az auditnaplóba.`,allowedMentions:{parse:[]}});
+      return interaction.editReply({content:`✅ <@${result.userId}> · a #${result.id} szolgálati rekordot ${minutes>0?'+':''}${minutes} perccel korrigáltam. Új aktív idő: **${formatDuration(result.activeSeconds)}**. Az indok bekerült az auditnaplóba.`,allowedMentions:{parse:[]}});
     }catch(error){return interaction.editReply({content:`❌ ${error.message}`,allowedMentions:{parse:[]}});}
   }
   if (subcommand === 'panel') {
@@ -18882,6 +18891,7 @@ module.exports = {
   listShiftRecords,
   shiftOverview,
   updateShiftRecord,
+  adjustShiftMinutes,
   deleteShiftRecord,
   resetShiftData
 };
