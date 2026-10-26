@@ -2,6 +2,7 @@
 // Loaded with `node -r ./live-status.js index.js` so it can coexist with the packed runtime.
 const { Client, Events, ChannelType, EmbedBuilder, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
 const { Pool } = require('pg');
+const { randomInt } = require('node:crypto');
 
 const PANEL_FOOTERS = {
   voice: 'NEXA LIVE • voice',
@@ -18,6 +19,7 @@ const consumedDeleteInteractions = new WeakSet();
 const consumedMemberInfoInteractions = new WeakSet();
 const consumedAfkInteractions = new WeakSet();
 const consumedAfkMessages = new WeakSet();
+const consumedDiceInteractions = new WeakSet();
 const afkMembers = new Map();
 let pool;
 
@@ -328,6 +330,31 @@ const afkOffCommand = new SlashCommandBuilder()
   .setDMPermission(false)
   .toJSON();
 
+const diceCommand = new SlashCommandBuilder()
+  .setName('kocka')
+  .setNameLocalizations({ 'en-US': 'dice', 'en-GB': 'dice' })
+  .setDescription('Dob egy vagy több kockával.')
+  .setDescriptionLocalizations({ 'en-US': 'Roll one or more dice.', 'en-GB': 'Roll one or more dice.' })
+  .setDMPermission(false)
+  .addIntegerOption((option) => option
+    .setName('sides')
+    .setNameLocalizations({ 'hu': 'oldal' })
+    .setDescription('A kocka oldalainak száma.')
+    .setDescriptionLocalizations({ 'en-US': 'Number of sides on each die.', 'en-GB': 'Number of sides on each die.' })
+    .addChoices(
+      { name: '4', value: 4 }, { name: '6', value: 6 }, { name: '8', value: 8 },
+      { name: '10', value: 10 }, { name: '12', value: 12 }, { name: '20', value: 20 }, { name: '100', value: 100 }
+    )
+    .setRequired(true))
+  .addIntegerOption((option) => option
+    .setName('count')
+    .setNameLocalizations({ 'hu': 'darab' })
+    .setDescription('Hány kockával dobjon? (1–20)')
+    .setDescriptionLocalizations({ 'en-US': 'How many dice to roll? (1–20)', 'en-GB': 'How many dice to roll? (1–20)' })
+    .setMinValue(1)
+    .setMaxValue(20))
+  .toJSON();
+
 async function ensureDeleteMessagesCommand(client) {
   try {
     const commands = await client.application.commands.fetch();
@@ -360,6 +387,19 @@ async function ensureMemberInfoCommand(client) {
   } catch (error) {
     console.error('A /taginfo parancs regisztrálása nem sikerült:', error.message);
   }
+}
+
+async function ensureDiceCommand(client) {
+  let registered = 0;
+  for (const guild of client.guilds.cache.values()) {
+    try {
+      await client.application.commands.create(diceCommand, guild.id);
+      registered += 1;
+    } catch (error) {
+      console.error('A /kocka parancs regisztrálása nem sikerült (' + guild.id + '):', error.message);
+    }
+  }
+  console.info('A /kocka (/dice) parancs regisztrálva: ' + registered + '/' + client.guilds.cache.size + ' szerver.');
 }
 
 async function ensureAfkCommand(client) {
@@ -440,6 +480,26 @@ async function handleAfkOffCommand(interaction) {
     content: wasAfk ? '👋 Kikapcsoltam az AFK állapotodat.' : 'ℹ️ Nem volt bekapcsolva az AFK állapotod.',
     flags: MessageFlags.Ephemeral
   });
+}
+
+async function handleDiceCommand(interaction) {
+  if (!interaction.inGuild()) {
+    return interaction.reply({ content: '❌ Ezt a parancsot szerveren használd.', flags: MessageFlags.Ephemeral });
+  }
+  const sidesOption = interaction.options.data?.find((option) => option.name === 'sides' || option.name === 'oldal');
+  const countOption = interaction.options.data?.find((option) => option.name === 'count' || option.name === 'darab');
+  const sides = Number(sidesOption?.value);
+  const count = Math.min(20, Math.max(1, Number(countOption?.value || 1)));
+  if (![4, 6, 8, 10, 12, 20, 100].includes(sides)) {
+    return interaction.reply({ content: '❌ Válassz egy érvényes kockatípust.', flags: MessageFlags.Ephemeral });
+  }
+  const rolls = Array.from({ length: count }, () => randomInt(1, sides + 1));
+  const total = rolls.reduce((sum, roll) => sum + roll, 0);
+  const en = String(interaction.locale || '').startsWith('en');
+  const content = en
+    ? '🎲 ' + count + 'd' + sides + ': ' + rolls.join(' + ') + ' = **' + total + '**'
+    : '🎲 ' + count + '×d' + sides + ': ' + rolls.join(' + ') + ' = **' + total + '**';
+  return interaction.reply({ content, allowedMentions: { parse: [] } });
 }
 
 function discordTimestamp(date, style = 'R') {
@@ -570,6 +630,11 @@ function registerAfkCommand(client) {
   timer.unref();
 }
 
+function registerDiceCommand(client) {
+  const timer = setTimeout(() => ensureDiceCommand(client), 15_000);
+  timer.unref();
+}
+
 const originalLogin = Client.prototype.login;
 Client.prototype.login = function patchedLogin(...args) {
   if (!watchedClients.has(this)) {
@@ -579,6 +644,7 @@ Client.prototype.login = function patchedLogin(...args) {
       registerDeleteMessagesCommand(readyClient);
       registerMemberInfoCommand(readyClient);
       registerAfkCommand(readyClient);
+      registerDiceCommand(readyClient);
     });
   }
   return originalLogin.apply(this, args);
@@ -626,6 +692,11 @@ Client.prototype.on = function patchedOn(eventName, listener) {
       if (consumedAfkInteractions.has(interaction)) return;
       consumedAfkInteractions.add(interaction);
       return handleAfkOffCommand(interaction);
+    }
+    if (interaction.isChatInputCommand?.() && ['kocka', 'dice'].includes(interaction.commandName)) {
+      if (consumedDiceInteractions.has(interaction)) return;
+      consumedDiceInteractions.add(interaction);
+      return handleDiceCommand(interaction);
     }
     return listener.call(client, interaction);
   });
