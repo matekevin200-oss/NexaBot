@@ -355,13 +355,24 @@ async function ensureMemberInfoCommand(client) {
 }
 
 async function ensureAfkCommand(client) {
+  let registered = 0;
   try {
     const commands = await client.application.commands.fetch();
-    if (commands.some((command) => command.name === afkCommand.name)) return;
-    await client.application.commands.create(afkCommand);
+    const globalCommand = commands.find((command) => command.name === afkCommand.name);
+    if (globalCommand) await globalCommand.delete();
   } catch (error) {
-    console.error('A /afk parancs regisztrálása nem sikerült:', error.message);
+    console.error('A globális /afk parancs eltávolítása nem sikerült:', error.message);
   }
+  for (const guild of client.guilds.cache.values()) {
+    try {
+      // Guild commands show immediately and this POST also updates an older /afk schema in place.
+      await client.application.commands.create(afkCommand, guild.id);
+      registered += 1;
+    } catch (error) {
+      console.error(`A /afk parancs regisztrálása nem sikerült (${guild.id}):`, error.message);
+    }
+  }
+  console.info(`A /afk parancs szerverenként regisztrálva: ${registered}/${client.guilds.cache.size} szerver.`);
 }
 
 function afkKey(guildId, userId) {
