@@ -496,11 +496,11 @@ async function ensureBelvPermissionsCommand(client) {
 async function handleBelvPermissionsCommand(interaction) {
   if (!interaction.inGuild()) return interaction.reply({ content: '❌ Ezt a parancsot a BELV szerveren használd.', flags: MessageFlags.Ephemeral });
   if (!isBotOwner(interaction.user.id)) return interaction.reply({ content: '❌ Ezt csak a NEXA fő tulajdonosa használhatja.', flags: MessageFlags.Ephemeral });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const targetGuildId = await getBelvGuildId();
-  if (!targetGuildId || interaction.guildId !== targetGuildId) return interaction.reply({ content: '❌ Ez a parancs kizárólag a beállított BELV szerveren használható.', flags: MessageFlags.Ephemeral });
+  if (!targetGuildId || interaction.guildId !== targetGuildId) return interaction.editReply('❌ Ez a parancs kizárólag a beállított BELV szerveren használható.');
   const applyOption = interaction.options.data?.find((option) => option.name === 'apply' || option.name === 'alkalmaz');
   const shouldApply = applyOption?.value === true;
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   try {
     await interaction.guild.channels.fetch();
     await interaction.guild.roles.fetch();
@@ -541,34 +541,68 @@ async function handleBelvPermissionsCommand(interaction) {
     if (missingRoles.length || missingChannels.length) return interaction.editReply(summary + '\n❌ Nem alkalmaztam a beállítást, mert hiányos a rang- vagy csatornalista.');
     const botMember = interaction.guild.members.me || await interaction.guild.members.fetchMe();
     if (!botMember.permissions.has(PermissionFlagsBits.ManageChannels)) return interaction.editReply('❌ A Nexának **Csatornák kezelése** jogosultság kell. Nem változtattam semmin.');
-    const changedRoleIds = new Map();
-    for (const [key, roles] of roleGroups) for (const role of roles) changedRoleIds.set(role.id, key);
     const botRoleIds = new Set(botMember.roles.cache.keys());
-    let changedChannels = 0;
-    for (const { channel, tiers } of matchedChannels) {
+    const sendMessages = PermissionFlagsBits.SendMessages;
+    const explicitMemberIds = [...new Set(matchedChannels.flatMap(({ channel }) =>
+      [...channel.permissionOverwrites.cache.values()]
+        .filter((overwrite) => overwrite.type === 1)
+        .map((overwrite) => overwrite.id)
+    ))].filter((id) => id !== botMember.id);
+    const memberById = new Map(interaction.guild.members.cache);
+    for (let i = 0; i < explicitMemberIds.length; i += 10) {
+      const missingIds = explicitMemberIds.slice(i, i + 10).filter((id) => !memberById.has(id));
+      const fetchedMembers = await Promise.all(missingIds.map((id) => interaction.guild.members.fetch(id).catch(() => null)));
+      for (const member of fetchedMembers) if (member) memberById.set(member.id, member);
+    }
+    const applyChannelPermissions = async ({ channel, tiers }) => {
       const allowedRoleIds = new Set(tiers.flatMap((tier) => roleGroups.get(tier).map((role) => role.id)));
-      await channel.permissionOverwrites.edit(interaction.guild.roles.everyone.id, { SendMessages: false }, { reason: 'BELV rendfokozati írási jogosultságok' });
-      for (const overwrite of [...channel.permissionOverwrites.cache.values()]) {
-        if (overwrite.id === interaction.guild.id || overwrite.type === 0 && allowedRoleIds.has(overwrite.id) || overwrite.type === 0 && botRoleIds.has(overwrite.id)) continue;
-        if (!overwrite.allow.has(PermissionFlagsBits.SendMessages)) continue;
-        if (overwrite.type === 0) {
+      const overwrites = new Map([...channel.permissionOverwrites.cache.values()].map((overwrite) => [
+        overwrite.id,
+        { id: overwrite.id, type: overwrite.type, allow: overwrite.allow.bitfield, deny: overwrite.deny.bitfield }
+      ]));
+      const updateSendMessages = (id, type, allowed) => {
+        const overwrite = overwrites.get(id) || { id, type, allow: 0n, deny: 0n };
+        overwrite.allow &= ~sendMessages;
+        overwrite.deny &= ~sendMessages;
+        if (allowed === true) overwrite.allow |= sendMessages;
+        if (allowed === false) overwrite.deny |= sendMessages;
+        overwrites.set(id, overwrite);
+      };
+      updateSendMessages(interaction.guild.roles.everyone.id, 0, false);
+      for (const overwrite of channel.permissionOverwrites.cache.values()) {
+        if (overwrite.id === interaction.guild.id) {
+          updateSendMessages(overwrite.id, overwrite.type, false);
+        } else if (overwrite.type === 0) {
           const role = interaction.guild.roles.cache.get(overwrite.id);
-          if (role?.managed) continue;
-          await channel.permissionOverwrites.edit(overwrite.id, { SendMessages: false }, { reason: 'BELV rendfokozati jog: nem engedélyezett rang' });
+          if (allowedRoleIds.has(overwrite.id)) updateSendMessages(overwrite.id, overwrite.type, true);
+          else if (!botRoleIds.has(overwrite.id) && !role?.managed && overwrite.allow.has(sendMessages)) {
+            updateSendMessages(overwrite.id, overwrite.type, false);
+          }
         } else if (overwrite.type === 1) {
-          const member = await interaction.guild.members.fetch(overwrite.id).catch(() => null);
-          if (member?.user.bot || [...(member?.roles.cache.keys() || [])].some((id) => allowedRoleIds.has(id))) continue;
-          await channel.permissionOverwrites.edit(overwrite.id, { SendMessages: false }, { reason: 'BELV rendfokozati jog: nem engedélyezett egyéni kivétel' });
+          const member = memberById.get(overwrite.id);
+          if (member?.user.bot) continue;
+          const hasAllowedRank = [...(member?.roles.cache.keys() || [])].some((id) => allowedRoleIds.has(id));
+          if (hasAllowedRank || tiers.includes('chief') && chiefUserIds.has(overwrite.id)) {
+            updateSendMessages(overwrite.id, overwrite.type, true);
+          } else if (overwrite.allow.has(sendMessages)) {
+            updateSendMessages(overwrite.id, overwrite.type, false);
+          }
         }
       }
-      for (const roleId of allowedRoleIds) await channel.permissionOverwrites.edit(roleId, { SendMessages: true }, { reason: 'BELV rendfokozati jog: engedélyezett rang' });
+      for (const roleId of allowedRoleIds) updateSendMessages(roleId, 0, true);
       if (tiers.includes('chief')) {
-        for (const userId of chiefUserIds) {
-          if (userId !== botMember.id) await channel.permissionOverwrites.edit(userId, { SendMessages: true }, { type: 1, reason: 'BELV rendfokozati jog: Főigazgató tulajdonosi jogosultság' }).catch(() => null);
-        }
+        for (const userId of chiefUserIds) updateSendMessages(userId, 1, true);
       }
-      await channel.permissionOverwrites.edit(botMember.id, { SendMessages: true }, { type: 1, reason: 'NEXA botműködés fenntartása a BELV-csatornákban' }).catch(() => null);
-      changedChannels += 1;
+      updateSendMessages(botMember.id, 1, true);
+      await channel.permissionOverwrites.set([...overwrites.values()], 'BELV rendfokozati írási jogosultságok');
+    };
+    let changedChannels = 0;
+    const channelBatchSize = 4;
+    for (let i = 0; i < matchedChannels.length; i += channelBatchSize) {
+      const batch = matchedChannels.slice(i, i + channelBatchSize);
+      await Promise.all(batch.map(applyChannelPermissions));
+      changedChannels += batch.length;
+      await interaction.editReply(summary + '\nJogosultságok alkalmazása: **' + changedChannels + '/' + matchedChannels.length + '** csatorna.');
     }
     return interaction.editReply(summary + '\n✅ Beállítottam a **' + changedChannels + '** felsorolt BELV-csatorna írási jogait. Az olvasási jogokat nem módosítottam.');
   } catch (error) {
