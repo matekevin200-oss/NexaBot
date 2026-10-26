@@ -15,6 +15,7 @@ const panelState = new Map();
 const lastErrorAt = new Map();
 const watchedClients = new WeakSet();
 const consumedDeleteInteractions = new WeakSet();
+const consumedMemberInfoInteractions = new WeakSet();
 let pool;
 
 function normalize(value) {
@@ -293,6 +294,16 @@ const deleteMessagesCommand = new SlashCommandBuilder()
       .setRequired(true)))
   .toJSON();
 
+const memberInfoCommand = new SlashCommandBuilder()
+  .setName('taginfo')
+  .setDescription('Megmutatja egy szervertag alapadatait.')
+  .setDMPermission(false)
+  .addUserOption((option) => option
+    .setName('tag')
+    .setDescription('A szervertag, akiről információt kérsz.')
+    .setRequired(true))
+  .toJSON();
+
 async function ensureDeleteMessagesCommand(client) {
   try {
     const commands = await client.application.commands.fetch();
@@ -315,6 +326,58 @@ async function ensureDeleteMessagesCommand(client) {
   } catch (error) {
     console.error('A /uzenet torles parancs regisztrálása nem sikerült:', error.message);
   }
+}
+
+async function ensureMemberInfoCommand(client) {
+  try {
+    const commands = await client.application.commands.fetch();
+    if (commands.some((command) => command.name === memberInfoCommand.name)) return;
+    await client.application.commands.create(memberInfoCommand);
+  } catch (error) {
+    console.error('A /taginfo parancs regisztrálása nem sikerült:', error.message);
+  }
+}
+
+function discordTimestamp(date, style = 'R') {
+  const seconds = Math.floor(date.getTime() / 1000);
+  return `<t:${seconds}:${style}>`;
+}
+
+async function handleMemberInfoCommand(interaction) {
+  if (!interaction.inGuild()) {
+    return interaction.reply({ content: '❌ Ezt a parancsot szerveren használd.', flags: MessageFlags.Ephemeral });
+  }
+  const user = interaction.options.getUser('tag', true);
+  const member = await interaction.guild.members.fetch(user.id).catch(() => null);
+  if (!member) {
+    return interaction.reply({ content: '❌ Ez a felhasználó nem tagja ennek a szervernek.', flags: MessageFlags.Ephemeral });
+  }
+
+  const roles = member.roles.cache
+    .filter((role) => role.id !== interaction.guild.id)
+    .sort((a, b) => b.position - a.position)
+    .map((role) => `**${safeText(role.name, 100)}**`);
+  const joinedAt = member.joinedAt;
+  const createdAt = user.createdAt;
+  const voiceChannel = member.voice?.channel;
+  const embed = new EmbedBuilder()
+    .setColor(member.displayColor || 0x5865f2)
+    .setAuthor({ name: safeText(member.displayName || user.username, 100), iconURL: user.displayAvatarURL() })
+    .setThumbnail(user.displayAvatarURL({ size: 256 }))
+    .setDescription(`Információ a **${safeText(interaction.guild.name, 100)}** szerveren.`)
+    .addFields(
+      { name: 'Szervernév', value: safeText(member.displayName || user.username, 100), inline: true },
+      { name: 'Felhasználónév', value: `@${safeText(user.username, 90)}`, inline: true },
+      { name: 'Csatlakozott', value: joinedAt ? `${discordTimestamp(joinedAt, 'D')}\n(${discordTimestamp(joinedAt)})` : 'Nem elérhető', inline: true },
+      { name: 'Discord-fiók létrehozva', value: `${discordTimestamp(createdAt, 'D')}\n(${discordTimestamp(createdAt)})`, inline: true },
+      { name: 'Hangcsatorna', value: voiceChannel ? safeText(voiceChannel.name, 100) : 'Nincs hangcsatornában', inline: true },
+      { name: 'Időkorlátozás', value: member.communicationDisabledUntilTimestamp ? `Lejár ${discordTimestamp(new Date(member.communicationDisabledUntilTimestamp))}` : 'Nincs', inline: true },
+      { name: `Rangok (${roles.length})`, value: roles.length ? roles.slice(0, 15).join(', ').slice(0, 1024) : 'Nincs rangja', inline: false }
+    )
+    .setFooter({ text: `NEXA • ${user.id}` })
+    .setTimestamp();
+  if (roles.length > 15) embed.addFields({ name: 'További rangok', value: `… és még ${roles.length - 15}.` });
+  return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
 }
 
 async function handleDeleteMessagesCommand(interaction) {
@@ -393,6 +456,11 @@ function registerDeleteMessagesCommand(client) {
   timer.unref();
 }
 
+function registerMemberInfoCommand(client) {
+  const timer = setTimeout(() => ensureMemberInfoCommand(client), 15_000);
+  timer.unref();
+}
+
 const originalLogin = Client.prototype.login;
 Client.prototype.login = function patchedLogin(...args) {
   if (!watchedClients.has(this)) {
@@ -400,6 +468,7 @@ Client.prototype.login = function patchedLogin(...args) {
     this.once(Events.ClientReady, (readyClient) => {
       start(readyClient);
       registerDeleteMessagesCommand(readyClient);
+      registerMemberInfoCommand(readyClient);
     });
   }
   return originalLogin.apply(this, args);
@@ -416,6 +485,17 @@ Client.prototype.on = function patchedOn(eventName, listener) {
       if (consumedDeleteInteractions.has(interaction)) return;
       consumedDeleteInteractions.add(interaction);
       return handleDeleteMessagesCommand(interaction);
+    }
+    if (interaction.isChatInputCommand?.() && interaction.commandName === 'taginfo') {
+      if (consumedMemberInfoInteractions.has(interaction)) return;
+      consumedMemberInfoInteractions.add(interaction);
+      return handleMemberInfoCommand(interaction).catch((error) => {
+        console.error(`A /taginfo nem sikerült (${interaction.guildId}):`, error.message);
+        if (interaction.replied || interaction.deferred) {
+          return interaction.followUp({ content: '❌ Nem sikerült lekérni a tag adatait.', flags: MessageFlags.Ephemeral });
+        }
+        return interaction.reply({ content: '❌ Nem sikerült lekérni a tag adatait.', flags: MessageFlags.Ephemeral });
+      });
     }
     return listener.call(client, interaction);
   });
