@@ -320,6 +320,14 @@ const afkCommand = new SlashCommandBuilder()
     .setMaxLength(160))
   .toJSON();
 
+const afkOffCommand = new SlashCommandBuilder()
+  .setName('afk-ki')
+  .setNameLocalizations({ 'en-US': 'afk-off', 'en-GB': 'afk-off' })
+  .setDescription('Kikapcsolja a távolléti állapotodat.')
+  .setDescriptionLocalizations({ 'en-US': 'Turn off your AFK status.', 'en-GB': 'Turn off your AFK status.' })
+  .setDMPermission(false)
+  .toJSON();
+
 async function ensureDeleteMessagesCommand(client) {
   try {
     const commands = await client.application.commands.fetch();
@@ -355,24 +363,31 @@ async function ensureMemberInfoCommand(client) {
 }
 
 async function ensureAfkCommand(client) {
-  let registered = 0;
-  try {
-    const commands = await client.application.commands.fetch();
-    const globalCommand = commands.find((command) => command.name === afkCommand.name);
-    if (globalCommand) await globalCommand.delete();
-  } catch (error) {
-    console.error('A globális /afk parancs eltávolítása nem sikerült:', error.message);
-  }
-  for (const guild of client.guilds.cache.values()) {
+  const commandDefinitions = [afkCommand, afkOffCommand];
+  for (const definition of commandDefinitions) {
     try {
-      // Guild commands show immediately and this POST also updates an older /afk schema in place.
-      await client.application.commands.create(afkCommand, guild.id);
-      registered += 1;
+      const commands = await client.application.commands.fetch();
+      const globalCommand = commands.find((command) => command.name === definition.name);
+      if (globalCommand) await globalCommand.delete();
     } catch (error) {
-      console.error(`A /afk parancs regisztrálása nem sikerült (${guild.id}):`, error.message);
+      console.error(`A globális /${definition.name} parancs eltávolítása nem sikerült:`, error.message);
     }
   }
-  console.info(`A /afk parancs szerverenként regisztrálva: ${registered}/${client.guilds.cache.size} szerver.`);
+  let registeredAfk = 0;
+  let registeredAfkOff = 0;
+  for (const guild of client.guilds.cache.values()) {
+    for (const [definition, counter] of [[afkCommand, 'afk'], [afkOffCommand, 'afkOff']]) {
+      try {
+        // Guild commands show immediately and this POST also updates an older command in place.
+        await client.application.commands.create(definition, guild.id);
+        if (counter === 'afk') registeredAfk += 1;
+        else registeredAfkOff += 1;
+      } catch (error) {
+        console.error(`A /${definition.name} parancs regisztrálása nem sikerült (${guild.id}):`, error.message);
+      }
+    }
+  }
+  console.info(`AFK parancsok szerverenként regisztrálva: /afk ${registeredAfk}/${client.guilds.cache.size}, /afk-ki ${registeredAfkOff}/${client.guilds.cache.size}.`);
 }
 
 function afkKey(guildId, userId) {
@@ -413,6 +428,17 @@ async function handleAfkCommand(interaction) {
     content: reason ? `💤 AFK mód bekapcsolva. Üzenet: ${reason}\nAmint írsz a szerveren, automatikusan kikapcsol.` : '💤 AFK mód bekapcsolva. Amint írsz a szerveren, automatikusan kikapcsol.',
     flags: MessageFlags.Ephemeral,
     allowedMentions: { parse: [] }
+  });
+}
+
+async function handleAfkOffCommand(interaction) {
+  if (!interaction.inGuild()) {
+    return interaction.reply({ content: '❌ Ezt a parancsot szerveren használd.', flags: MessageFlags.Ephemeral });
+  }
+  const wasAfk = afkMembers.delete(afkKey(interaction.guildId, interaction.user.id));
+  return interaction.reply({
+    content: wasAfk ? '👋 Kikapcsoltam az AFK állapotodat.' : 'ℹ️ Nem volt bekapcsolva az AFK állapotod.',
+    flags: MessageFlags.Ephemeral
   });
 }
 
@@ -595,6 +621,11 @@ Client.prototype.on = function patchedOn(eventName, listener) {
       if (consumedAfkInteractions.has(interaction)) return;
       consumedAfkInteractions.add(interaction);
       return handleAfkCommand(interaction);
+    }
+    if (interaction.isChatInputCommand?.() && ['afk-ki', 'afk-off'].includes(interaction.commandName)) {
+      if (consumedAfkInteractions.has(interaction)) return;
+      consumedAfkInteractions.add(interaction);
+      return handleAfkOffCommand(interaction);
     }
     return listener.call(client, interaction);
   });
