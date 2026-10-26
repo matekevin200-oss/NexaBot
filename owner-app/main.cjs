@@ -136,7 +136,8 @@ function createWindow() {
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (isAllowedNavigation(url)) {
       if (url.startsWith('file:')) loadHome(window);
-      else openOwner(url, window);
+      else if (new URL(url).origin === SITE_ORIGIN) openOwner(url, window);
+      else void window.loadURL(url);
     } else {
       openExternal(url);
     }
