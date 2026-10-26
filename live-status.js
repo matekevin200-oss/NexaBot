@@ -1,6 +1,6 @@
 // NEXA LIVE read-only status panels for the optional "NEXA LIVE" category.
 // Loaded with `node -r ./live-status.js index.js` so it can coexist with the packed runtime.
-const { Client, Events, ChannelType, EmbedBuilder } = require('discord.js');
+const { Client, Events, ChannelType, EmbedBuilder, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
 const { Pool } = require('pg');
 
 const PANEL_FOOTERS = {
@@ -14,6 +14,7 @@ const PANEL_FOOTERS = {
 const panelState = new Map();
 const lastErrorAt = new Map();
 const watchedClients = new WeakSet();
+const consumedDeleteInteractions = new WeakSet();
 let pool;
 
 function normalize(value) {
@@ -277,6 +278,87 @@ function reportError(guildId, kind, error) {
   console.error(`NEXA LIVE ${kind} frissítési hiba (${guildId}):`, error.message);
 }
 
+const deleteMessagesCommand = new SlashCommandBuilder()
+  .setName('uzenet')
+  .setDescription('Üzenetek kezelése a jelenlegi csatornában.')
+  .setDMPermission(false)
+  .addSubcommand((subcommand) => subcommand
+    .setName('torles')
+    .setDescription('Törli a legutóbbi üzeneteket a csatornából.')
+    .addIntegerOption((option) => option
+      .setName('szam')
+      .setDescription('Hány korábbi üzenetet töröljön? (1–100)')
+      .setMinValue(1)
+      .setMaxValue(100)
+      .setRequired(true)))
+  .toJSON();
+
+async function ensureDeleteMessagesCommand(client) {
+  try {
+    const commands = await client.application.commands.fetch();
+    const existing = commands.find((command) => command.name === 'uzenet');
+    if (existing) {
+      const alreadyPresent = existing.options?.some((option) =>
+        option.name === 'torles' && option.options?.some((child) => child.name === 'szam')
+      );
+      if (alreadyPresent) return;
+      const existingOptions = existing.options || [];
+      const newSubcommand = deleteMessagesCommand.options[0];
+      await existing.edit({
+        name: existing.name,
+        description: existing.description || deleteMessagesCommand.description,
+        options: [...existingOptions, newSubcommand]
+      });
+      return;
+    }
+    await client.application.commands.create(deleteMessagesCommand);
+  } catch (error) {
+    console.error('A /uzenet torles parancs regisztrálása nem sikerült:', error.message);
+  }
+}
+
+async function handleDeleteMessagesCommand(interaction) {
+  if (!interaction.inGuild() || interaction.options.getSubcommand() !== 'torles') {
+    return interaction.reply({ content: '❌ Ezt a parancsot szerver szöveges csatornájában használd.', flags: MessageFlags.Ephemeral });
+  }
+  const memberPermissions = interaction.memberPermissions;
+  if (!memberPermissions?.has(PermissionFlagsBits.ManageMessages) && !memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+    return interaction.reply({ content: '❌ Ehhez a parancshoz Üzenetek kezelése jogosultság szükséges.', flags: MessageFlags.Ephemeral });
+  }
+  const channel = interaction.channel;
+  if (!channel?.isTextBased?.() || typeof channel.bulkDelete !== 'function') {
+    return interaction.reply({ content: '❌ Ebben a csatornában nem lehet tömegesen üzenetet törölni.', flags: MessageFlags.Ephemeral });
+  }
+  const botMember = interaction.guild.members.me || await interaction.guild.members.fetchMe().catch(() => null);
+  if (!botMember?.permissionsIn(channel).has(PermissionFlagsBits.ManageMessages)) {
+    return interaction.reply({ content: '❌ A Nexának is kell az **Üzenetek kezelése** jogosultság ebben a csatornában.', flags: MessageFlags.Ephemeral });
+  }
+
+  const requested = interaction.options.getInteger('szam', true);
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  try {
+    let deletedCount = 0;
+    if (requested === 1) {
+      const latest = await channel.messages.fetch({ limit: 1 });
+      const message = latest.first();
+      if (message) {
+        await message.delete();
+        deletedCount = 1;
+      }
+    } else {
+      const deleted = await channel.bulkDelete(requested, true);
+      deletedCount = deleted.size;
+    }
+    const skipped = requested - deletedCount;
+    return interaction.editReply(skipped > 0 && requested > 1
+      ? `🗑️ **${deletedCount}** üzenetet töröltem. **${skipped}** régebbi üzenet nem törölhető tömegesen.`
+      : `🗑️ **${deletedCount}** korábbi üzenetet töröltem.`);
+  } catch (error) {
+    console.error(`A /uzenet torles nem sikerült (${interaction.guildId}/${channel.id}):`, error.message);
+    return interaction.editReply('❌ Nem sikerült törölni az üzeneteket. Ellenőrizd a csatornajogokat, vagy próbálj meg kevesebb üzenetet törölni.');
+  }
+}
+
 function start(client, intervalMs = 30_000) {
   let running = false;
   const refresh = async () => {
@@ -306,12 +388,36 @@ function start(client, intervalMs = 30_000) {
   return timer;
 }
 
+function registerDeleteMessagesCommand(client) {
+  const timer = setTimeout(() => ensureDeleteMessagesCommand(client), 15_000);
+  timer.unref();
+}
+
 const originalLogin = Client.prototype.login;
 Client.prototype.login = function patchedLogin(...args) {
   if (!watchedClients.has(this)) {
     watchedClients.add(this);
-    this.once(Events.ClientReady, (readyClient) => start(readyClient));
+    this.once(Events.ClientReady, (readyClient) => {
+      start(readyClient);
+      registerDeleteMessagesCommand(readyClient);
+    });
   }
   return originalLogin.apply(this, args);
+};
+
+const originalOn = Client.prototype.on;
+Client.prototype.on = function patchedOn(eventName, listener) {
+  if (eventName !== Events.InteractionCreate || typeof listener !== 'function') {
+    return originalOn.call(this, eventName, listener);
+  }
+  const client = this;
+  return originalOn.call(this, eventName, async (interaction) => {
+    if (interaction.isChatInputCommand?.() && interaction.commandName === 'uzenet') {
+      if (consumedDeleteInteractions.has(interaction)) return;
+      consumedDeleteInteractions.add(interaction);
+      return handleDeleteMessagesCommand(interaction);
+    }
+    return listener.call(client, interaction);
+  });
 };
 
