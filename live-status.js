@@ -447,7 +447,7 @@ const BELV_CHANNEL_RULES = [
 
 function belvTierForRole(role) {
   const name = normalize(role.name);
-  const code = name.match(/bv(\\d{1,2})/);
+  const code = name.match(/bv(\d{1,2})/);
   if (code) {
     const number = Number(code[1]);
     const band = BELV_RANK_BANDS.find(([, first, last]) => number >= first && number <= last);
