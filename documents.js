@@ -538,7 +538,9 @@ function documentPanel(type, guild = null) {
     .setTitle(`${type.emoji} ${type.title}`)
     .setDescription(
       type.approval
-        ? 'Az adatlap kitöltése után a dokumentum a **Vezetőség** jóváhagyására kerül. Jóváhagyás után a NexaBot teszi közzé ebben a csatornában.'
+        ? belvApprovalRoleExists(guild)
+          ? 'Az adatlap kitöltése után a dokumentum a **BELVÉDELMI VEZETŐSÉG** jóváhagyására kerül. Jóváhagyás után a NexaBot teszi közzé ebben a csatornában.'
+          : 'Az adatlap kitöltése után a dokumentum a **Vezetőség** jóváhagyására kerül. Jóváhagyás után a NexaBot teszi közzé ebben a csatornában.'
         : 'Töltsd ki az adatlapot. A kész bejegyzést a NexaBot teszi közzé ebben a csatornában.'
     )
     .addFields(
@@ -633,7 +635,7 @@ function documentEmbed(type, interaction, caseNumber, status, targetUserId = nul
   return baseEmbed(
     status === 'pending' ? `⏳ Jóváhagyásra vár • ${type.title}` : `${type.emoji} ${type.title}`,
     status === 'pending'
-      ? 'A dokumentum a **Vezetőség** vagy egy adminisztrátor döntésére vár.'
+      ? 'A dokumentum a kijelölt vezetői rang jóváhagyására vár.'
       : 'Hivatalos bejegyzés a NexaBot dokumentációs rendszeréből.',
     status === 'pending' ? COLORS.warning : COLORS.primary
   ).addFields(
