@@ -22,7 +22,7 @@ function hubPayload(guild, settings) {
       { name: '03 • Iratkezelés', value: 'Játékosadatlap, személyek, járművek, ügyiratok, RP-körözések, szolgálati napló és Belv-iratsablonok.', inline: false },
       { name: 'Hozzáférés', value: `${(settings.members || []).length} felvett MDT-ügyintéző + fő owner`, inline: true },
       { name: 'Állományi nézet', value: settings.staffRoleId ? `<@&${settings.staffRoleId}> • közzétett iratok` : 'A fő owner az Owner Centerben választ állományi rangot.', inline: true },
-      { name: 'Vezetői döntés', value: 'A jóváhagyás és a hozzáférések kezelése a fő owner feladata.', inline: false })
+      { name: 'Vezetői döntés', value: 'Iratot elfogadni vagy elutasítani kizárólag a 🏛️ | BELVÉDELMI VEZETŐSÉG ranggal lehet. Az MDT-hozzáférések kezelése továbbra is a fő owner feladata.', inline: false })
     .setFooter({ text: MARKER }).setTimestamp();
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('mdt_hub:script').setLabel('Saját betöltő').setStyle(ButtonStyle.Primary),
@@ -36,8 +36,8 @@ function helpPayload() {
     .setDescription('**A közzétett nyilvántartás az állomány közös RP-munkáját támogatja.**')
     .addFields(
       { name: 'Személyes használat', value: 'A fő owner a Discord-ID-det és a saját Roblox-ID-det párosítja. Saját kódot kérj; a másik tag kódja nem a te fiókodhoz tartozik.' },
-      { name: 'Jogosultságok', value: 'A felvett MDT-tag olvashat és rögzíthet, saját iratát módosíthatja vagy lezárhatja. Más tag iratát és a vezetői jóváhagyást a fő owner kezeli. Az állományi rang Discord-olvasást ad.' },
-      { name: 'Ügyiratok és körözések', value: 'Beküldés után vezetői ellenőrzésre kerülnek. Jóváhagyás előtt a panelben a beküldő és a fő owner láthatja. A közzétett irat az állomány célcsatornájában jelenik meg.' },
+      { name: 'Jogosultságok', value: 'A felvett MDT-tag olvashat és rögzíthet, saját iratát módosíthatja vagy lezárhatja. Elfogadni vagy elutasítani kizárólag a 🏛️ | BELVÉDELMI VEZETŐSÉG ranggal lehet; az MDT-hozzáférések kezelése a fő owner feladata. Az állományi rang Discord-olvasást ad.' },
+      { name: 'Ügyiratok és körözések', value: 'Beküldés után vezetői ellenőrzésre kerülnek. Jóváhagyás előtt a panelben a beküldő, a fő owner és a BELVÉDELMI VEZETŐSÉG rang viselői láthatják. A közzétett irat az állomány célcsatornájában jelenik meg.' },
       { name: 'Nyilvántartási rend', value: 'Pontos Roblox-ID-vel kapcsolj személyadatot, ügyet és RP-körözést. Valós személyes adat helyett RP-adatot használj. A régi Discord-üzenetek nem importálódnak automatikusan.' },
       { name: 'Játékadat', value: 'A játék körözési jelzését a megnyitott rendőrségi listából olvassa a panel, ha felismeri. Hiányzó jelzés: ismeretlen. Saját RP-körözés felvitele nem módosítja a játékot.' },
       { name: 'Gyorsparancsok', value: '`/mdt script` • `/mdt belepes` • `/mdt allapot` • `/mdt kijelentkezes`\n**F6:** panel nyitása / elrejtése.' },
