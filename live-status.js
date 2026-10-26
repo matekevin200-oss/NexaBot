@@ -2,6 +2,7 @@
 // Loaded with `node -r ./live-status.js index.js` so it can coexist with the packed runtime.
 const { Client, Events, ChannelType, EmbedBuilder, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
 const { Pool } = require('pg');
+const { isBotOwner } = require('./config');
 const { randomInt } = require('node:crypto');
 
 const PANEL_FOOTERS = {
@@ -20,6 +21,7 @@ const consumedMemberInfoInteractions = new WeakSet();
 const consumedAfkInteractions = new WeakSet();
 const consumedAfkMessages = new WeakSet();
 const consumedDiceInteractions = new WeakSet();
+const consumedBelvPermissionInteractions = new WeakSet();
 const afkMembers = new Map();
 let pool;
 
@@ -330,6 +332,20 @@ const afkOffCommand = new SlashCommandBuilder()
   .setDMPermission(false)
   .toJSON();
 
+const belvPermissionsCommand = new SlashCommandBuilder()
+  .setName('belv-jogok')
+  .setNameLocalizations({ 'en-US': 'belv-permissions', 'en-GB': 'belv-permissions' })
+  .setDescription('Ellenőrzi vagy beállítja a BELV rendfokozati csatornajogokat.')
+  .setDescriptionLocalizations({ 'en-US': 'Preview or apply BELV rank-based channel permissions.', 'en-GB': 'Preview or apply BELV rank-based channel permissions.' })
+  .setDMPermission(false)
+  .addBooleanOption((option) => option
+    .setName('apply')
+    .setNameLocalizations({ 'hu': 'alkalmaz' })
+    .setDescription('Igaz értékkel alkalmazza a csatornajogokat; hamis értékkel csak ellenőriz.')
+    .setDescriptionLocalizations({ 'en-US': 'True applies permissions; false only previews them.', 'en-GB': 'True applies permissions; false only previews them.' })
+    .setRequired(true))
+  .toJSON();
+
 const diceCommand = new SlashCommandBuilder()
   .setName('kocka')
   .setNameLocalizations({ 'en-US': 'dice', 'en-GB': 'dice' })
@@ -400,6 +416,149 @@ async function ensureDiceCommand(client) {
     }
   }
   console.info('A /kocka (/dice) parancs regisztrálva: ' + registered + '/' + client.guilds.cache.size + ' szerver.');
+}
+
+const BELV_RANK_BANDS = [
+  ['chief', 1, 1, 'Főigazgató'], ['chiefDeputy', 2, 2, 'Főigazgató-helyettes'],
+  ['director', 3, 3, 'Igazgató'], ['directorDeputy', 4, 9, 'Igazgatóhelyettes'],
+  ['departmentChief', 10, 14, 'Főosztályvezető'], ['operationsLead', 15, 19, 'Műveleti vezető'],
+  ['inspectionLead', 20, 24, 'Ellenőrzési vezető'], ['chiefInspector', 25, 34, 'Főellenőr'],
+  ['leadOfficer', 35, 39, 'Vezető tiszt'], ['officer', 40, 49, 'Belvédelmi tiszt'],
+  ['leadAgent', 50, 59, 'Vezető ügynök'], ['specialAgent', 60, 69, 'Különleges ügynök'],
+  ['agent', 70, 89, 'Belvédelmi ügynök'], ['candidate', 90, 99, 'Belvédelmi jelölt']
+];
+const BELV_TOP = ['chief', 'chiefDeputy', 'director', 'directorDeputy'];
+const BELV_CHANNEL_RULES = [
+  ['utasítások', BELV_TOP], ['körlevelek', BELV_TOP],
+  ['belső-vizsgálatok', BELV_TOP.concat(['departmentChief', 'inspectionLead', 'chiefInspector'])],
+  ['heti-ellenőrzési-feladat', BELV_TOP.concat(['departmentChief'])],
+  ['ügyiratok', BELV_TOP.concat(['departmentChief', 'operationsLead', 'inspectionLead', 'chiefInspector'])],
+  ['vizsgálati-jelentések', BELV_TOP.concat(['departmentChief', 'inspectionLead', 'chiefInspector'])],
+  ['feljegyzések-megrovások', ['departmentChief', 'chiefInspector', 'leadOfficer']],
+  ['intézkedési-jelentések', BELV_TOP.concat(['operationsLead', 'leadOfficer', 'officer', 'leadAgent', 'specialAgent', 'agent', 'candidate'])],
+  ['helyszíni-intézkedések', BELV_TOP.concat(['operationsLead', 'leadOfficer', 'officer', 'specialAgent', 'agent'])],
+  ['rendkívüli-események', BELV_TOP.concat(['operationsLead', 'leadOfficer', 'specialAgent'])],
+  ['jegyzőkönyv', BELV_TOP.concat(['inspectionLead', 'chiefInspector'])],
+  ['fegyelmi-eljárások', BELV_TOP.concat(['inspectionLead'])],
+  ['igazoltatások', BELV_TOP.concat(['officer', 'leadAgent', 'specialAgent', 'agent', 'candidate'])],
+  ['közúti-ellenőrzések', BELV_TOP.concat(['officer', 'leadAgent', 'agent', 'candidate'])],
+  ['előállítások', BELV_TOP.concat(['officer', 'leadAgent', 'agent'])]
+];
+
+function belvTierForRole(role) {
+  const name = normalize(role.name);
+  const code = name.match(/bv(\\d{1,2})/);
+  if (code) {
+    const number = Number(code[1]);
+    const band = BELV_RANK_BANDS.find(([, first, last]) => number >= first && number <= last);
+    if (band) return band[0];
+  }
+  const aliases = [
+    ['chiefDeputy', 'foigazgatohelyettes'], ['directorDeputy', 'igazgatohelyettes'],
+    ['departmentChief', 'foosztalyvezeto'], ['operationsLead', 'muveletivezeto'],
+    ['inspectionLead', 'ellenorzesivezeto'], ['chiefInspector', 'foellenor'],
+    ['leadOfficer', 'vezetotiszt'], ['specialAgent', 'kulonlegesugynok'],
+    ['leadAgent', 'vezetougy nok'.replace(/ /g, '')], ['candidate', 'belvedelmijelolt'],
+    ['officer', 'belvedelmitiszt'], ['agent', 'belvedelmiugynok'],
+    ['director', 'igazgato'], ['chief', 'foigazgato']
+  ];
+  return aliases.find(([, alias]) => name.includes(alias))?.[0] || null;
+}
+
+async function getBelvGuildId() {
+  const configured = String(process.env.BELV_MDT_GUILD_ID || '').trim();
+  if (/^\\d{16,22}$/.test(configured)) return configured;
+  const db = database();
+  if (!db) return null;
+  try {
+    const result = await db.query("SELECT guild_id FROM nexabot_mdt_scope WHERE scope_key='belv' LIMIT 1");
+    return result.rows[0]?.guild_id ? String(result.rows[0].guild_id) : null;
+  } catch (error) {
+    console.error('A BELV-szerver azonosítóját nem sikerült lekérni:', error.message);
+    return null;
+  }
+}
+
+async function ensureBelvPermissionsCommand(client) {
+  const guildId = await getBelvGuildId();
+  if (!guildId || !client.guilds.cache.has(guildId)) {
+    console.error('A BELV rendfokozati parancs kihagyva: a BELV szerver nincs beállítva vagy a bot nem tagja.');
+    return;
+  }
+  try {
+    await client.application.commands.create(belvPermissionsCommand, guildId);
+    console.info('A /belv-jogok parancs regisztrálva a BELV szerveren.');
+  } catch (error) {
+    console.error('A /belv-jogok parancs regisztrálása nem sikerült:', error.message);
+  }
+}
+
+async function handleBelvPermissionsCommand(interaction) {
+  if (!interaction.inGuild()) return interaction.reply({ content: '❌ Ezt a parancsot a BELV szerveren használd.', flags: MessageFlags.Ephemeral });
+  if (!isBotOwner(interaction.user.id)) return interaction.reply({ content: '❌ Ezt csak a NEXA fő tulajdonosa használhatja.', flags: MessageFlags.Ephemeral });
+  const targetGuildId = await getBelvGuildId();
+  if (!targetGuildId || interaction.guildId !== targetGuildId) return interaction.reply({ content: '❌ Ez a parancs kizárólag a beállított BELV szerveren használható.', flags: MessageFlags.Ephemeral });
+  const applyOption = interaction.options.data?.find((option) => option.name === 'apply' || option.name === 'alkalmaz');
+  const shouldApply = applyOption?.value === true;
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  try {
+    await interaction.guild.channels.fetch();
+    await interaction.guild.roles.fetch();
+    const roleGroups = new Map(BELV_RANK_BANDS.map(([key]) => [key, []]));
+    for (const role of interaction.guild.roles.cache.values()) {
+      if (role.id === interaction.guild.id || role.managed) continue;
+      const tier = belvTierForRole(role);
+      if (tier) roleGroups.get(tier).push(role);
+    }
+    const missingRoles = BELV_RANK_BANDS.filter(([key]) => !roleGroups.get(key).length).map(([, , , label]) => label);
+    const matchedChannels = [];
+    const missingChannels = [];
+    for (const [channelName, tiers] of BELV_CHANNEL_RULES) {
+      const matches = [...interaction.guild.channels.cache.values()].filter((channel) =>
+        channel.isTextBased?.() && !channel.isThread?.() && normalize(channel.name) === normalize(channelName)
+      );
+      if (!matches.length) missingChannels.push(channelName);
+      for (const channel of matches) matchedChannels.push({ channel, tiers });
+    }
+    const summary = '📋 **BELV rendfokozati jogok ellenőrzése**\n' +
+      'Felismert rangcsoportok: **' + (BELV_RANK_BANDS.length - missingRoles.length) + '/' + BELV_RANK_BANDS.length + '**\n' +
+      'Felismert csatornák: **' + matchedChannels.length + '/' + BELV_CHANNEL_RULES.length + '**\n' +
+      (missingRoles.length ? 'Hiányzó rangok: ' + missingRoles.join(', ') + '\n' : '') +
+      (missingChannels.length ? 'Hiányzó csatornák: ' + missingChannels.join(', ') + '\n' : '');
+    if (!matchedChannels.length) return interaction.editReply('❌ Nem találtam meg a megadott BELV-csatornákat. Ellenőrizd a csatornaneveket.');
+    if (!shouldApply) return interaction.editReply(summary + '\nEllenőrző mód: semmit nem módosítottam. Ha a lista megfelelő, futtasd újra az apply opcióval.');
+    if (missingRoles.length || missingChannels.length) return interaction.editReply(summary + '\n❌ Nem alkalmaztam a beállítást, mert hiányos a rang- vagy csatornalista.');
+    const botMember = interaction.guild.members.me || await interaction.guild.members.fetchMe();
+    if (!botMember.permissions.has(PermissionFlagsBits.ManageChannels)) return interaction.editReply('❌ A Nexának **Csatornák kezelése** jogosultság kell. Nem változtattam semmin.');
+    const changedRoleIds = new Map();
+    for (const [key, roles] of roleGroups) for (const role of roles) changedRoleIds.set(role.id, key);
+    const botRoleIds = new Set(botMember.roles.cache.keys());
+    let changedChannels = 0;
+    for (const { channel, tiers } of matchedChannels) {
+      const allowedRoleIds = new Set(tiers.flatMap((tier) => roleGroups.get(tier).map((role) => role.id)));
+      await channel.permissionOverwrites.edit(interaction.guild.roles.everyone.id, { SendMessages: false }, { reason: 'BELV rendfokozati írási jogosultságok' });
+      for (const overwrite of [...channel.permissionOverwrites.cache.values()]) {
+        if (overwrite.id === interaction.guild.id || overwrite.type === 0 && allowedRoleIds.has(overwrite.id) || overwrite.type === 0 && botRoleIds.has(overwrite.id)) continue;
+        if (permissionValue(overwrite, 'SendMessages') !== true) continue;
+        if (overwrite.type === 0) {
+          const role = interaction.guild.roles.cache.get(overwrite.id);
+          if (role?.managed) continue;
+          await channel.permissionOverwrites.edit(overwrite.id, { SendMessages: false }, { reason: 'BELV rendfokozati jog: nem engedélyezett rang' });
+        } else if (overwrite.type === 1) {
+          const member = await interaction.guild.members.fetch(overwrite.id).catch(() => null);
+          if (member?.user.bot || [...(member?.roles.cache.keys() || [])].some((id) => allowedRoleIds.has(id))) continue;
+          await channel.permissionOverwrites.edit(overwrite.id, { SendMessages: false }, { reason: 'BELV rendfokozati jog: nem engedélyezett egyéni kivétel' });
+        }
+      }
+      for (const roleId of allowedRoleIds) await channel.permissionOverwrites.edit(roleId, { SendMessages: true }, { reason: 'BELV rendfokozati jog: engedélyezett rang' });
+      await channel.permissionOverwrites.edit(botMember.id, { SendMessages: true }, { type: 1, reason: 'NEXA botműködés fenntartása a BELV-csatornákban' }).catch(() => null);
+      changedChannels += 1;
+    }
+    return interaction.editReply(summary + '\n✅ Beállítottam a **' + changedChannels + '** felsorolt BELV-csatorna írási jogait. Az olvasási jogokat nem módosítottam.');
+  } catch (error) {
+    console.error('A BELV rendfokozati jogok szinkronja nem sikerült:', error.message);
+    return interaction.editReply('❌ Nem sikerült alkalmazni a jogosultságokat. Ellenőrizd a Nexa csatornakezelési jogát. Ha a frissítés megszakadt, nézd át a csatornákat.');
+  }
 }
 
 async function ensureAfkCommand(client) {
@@ -635,6 +794,11 @@ function registerDiceCommand(client) {
   timer.unref();
 }
 
+function registerBelvPermissionsCommand(client) {
+  const timer = setTimeout(() => ensureBelvPermissionsCommand(client), 20_000);
+  timer.unref();
+}
+
 const originalLogin = Client.prototype.login;
 Client.prototype.login = function patchedLogin(...args) {
   if (!watchedClients.has(this)) {
@@ -645,6 +809,7 @@ Client.prototype.login = function patchedLogin(...args) {
       registerMemberInfoCommand(readyClient);
       registerAfkCommand(readyClient);
       registerDiceCommand(readyClient);
+      registerBelvPermissionsCommand(readyClient);
     });
   }
   return originalLogin.apply(this, args);
@@ -697,6 +862,15 @@ Client.prototype.on = function patchedOn(eventName, listener) {
       if (consumedDiceInteractions.has(interaction)) return;
       consumedDiceInteractions.add(interaction);
       return handleDiceCommand(interaction);
+    }
+    if (interaction.isChatInputCommand?.() && ['belv-jogok', 'belv-permissions'].includes(interaction.commandName)) {
+      if (consumedBelvPermissionInteractions.has(interaction)) return;
+      consumedBelvPermissionInteractions.add(interaction);
+      return handleBelvPermissionsCommand(interaction).catch((error) => {
+        console.error('A /belv-jogok parancs nem sikerült:', error.message);
+        if (interaction.replied || interaction.deferred) return interaction.followUp({ content: '❌ A BELV jogosultságellenőrzés hibával leállt.', flags: MessageFlags.Ephemeral });
+        return interaction.reply({ content: '❌ A BELV jogosultságellenőrzés hibával leállt.', flags: MessageFlags.Ephemeral });
+      });
     }
     return listener.call(client, interaction);
   });
