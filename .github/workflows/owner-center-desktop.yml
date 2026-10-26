@@ -1,0 +1,44 @@
+name: Build NEXA Owner Center for Windows
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'owner-app/**'
+      - '.github/workflows/owner-center-desktop.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: owner-app
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build installer and portable app
+        run: npm run dist:win
+
+      - name: Publish downloadable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_NUMBER: ${{ github.run_number }}
+          TARGET_SHA: ${{ github.sha }}
+        shell: pwsh
+        run: |
+          $assets = Get-ChildItem -Path "dist/*.exe" | ForEach-Object { $_.FullName }
+          if (-not $assets) { throw "No Windows executables were produced." }
+          gh release create "owner-center-v1.0.$env:RUN_NUMBER" @assets --title "NEXA Owner Center 1.0.$env:RUN_NUMBER" --notes-file "RELEASE.md" --target $env:TARGET_SHA
