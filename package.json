@@ -6,7 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "start": "node index.js",
+    "start": "node -r ./live-status.js index.js",
     "test": "node test/run-checks.js"
   },
   "dependencies": {
