@@ -6,6 +6,7 @@ const { recordAudit, recordError } = require('./telemetry');
 const { localizeCommandJson } = require('./command-localizations');
 
 const PREFIX = '/api/mdt/v1';
+const BELV_APPROVAL_ROLE_NAME = 'belvedelmi vezetoseg';
 const CODE_MS = 10 * 60 * 1000;
 const SESSION_MS = 6 * 60 * 60 * 1000;
 const windows = new Map();
@@ -41,6 +42,13 @@ const digest = (value) => crypto.createHash('sha256').update(value).digest('hex'
 const sid = (value) => /^\d{16,22}$/.test(String(value || '')) ? String(value) : null;
 const has = (member, bit) => Boolean(member?.permissions?.has(bit));
 const admin = (member) => isBotOwner(member?.id);
+function hasBelvApprovalRole(member) {
+  return Boolean(member?.roles?.cache?.some((role) => String(role.name || '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '') === BELV_APPROVAL_ROLE_NAME));
+}
 function requireDatabase() { if (!isPersistentStore()) fail(503, 'Az MDT-hez működő PostgreSQL-adatbázis szükséges.'); }
 async function query(sql, values = []) {
   requireDatabase();
@@ -224,7 +232,7 @@ function assertAccess(guild, member, settings) {
   if (owner.blacklistedGuilds?.includes(guild.id) || owner.blacklistedUsers?.includes(member?.id)) fail(403, 'Ez a szerver vagy fiók le van tiltva a NEXA rendszerben.');
   if (owner.maintenance && !isBotOwner(member?.id)) fail(503, 'A NEXA jelenleg karbantartás alatt áll.');
   if (!settings.enabled) fail(403, 'Az MDT ezen a Discord-szerveren nincs bekapcsolva.');
-  if (!member || !isBotOwner(member.id) && !robloxIdsFor(settings, member.id).length) fail(403, 'Nincs MDT-hozzáférésed. A fő ownernek hozzá kell adnia a Discord-ID-det és a saját Roblox-ID-det.');
+  if (!member || !isBotOwner(member.id) && !hasBelvApprovalRole(member) && !robloxIdsFor(settings, member.id).length) fail(403, 'Nincs MDT-hozzáférésed. A fő ownernek hozzá kell adnia a Discord-ID-det és a saját Roblox-ID-det, vagy viselned kell a BELVÉDELMI VEZETŐSÉG rangot.');
 }
 async function freshMember(guild, userId) {
   return guild.members.fetch({ user: userId, force: true }).catch(() => null);
@@ -241,7 +249,7 @@ function definitions(guild, member, settings) {
   const generic = TYPES.map((type) => ({ ...type, channelId: settings.channelIds?.[type.key] || settings.defaultChannelId, category: type.key }));
   const documents = allDocumentTypes(guild).filter((type) => {
     const rule = documentRule(guild, type);
-    return admin(member) || robloxIdsFor(settings, member.id).length || rule.accessRoleId && member.roles.cache.has(rule.accessRoleId);
+    return admin(member) || hasBelvApprovalRole(member) || robloxIdsFor(settings, member.id).length || rule.accessRoleId && member.roles.cache.has(rule.accessRoleId);
   }).map((type) => ({ ...type, key: `doc:${type.key}`, channelId: findDocumentChannel(guild, type)?.id, category: 'document', documentKey: type.key }));
   return [...generic, ...documents].filter((type) => {
     const channel = textChannel(guild, type.channelId);
@@ -276,7 +284,7 @@ function publicTemplate(type) {
 function publicRecord(row, ctx) {
   const manager = leader(ctx.member, ctx.settings);
   const owned = row.created_by === ctx.member.id;
-  return { id: String(row.id), key: row.template_key, title: row.title, fields: row.fields, status: row.status, revision: row.revision, createdBy: row.created_by, updatedBy: row.updated_by, createdAt: row.created_at, updatedAt: row.updated_at, discordState: row.discord_state, discordUrl: row.discord_message_id ? `https://discord.com/channels/${row.guild_id}/${row.discord_channel_id}/${row.discord_message_id}` : row.review_message_id ? `https://discord.com/channels/${row.guild_id}/${row.review_channel_id}/${row.review_message_id}` : null, canEdit: (owned || manager) && !['archived', 'published'].includes(row.status) || (owned || manager) && row.status === 'published' && !row.approval_required, canArchive: (owned || manager) && row.status !== 'archived', canReview: manager && row.status === 'pending', canSync: owned || manager };
+  return { id: String(row.id), key: row.template_key, title: row.title, fields: row.fields, status: row.status, revision: row.revision, createdBy: row.created_by, updatedBy: row.updated_by, createdAt: row.created_at, updatedAt: row.updated_at, discordState: row.discord_state, discordUrl: row.discord_message_id ? `https://discord.com/channels/${row.guild_id}/${row.discord_channel_id}/${row.discord_message_id}` : row.review_message_id ? `https://discord.com/channels/${row.guild_id}/${row.review_channel_id}/${row.review_message_id}` : null, canEdit: (owned || manager) && !['archived', 'published'].includes(row.status) || (owned || manager) && row.status === 'published' && !row.approval_required, canArchive: (owned || manager) && row.status !== 'archived', canReview: hasBelvApprovalRole(ctx.member) && row.status === 'pending', canSync: owned || manager };
 }
 async function getRecord(ctx, id) {
   if (!/^\d{1,20}$/.test(String(id))) fail(400, 'Érvénytelen MDT-azonosító.');
@@ -287,7 +295,7 @@ async function getRecord(ctx, id) {
   return row;
 }
 function canReadRecord(ctx, row) {
-  return leader(ctx.member, ctx.settings) || row.created_by === ctx.member.id || row.status === 'published' || row.status === 'archived' && (!row.approval_required || Boolean(row.discord_message_id));
+  return leader(ctx.member, ctx.settings) || hasBelvApprovalRole(ctx.member) || row.created_by === ctx.member.id || row.status === 'published' || row.status === 'archived' && (!row.approval_required || Boolean(row.discord_message_id));
 }
 function assertEdit(ctx, row) {
   if (row.created_by !== ctx.member.id && !leader(ctx.member, ctx.settings)) fail(403, 'Csak a saját iratodat módosíthatod; más iratát a fő owner kezelheti.');
@@ -380,7 +388,7 @@ async function mutateRecord(ctx, id, body, action) {
     if (!Number.isInteger(body.revision) || body.revision !== row.revision) fail(409, 'Ezt az iratot időközben módosították. Frissítsd az adatlapot.');
     let fields = row.fields, title = row.title, status = row.status, reviewedBy = row.reviewed_by, reason = row.review_reason;
     if (action === 'review') {
-      if (!leader(ctx.member, ctx.settings)) fail(403, 'Az MDT-iratokat csak a fő owner hagyhatja jóvá.');
+      if (!hasBelvApprovalRole(ctx.member)) fail(403, 'Az MDT-iratokat kizárólag a BELVÉDELMI VEZETŐSÉG rang fogadhatja el vagy utasíthatja el.');
       if (row.status !== 'pending') fail(409, 'Ez az irat már nem vár jóváhagyásra.');
       if (!['approve', 'reject'].includes(body.decision)) fail(400, 'Érvénytelen döntés.');
       status = body.decision === 'approve' ? 'published' : 'rejected';
