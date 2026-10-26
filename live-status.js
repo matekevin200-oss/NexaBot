@@ -2,7 +2,7 @@
 // Loaded with `node -r ./live-status.js index.js` so it can coexist with the packed runtime.
 const { Client, Events, ChannelType, EmbedBuilder, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
 const { Pool } = require('pg');
-const { isBotOwner } = require('./config');
+const { getBotOwnerId, isBotOwner } = require('./config');
 const { randomInt } = require('node:crypto');
 
 const PANEL_FOOTERS = {
@@ -510,19 +510,30 @@ async function handleBelvPermissionsCommand(interaction) {
       const tier = belvTierForRole(role);
       if (tier) roleGroups.get(tier).push(role);
     }
-    const missingRoles = BELV_RANK_BANDS.filter(([key]) => !roleGroups.get(key).length).map(([, , , label]) => label);
+    const chiefUserIds = new Set();
+    if (!roleGroups.get('chief').length) {
+      const botOwnerId = getBotOwnerId();
+      const botOwner = botOwnerId ? await interaction.guild.members.fetch(botOwnerId).catch(() => null) : null;
+      if (botOwner) chiefUserIds.add(botOwner.id);
+      if (interaction.guild.ownerId) chiefUserIds.add(interaction.guild.ownerId);
+    }
+    const missingRoles = BELV_RANK_BANDS
+      .filter(([key]) => !roleGroups.get(key).length && !(key === 'chief' && chiefUserIds.size))
+      .map(([, , , label]) => label);
     const matchedChannels = [];
+    const foundChannelNames = new Set();
     const missingChannels = [];
     for (const [channelName, tiers] of BELV_CHANNEL_RULES) {
       const matches = [...interaction.guild.channels.cache.values()].filter((channel) =>
         channel.isTextBased?.() && !channel.isThread?.() && normalize(channel.name) === normalize(channelName)
       );
       if (!matches.length) missingChannels.push(channelName);
+      else foundChannelNames.add(normalize(channelName));
       for (const channel of matches) matchedChannels.push({ channel, tiers });
     }
     const summary = '📋 **BELV rendfokozati jogok ellenőrzése**\n' +
       'Felismert rangcsoportok: **' + (BELV_RANK_BANDS.length - missingRoles.length) + '/' + BELV_RANK_BANDS.length + '**\n' +
-      'Felismert csatornák: **' + matchedChannels.length + '/' + BELV_CHANNEL_RULES.length + '**\n' +
+      'Felismert csatornanevek: **' + foundChannelNames.size + '/' + new Set(BELV_CHANNEL_RULES.map(([name]) => normalize(name))).size + '** (' + matchedChannels.length + ' tényleges csatorna)\n' +
       (missingRoles.length ? 'Hiányzó rangok: ' + missingRoles.join(', ') + '\n' : '') +
       (missingChannels.length ? 'Hiányzó csatornák: ' + missingChannels.join(', ') + '\n' : '');
     if (!matchedChannels.length) return interaction.editReply('❌ Nem találtam meg a megadott BELV-csatornákat. Ellenőrizd a csatornaneveket.');
@@ -551,6 +562,11 @@ async function handleBelvPermissionsCommand(interaction) {
         }
       }
       for (const roleId of allowedRoleIds) await channel.permissionOverwrites.edit(roleId, { SendMessages: true }, { reason: 'BELV rendfokozati jog: engedélyezett rang' });
+      if (tiers.includes('chief')) {
+        for (const userId of chiefUserIds) {
+          if (userId !== botMember.id) await channel.permissionOverwrites.edit(userId, { SendMessages: true }, { type: 1, reason: 'BELV rendfokozati jog: Főigazgató tulajdonosi jogosultság' }).catch(() => null);
+        }
+      }
       await channel.permissionOverwrites.edit(botMember.id, { SendMessages: true }, { type: 1, reason: 'NEXA botműködés fenntartása a BELV-csatornákban' }).catch(() => null);
       changedChannels += 1;
     }
