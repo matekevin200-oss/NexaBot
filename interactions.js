@@ -105,7 +105,7 @@ const { handleEngagementCommand, handleVerificationButton } = require('./engagem
 const { handleApplicationButton, handleApplicationModal } = require('./applications');
 const { handleChronoGuardCommand } = require('./chronoguard');
 const { handleAegisCommand } = require('./aegis');
-const { handleMdtCommand, handleMdtButton } = require('./belv-mdt');
+const { handleMdtCommand, handleMdtButton, BELV_GUILD_ID } = require('./belv-mdt');
 const { handleCrownCityCommand, handleCrownSessionButton, handleCrownSessionModal, crownStaffRoleIds } = require('./crown-city');
 const { handleDiscordSupportInteraction } = require('./web-support');
 const { canonicalCommandName } = require('./command-localizations');
@@ -1081,6 +1081,7 @@ async function handleModerationSubmit(interaction) {
     description = `${target} • ${role}`;
     color = action === 'role_add' ? COLORS.success : COLORS.warning;
   } else if (action === 'nickname') {
+    if (interaction.guildId === BELV_GUILD_ID && isBotOwner(target.id)) return interaction.editReply('🔒 A NEXA a Belv szerveren nem módosítja a bot tulajdonosának becenevét.');
     if (!target.manageable) return interaction.editReply('❌ A bot rangsorrend miatt nem tudja módosítani ezt a tagot.');
     const nickname = getText(interaction, 'mod_nickname');
     await target.setNickname(nickname, `${reason} • ${interaction.user.tag}`);
