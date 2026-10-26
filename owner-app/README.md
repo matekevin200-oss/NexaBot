@@ -1,12 +1,16 @@
 # NEXA Owner Center for Windows
 
-A small Windows desktop client that opens only the NEXA Owner Center.
+A desktop control room for the complete NEXA Bot Owner Center.
 
-## Access
+## What is inside
 
-Sign in with Discord inside the app. The NEXA server checks the signed-in Discord account against the existing Owner Center access list. Only accounts with Owner Center access can use the dashboard. Adding or removing an account remains controlled from the existing Owner Center.
+- A custom searchable app home with quick links to Owner Center areas.
+- Native desktop navigation and keyboard shortcuts.
+- Full access to the existing web Owner Center for server, subscription, support, owner access, AI access, audit and system settings.
+- The server remains the authority for Discord sign-in and Owner Center permissions. Accounts without Owner Center access cannot open its management pages.
+- App-only home and navigation; management actions continue to use the existing secure Owner Center routes and database.
 
-The desktop client contains no Discord bot token, database password, or copied owner credentials. Downloading the installer does not grant access.
+The app does not store a Discord bot token or owner password. It needs an internet connection.
 
 ## Build
 
@@ -22,4 +26,4 @@ The Windows build creates an installer and a portable executable in `dist/`.
 
 ## Downloads
 
-The latest Windows installer and portable executable are published on the [NEXA Bot GitHub Releases page](https://github.com/matekevin200-oss/NexaBot/releases/latest).
+Get the latest installer or portable app from the [NEXA Bot GitHub Releases page](https://github.com/matekevin200-oss/NexaBot/releases/latest).
