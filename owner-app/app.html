@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:;">
+  <title>NEXA Owner Center</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="#" data-home>
+        <span class="brand-mark">N</span>
+        <span><strong>NEXA</strong><small>OWNER CENTER</small></span>
+      </a>
+      <label class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input id="search" type="search" placeholder="Keresés a kezelőben…" autocomplete="off">
+        <kbd>Ctrl K</kbd>
+      </label>
+      <div class="nav-caption">VEZÉRLŐPULT</div>
+      <button class="nav-item active" data-section="overview"><span>◈</span> Áttekintés</button>
+      <button class="nav-item" data-route="/owner#servers"><span>▦</span> Szerverek</button>
+      <button class="nav-item" data-route="/owner#packages"><span>✦</span> Előfizetések</button>
+      <div class="nav-caption nav-caption-tools">OWNER ESZKÖZÖK</div>
+      <button class="nav-item" data-route="/owner/support"><span>◷</span> Support műveletek</button>
+      <button class="nav-item" data-route="/owner#access"><span>♙</span> Owner hozzáférések</button>
+      <button class="nav-item" data-route="/owner/ai-access"><span>✳</span> AI-hozzáférések</button>
+      <button class="nav-item" data-route="/owner#audit"><span>≋</span> Auditnapló</button>
+      <button class="nav-item" data-route="/owner#system"><span>⚙</span> Rendszerállapot</button>
+      <div class="sidebar-bottom">
+        <div class="secure-pill"><i></i><span>Discord belépés<br><b>Szerver által ellenőrizve</b></span></div>
+        <div class="app-version">NEXA DESKTOP <span>1.1.0</span></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div><span class="crumb">NEXA</span><span class="slash">/</span><strong>Owner Center</strong></div>
+        <div class="top-actions">
+          <span class="connection"><i></i> Biztonságos kapcsolat</span>
+          <button class="icon-button" id="refresh" title="Frissítés">↻</button>
+          <button class="user-button" id="open-overview"><span class="avatar">N</span><span>Owner felület</span><span class="chevron">⌄</span></button>
+        </div>
+      </header>
+
+      <section class="content" id="overview">
+        <div class="welcome">
+          <div class="welcome-copy">
+            <div class="eyebrow"><span class="pulse"></span> TULAJDONOSI VEZÉRLŐPULT</div>
+            <h1>Minden fontos eszköz<br><em>egy helyen.</em></h1>
+            <p>Válassz egy területet, és kezeld a NexaBotot az Owner Center teljes webes felületén.</p>
+            <button class="primary-button" data-route="/owner#overview">Belépés az Owner Centerbe <span>→</span></button>
+          </div>
+          <div class="welcome-art" aria-hidden="true">
+            <div class="orb orb-one"></div><div class="orb orb-two"></div><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
+            <div class="core">N</div><span class="orbit-label label-one">OWNER</span><span class="orbit-label label-two">CONTROL</span>
+          </div>
+        </div>
+
+        <div class="section-heading">
+          <div><div class="eyebrow">GYORS ELÉRÉS</div><h2>Kezelési területek</h2></div>
+          <span class="section-note">A beállítások mentése az Owner Center szerverén történik.</span>
+        </div>
+
+        <div class="cards" id="cards">
+          <button class="tool-card featured" data-route="/owner#servers" data-search="szerver server guild telepítés modul beállítás">
+            <span class="card-icon green">▦</span><span class="card-arrow">↗</span><small>RENDSZER</small><strong>Szerverek kezelése</strong><span class="card-description">Szerverek, modulok és kapcsolódó beállítások áttekintése.</span><span class="card-link">Megnyitás <b>→</b></span>
+          </button>
+          <button class="tool-card" data-route="/owner/support" data-search="support ticket ügyfélszolgálat">
+            <span class="card-icon blue">◷</span><span class="card-arrow">↗</span><small>ÜGYFÉLSZOLGÁLAT</small><strong>Support műveletek</strong><span class="card-description">Jegyek, ügyek és támogatási folyamatok kezelése.</span><span class="card-link">Megnyitás <b>→</b></span>
+          </button>
+          <button class="tool-card" data-route="/owner#packages" data-search="előfizetés csomag subscription">
+            <span class="card-icon violet">✦</span><span class="card-arrow">↗</span><small>FIZETÉSEK</small><strong>Előfizetések</strong><span class="card-description">Csomagok és előfizetési állapotok kezelése.</span><span class="card-link">Megnyitás <b>→</b></span>
+          </button>
+          <button class="tool-card" data-route="/owner#access" data-search="owner tulajdonos hozzáférés jogosultság">
+            <span class="card-icon amber">♙</span><span class="card-arrow">↗</span><small>JOGOSULTSÁGOK</small><strong>Owner hozzáférések</strong><span class="card-description">A Owner Centerhez hozzáférő fiókok kezelése.</span><span class="card-link">Megnyitás <b>→</b></span>
+          </button>
+          <button class="tool-card" data-route="/owner/ai-access" data-search="ai mesterséges intelligencia hozzáférés">
+            <span class="card-icon cyan">✳</span><span class="card-arrow">↗</span><small>AI</small><strong>AI-hozzáférések</strong><span class="card-description">Az AI funkcióihoz engedélyezett felhasználók kezelése.</span><span class="card-link">Megnyitás <b>→</b></span>
+          </button>
+          <button class="tool-card" data-route="/owner#audit" data-search="audit napló biztonság esemény">
+            <span class="card-icon rose">≋</span><span class="card-arrow">↗</span><small>ÁTLÁTHATÓSÁG</small><strong>Auditnapló</strong><span class="card-description">A fontosabb tulajdonosi és rendszeresemények áttekintése.</span><span class="card-link">Megnyitás <b>→</b></span>
+          </button>
+          <button class="tool-card" data-route="/owner#system" data-search="rendszer állapot karbantartás">
+            <span class="card-icon green">⚙</span><span class="card-arrow">↗</span><small>ÁLLAPOT</small><strong>Rendszer és karbantartás</strong><span class="card-description">A szolgáltatás állapotának és globális opcióinak megnyitása.</span><span class="card-link">Megnyitás <b>→</b></span>
+          </button>
+          <button class="tool-card" data-route="/owner#servers" data-search="aegis chronoguard architect mdt műszak dokumentum rp eszköz">
+            <span class="card-icon blue">⌘</span><span class="card-arrow">↗</span><small>SZERVERESZKÖZÖK</small><strong>Modulok és eszközök</strong><span class="card-description">Válassz szervert az AEGIS, ChronoGuard, MDT, műszak és dokumentumeszközökhöz.</span><span class="card-link">Szerver kiválasztása <b>→</b></span>
+          </button>
+        </div>
+
+        <div class="bottom-note"><span class="shield">◇</span><span><b>Védett tulajdonosi felület</b><small>A belépést és a jogosultságot a NexaBot szervere ellenőrzi.</small></span><span class="note-right">A változtatások azonnal a webes Owner Centerrel szinkronizálódnak.</span></div>
+      </section>
+      <div class="toast" id="toast" role="status"></div>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
