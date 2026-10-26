@@ -454,13 +454,13 @@ function belvTierForRole(role) {
     if (band) return band[0];
   }
   const aliases = [
-    ['chiefDeputy', 'foigazgatohelyettes'], ['directorDeputy', 'igazgatohelyettes'],
+    ['chiefDeputy', 'foigazgatohelyettes'], ['chief', 'foigazgato'],
+    ['directorDeputy', 'igazgatohelyettes'], ['director', 'igazgato'],
     ['departmentChief', 'foosztalyvezeto'], ['operationsLead', 'muveletivezeto'],
     ['inspectionLead', 'ellenorzesivezeto'], ['chiefInspector', 'foellenor'],
     ['leadOfficer', 'vezetotiszt'], ['specialAgent', 'kulonlegesugynok'],
-    ['leadAgent', 'vezetougy nok'.replace(/ /g, '')], ['candidate', 'belvedelmijelolt'],
-    ['officer', 'belvedelmitiszt'], ['agent', 'belvedelmiugynok'],
-    ['director', 'igazgato'], ['chief', 'foigazgato']
+    ['leadAgent', 'vezetougynok'], ['candidate', 'belvedelmijelolt'],
+    ['officer', 'belvedelmitiszt'], ['agent', 'belvedelmiugynok']
   ];
   return aliases.find(([, alias]) => name.includes(alias))?.[0] || null;
 }
