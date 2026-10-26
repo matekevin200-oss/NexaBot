@@ -122,6 +122,7 @@ async function updatePanel(client, guild, channel, kind) {
     : null;
   if (!message) {
     const recent = await channel.messages.fetch({ limit: 50 }).catch(() => null);
+    if (!recent && previous?.channelId === channel.id && previous.messageId) return;
     message = recent?.find((item) => item.author.id === client.user.id && item.embeds.some((entry) => entry.footer?.text === footer)) || null;
   }
   message = message
