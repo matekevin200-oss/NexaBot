@@ -16,6 +16,9 @@ const lastErrorAt = new Map();
 const watchedClients = new WeakSet();
 const consumedDeleteInteractions = new WeakSet();
 const consumedMemberInfoInteractions = new WeakSet();
+const consumedAfkInteractions = new WeakSet();
+const consumedAfkMessages = new WeakSet();
+const afkMembers = new Map();
 let pool;
 
 function normalize(value) {
@@ -304,6 +307,19 @@ const memberInfoCommand = new SlashCommandBuilder()
     .setRequired(true))
   .toJSON();
 
+const afkCommand = new SlashCommandBuilder()
+  .setName('afk')
+  .setDescription('Beállítja a távollétedet; említéskor a bot jelzi, hogy AFK vagy.')
+  .setDescriptionLocalizations({ 'en-US': 'Set your AFK status; the bot tells others when they mention you.', 'en-GB': 'Set your AFK status; the bot tells others when they mention you.' })
+  .setDMPermission(false)
+  .addStringOption((option) => option
+    .setName('reason')
+    .setNameLocalizations({ 'hu': 'uzenet' })
+    .setDescription('Opcionális távolléti üzenet.')
+    .setDescriptionLocalizations({ 'en-US': 'Optional AFK message.', 'en-GB': 'Optional AFK message.' })
+    .setMaxLength(160))
+  .toJSON();
+
 async function ensureDeleteMessagesCommand(client) {
   try {
     const commands = await client.application.commands.fetch();
@@ -336,6 +352,57 @@ async function ensureMemberInfoCommand(client) {
   } catch (error) {
     console.error('A /taginfo parancs regisztrálása nem sikerült:', error.message);
   }
+}
+
+async function ensureAfkCommand(client) {
+  try {
+    const commands = await client.application.commands.fetch();
+    if (commands.some((command) => command.name === afkCommand.name)) return;
+    await client.application.commands.create(afkCommand);
+  } catch (error) {
+    console.error('A /afk parancs regisztrálása nem sikerült:', error.message);
+  }
+}
+
+function afkKey(guildId, userId) {
+  return `${guildId}:${userId}`;
+}
+
+function handleAfkMessage(message) {
+  if (!message.guild || message.author?.bot || message.webhookId) return;
+  const ownKey = afkKey(message.guild.id, message.author.id);
+  if (afkMembers.delete(ownKey)) {
+    message.react('👋').catch(() => null);
+  }
+
+  const mentionedAfkMembers = [...message.mentions.users.values()]
+    .filter((user) => !user.bot)
+    .map((user) => ({ user, state: afkMembers.get(afkKey(message.guild.id, user.id)) }))
+    .filter((entry) => entry.state);
+  if (!mentionedAfkMembers.length) return;
+
+  const lines = mentionedAfkMembers.slice(0, 10).map(({ user, state }) => {
+    const member = message.guild.members.cache.get(user.id);
+    const name = safeText(member?.displayName || user.globalName || user.username, 80);
+    const reason = state.reason ? ` — ${state.reason}` : '';
+    return `• **${name}**${reason} · AFK ${discordTimestamp(new Date(state.since))}`;
+  });
+  if (mentionedAfkMembers.length > 10) lines.push(`… és még ${mentionedAfkMembers.length - 10} AFK tag.`);
+  message.channel.send({ content: `💤 ${lines.join('\n')}`, allowedMentions: { parse: [] } }).catch(() => null);
+}
+
+async function handleAfkCommand(interaction) {
+  if (!interaction.inGuild()) {
+    return interaction.reply({ content: '❌ Ezt a parancsot szerveren használd.', flags: MessageFlags.Ephemeral });
+  }
+  const reasonOption = interaction.options.data?.find((option) => option.name === 'reason' || option.name === 'uzenet');
+  const reason = safeText(reasonOption?.value || '', 160);
+  afkMembers.set(afkKey(interaction.guildId, interaction.user.id), { reason, since: Date.now() });
+  return interaction.reply({
+    content: reason ? `💤 AFK mód bekapcsolva. Üzenet: ${reason}\nAmint írsz a szerveren, automatikusan kikapcsol.` : '💤 AFK mód bekapcsolva. Amint írsz a szerveren, automatikusan kikapcsol.',
+    flags: MessageFlags.Ephemeral,
+    allowedMentions: { parse: [] }
+  });
 }
 
 function discordTimestamp(date, style = 'R') {
@@ -461,6 +528,11 @@ function registerMemberInfoCommand(client) {
   timer.unref();
 }
 
+function registerAfkCommand(client) {
+  const timer = setTimeout(() => ensureAfkCommand(client), 15_000);
+  timer.unref();
+}
+
 const originalLogin = Client.prototype.login;
 Client.prototype.login = function patchedLogin(...args) {
   if (!watchedClients.has(this)) {
@@ -469,6 +541,7 @@ Client.prototype.login = function patchedLogin(...args) {
       start(readyClient);
       registerDeleteMessagesCommand(readyClient);
       registerMemberInfoCommand(readyClient);
+      registerAfkCommand(readyClient);
     });
   }
   return originalLogin.apply(this, args);
@@ -476,10 +549,20 @@ Client.prototype.login = function patchedLogin(...args) {
 
 const originalOn = Client.prototype.on;
 Client.prototype.on = function patchedOn(eventName, listener) {
-  if (eventName !== Events.InteractionCreate || typeof listener !== 'function') {
+  if (typeof listener !== 'function') {
     return originalOn.call(this, eventName, listener);
   }
   const client = this;
+  if (eventName === Events.MessageCreate) {
+    return originalOn.call(this, eventName, (message) => {
+      if (!consumedAfkMessages.has(message)) {
+        consumedAfkMessages.add(message);
+        handleAfkMessage(message);
+      }
+      return listener.call(client, message);
+    });
+  }
+  if (eventName !== Events.InteractionCreate) return originalOn.call(this, eventName, listener);
   return originalOn.call(this, eventName, async (interaction) => {
     if (interaction.isChatInputCommand?.() && interaction.commandName === 'uzenet') {
       if (consumedDeleteInteractions.has(interaction)) return;
@@ -496,6 +579,11 @@ Client.prototype.on = function patchedOn(eventName, listener) {
         }
         return interaction.reply({ content: '❌ Nem sikerült lekérni a tag adatait.', flags: MessageFlags.Ephemeral });
       });
+    }
+    if (interaction.isChatInputCommand?.() && interaction.commandName === 'afk') {
+      if (consumedAfkInteractions.has(interaction)) return;
+      consumedAfkInteractions.add(interaction);
+      return handleAfkCommand(interaction);
     }
     return listener.call(client, interaction);
   });
