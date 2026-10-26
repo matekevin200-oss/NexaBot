@@ -550,7 +550,7 @@ async function handleBelvPermissionsCommand(interaction) {
       await channel.permissionOverwrites.edit(interaction.guild.roles.everyone.id, { SendMessages: false }, { reason: 'BELV rendfokozati írási jogosultságok' });
       for (const overwrite of [...channel.permissionOverwrites.cache.values()]) {
         if (overwrite.id === interaction.guild.id || overwrite.type === 0 && allowedRoleIds.has(overwrite.id) || overwrite.type === 0 && botRoleIds.has(overwrite.id)) continue;
-        if (permissionValue(overwrite, 'SendMessages') !== true) continue;
+        if (!overwrite.allow.has(PermissionFlagsBits.SendMessages)) continue;
         if (overwrite.type === 0) {
           const role = interaction.guild.roles.cache.get(overwrite.id);
           if (role?.managed) continue;
