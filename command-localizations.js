@@ -1,3 +1,5 @@
+const { Locale } = require('discord.js');
+
 const TRANSLATIONS = Object.freeze({
   mdt: ['mdt', 'Belv MDT: personal access and records.'],
   'mdt.belepes': ['access-code', 'Create a personal, single-use MDT access code.'],
@@ -167,16 +169,21 @@ const CHOICE_TRANSLATIONS = Object.freeze({
   'rangpanel.tipus': { select: 'Select menu', button: 'Buttons', reaction: 'Emoji reactions' }
 });
 
+const ENGLISH_FALLBACK_LOCALES = Object.freeze([...new Set(Object.values(Locale).filter((locale) => locale !== 'hu'))]);
+
+function englishLocalizations(value) {
+  return Object.fromEntries(ENGLISH_FALLBACK_LOCALES.map((locale) => [locale, value]));
+}
+
 function localizeNode(node, path) {
   const translation = TRANSLATIONS[path];
   if (translation) {
     const [englishName, englishDescription, hungarianName = node.name] = translation;
-    node.name_localizations = { hu: hungarianName, 'en-US': englishName, 'en-GB': englishName };
+    node.name_localizations = { ...englishLocalizations(englishName), hu: hungarianName };
     if (node.description) {
       node.description_localizations = {
-        hu: node.description,
-        'en-US': englishDescription,
-        'en-GB': englishDescription
+        ...englishLocalizations(englishDescription),
+        hu: node.description
       };
     }
   }
@@ -184,7 +191,7 @@ function localizeNode(node, path) {
   if (choices && Array.isArray(node.choices)) {
     for (const choice of node.choices) {
       const english = choices[choice.value];
-      if (english) choice.name_localizations = { hu: choice.name, 'en-US': english, 'en-GB': english };
+      if (english) choice.name_localizations = { ...englishLocalizations(english), hu: choice.name };
     }
   }
   for (const option of node.options || []) localizeNode(option, `${path}.${option.name}`);
