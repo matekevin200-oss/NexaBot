@@ -1,4 +1,10 @@
 const TRANSLATIONS = Object.freeze({
+  mdt: ['mdt', 'Belv MDT: personal access and records.'],
+  'mdt.belepes': ['access-code', 'Create a personal, single-use MDT access code.'],
+  'mdt.script': ['load-script', 'Show your one-line loader for the Roblox MDT.'],
+  'mdt.kijelentkezes': ['logout', 'Revoke your own MDT sessions.'],
+  'mdt.telepites': ['install', 'Create missing MDT channels only; existing channels are left untouched.'],
+  'mdt.allapot': ['status', 'Show the MDT status. Configure it in the Owner Center.'],
   beallitas: ['settings', 'Open the NEXA Bot web dashboard.'],
   telepites: ['rp-install', 'Install the complete Owner-approved RP base system.'],
   'dokumentum-panelek': ['document-panels', 'Install RP document panels in the existing channels.'],
