@@ -3,6 +3,7 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder,
 const { dashboardUrl, dbQuery, getOwnerSettings, isBotOwner, isPersistentStore } = require('./config');
 const { allDocumentTypes, documentRule, findDocumentChannel } = require('./documents');
 const { recordAudit, recordError } = require('./telemetry');
+const { localizeCommandJson } = require('./command-localizations');
 
 const PREFIX = '/api/mdt/v1';
 const CODE_MS = 10 * 60 * 1000;
@@ -563,7 +564,7 @@ async function syncMdtGuildCommand(guild) {
   }
   const settings = await getSettings(guild.id);
   if (!settings.enabled) { if (existing) await existing.delete(); return; }
-  const payload = buildMdtCommand().toJSON();
+  const payload = localizeCommandJson(buildMdtCommand().toJSON());
   if (existing) await existing.edit(payload); else await guild.commands.create(payload);
 }
 async function syncMdtGuildCommands(client) {
