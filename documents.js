@@ -591,13 +591,29 @@ function isOperative(member) {
   return hasNamedRole(member, NAMES.operativeRole);
 }
 
+const BELV_APPROVAL_ROLE_NAME = 'BELVÉDELMI VEZETŐSÉG';
+
+function belvApprovalRoleExists(guild) {
+  const expected = normalizeName(BELV_APPROVAL_ROLE_NAME);
+  return Boolean(guild?.roles?.cache?.some((role) => normalizeName(role.name) === expected));
+}
+
 function canApprove(member) {
+  const hasBelvApprovalRole = hasNamedRole(member, BELV_APPROVAL_ROLE_NAME);
+  if (hasBelvApprovalRole) return true;
+  if (belvApprovalRoleExists(member?.guild)) return false;
   const dashboardRoleId = member?.guild?.id ? getGuildConfig(member.guild.id).roles?.dashboard : null;
   return Boolean(
     member?.permissions?.has(PermissionFlagsBits.Administrator) ||
     (dashboardRoleId && member?.roles?.cache?.has(dashboardRoleId)) ||
     hasNamedRole(member, NAMES.leadershipRole)
   );
+}
+
+function approvalDenialMessage(guild) {
+  return belvApprovalRoleExists(guild)
+    ? `Ezt kizárólag a **${BELV_APPROVAL_ROLE_NAME}** rang fogadhatja el vagy utasíthatja el.`
+    : `Ezt csak adminisztrátor vagy a **${NAMES.leadershipRole}** rang használhatja.`;
 }
 
 function bviCaseNumber(date = new Date()) {
@@ -673,7 +689,7 @@ async function handleDocumentButton(interaction) {
 
   if (id.startsWith('doc_approve:')) {
     if (!canApprove(interaction.member)) {
-      return ephemeralError(interaction, `Ezt csak adminisztrátor vagy a **${NAMES.leadershipRole}** rang használhatja.`);
+      return ephemeralError(interaction, approvalDenialMessage(interaction.guild));
     }
     const [, key, targetChannelId, submitterId, selectedUserId] = id.split(':');
     const targetUserId = /^\d{16,22}$/.test(selectedUserId || '') ? selectedUserId : null;
@@ -714,7 +730,7 @@ async function handleDocumentButton(interaction) {
 
   if (id.startsWith('doc_reject:')) {
     if (!canApprove(interaction.member)) {
-      return ephemeralError(interaction, `Ezt csak adminisztrátor vagy a **${NAMES.leadershipRole}** rang használhatja.`);
+      return ephemeralError(interaction, approvalDenialMessage(interaction.guild));
     }
     const [, , , submitterId] = id.split(':');
     return interaction.showModal(rejectionModal(interaction.message.id, submitterId));
@@ -778,7 +794,7 @@ async function handleDocumentModal(interaction) {
 
   if (interaction.customId.startsWith('doc_reject_submit:')) {
     if (!canApprove(interaction.member)) {
-      return ephemeralError(interaction, `Ezt csak adminisztrátor vagy a **${NAMES.leadershipRole}** rang használhatja.`);
+      return ephemeralError(interaction, approvalDenialMessage(interaction.guild));
     }
     await interaction.deferReply({ flags: EPHEMERAL });
     const [, messageId, submitterId] = interaction.customId.split(':');
