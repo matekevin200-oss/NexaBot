@@ -66,7 +66,7 @@ function formatDuration(seconds) {
   return hours ? `${hours} óra ${minutes} perc` : `${minutes} perc`;
 }
 
-async function activeShiftDescription(guild) {
+async function activeShiftDescription(client, guild) {
   const db = database();
   if (!db) return { description: '⚠️ A szolgálati adatbázis nincs beállítva.', signature: 'db-missing' };
   const { rows } = await db.query(
@@ -77,10 +77,22 @@ async function activeShiftDescription(guild) {
       LIMIT 100`,
     [guild.id]
   );
+  const missingMemberIds = [...new Set(rows
+    .map((row) => String(row.user_id))
+    .filter((id) => !guild.members.cache.has(id)))];
+  if (missingMemberIds.length) {
+    await guild.members.fetch({ user: missingMemberIds }).catch(() => null);
+  }
+  const unresolvedUserIds = [...new Set(rows
+    .map((row) => String(row.user_id))
+    .filter((id) => !guild.members.cache.has(id) && !client.users.cache.has(id)))];
+  await Promise.all(unresolvedUserIds.map((id) => client.users.fetch(id).catch(() => null)));
   const now = Date.now();
   const lines = rows.map((row) => {
-    const member = guild.members.cache.get(String(row.user_id));
-    const name = safeText(member?.displayName || member?.user?.username || `Discord-tag (${row.user_id})`);
+    const userId = String(row.user_id);
+    const member = guild.members.cache.get(userId);
+    const user = member?.user || client.users.cache.get(userId);
+    const name = safeText(member?.displayName || user?.globalName || user?.username || 'Ismeretlen tag');
     const startedAt = new Date(row.started_at);
     const pausedSeconds = Number(row.break_seconds || 0) + (row.break_started_at
       ? Math.max(0, Math.floor((now - new Date(row.break_started_at).getTime()) / 1000))
@@ -105,7 +117,7 @@ async function updatePanel(client, guild, channel, kind) {
     description = activeVoiceDescription(guild);
     signature = description;
   } else {
-    ({ description, signature } = await activeShiftDescription(guild));
+    ({ description, signature } = await activeShiftDescription(client, guild));
   }
 
   const previous = panelState.get(key);
