@@ -3,7 +3,14 @@
 const { Client, Events, ChannelType, EmbedBuilder } = require('discord.js');
 const { Pool } = require('pg');
 
-const PANEL_FOOTERS = { voice: 'NEXA LIVE • voice', shift: 'NEXA LIVE • shift' };
+const PANEL_FOOTERS = {
+  voice: 'NEXA LIVE • voice',
+  shift: 'NEXA LIVE • shift',
+  overview: 'NEXA LIVE • overview',
+  members: 'NEXA LIVE • members',
+  tickets: 'NEXA LIVE • tickets',
+  system: 'NEXA LIVE • system'
+};
 const panelState = new Map();
 const lastErrorAt = new Map();
 const watchedClients = new WeakSet();
@@ -38,12 +45,35 @@ function findCategory(guild) {
 }
 
 function findTarget(guild, category, kind) {
-  const accepted = kind === 'voice'
-    ? new Set(['hangaktivitas', 'voiceactivity'])
-    : new Set(['szolgalat', 'duty', 'shift']);
+  const accepted = {
+    voice: ['hangaktivitas', 'voiceactivity'],
+    shift: ['szolgalat', 'duty', 'shift'],
+    overview: ['eloattekintes', 'liveoverview'],
+    members: ['tagletszam', 'membercount', 'members'],
+    tickets: ['ticketallapot', 'ticketstatus'],
+    system: ['rendszerallapot', 'systemstatus']
+  }[kind];
+  if (!accepted) return null;
+  const names = new Set(accepted);
   return guild.channels.cache.find((channel) =>
-    channel.parentId === category.id && channel.isTextBased?.() && !channel.isThread?.() && accepted.has(normalize(channel.name))
+    channel.parentId === category.id && channel.isTextBased?.() && !channel.isThread?.() && names.has(normalize(channel.name))
   ) || null;
+}
+
+function voiceMemberCount(guild) {
+  let total = 0;
+  for (const channel of guild.channels.cache.values()) {
+    if (![ChannelType.GuildVoice, ChannelType.GuildStageVoice].includes(channel.type)) continue;
+    total += [...(channel.members?.values?.() || [])].filter((member) => !member.user.bot).length;
+  }
+  return total;
+}
+
+function activeVoiceChannelCount(guild) {
+  return [...guild.channels.cache.values()].filter((channel) =>
+    [ChannelType.GuildVoice, ChannelType.GuildStageVoice].includes(channel.type) &&
+    [...(channel.members?.values?.() || [])].some((member) => !member.user.bot)
+  ).length;
 }
 
 function activeVoiceDescription(guild) {
@@ -108,6 +138,87 @@ async function activeShiftDescription(client, guild) {
   };
 }
 
+async function ticketCounts(guildId) {
+  const db = database();
+  if (!db) return null;
+  const result = await db.query(
+    `SELECT COUNT(*) FILTER (WHERE status = 'open')::int AS open,
+            COUNT(*) FILTER (WHERE status = 'open' AND claimed_by IS NOT NULL)::int AS claimed,
+            COUNT(*) FILTER (WHERE status = 'closed')::int AS closed,
+            COUNT(*)::int AS total
+       FROM nexabot_tickets
+      WHERE guild_id = $1`,
+    [guildId]
+  );
+  return result.rows[0] || { open: 0, claimed: 0, closed: 0, total: 0 };
+}
+
+async function liveOverview(client, guild) {
+  const db = database();
+  if (!db) return { description: '⚠️ Az élő áttekintéshez nincs adatbázis-kapcsolat.', signature: 'db-missing' };
+  const [shifts, tickets] = await Promise.all([
+    db.query('SELECT COUNT(*)::int AS count FROM nexabot_shifts WHERE guild_id = $1 AND ended_at IS NULL', [guild.id]),
+    db.query("SELECT COUNT(*)::int AS count FROM nexabot_tickets WHERE guild_id = $1 AND status = 'open'", [guild.id])
+  ]);
+  const voiceCount = voiceMemberCount(guild);
+  const description = [
+    `👥 **Tagok:** ${Number(guild.memberCount || 0).toLocaleString('hu-HU')}`,
+    `🎙️ **Hangcsatornában:** ${voiceCount}`,
+    `⏱️ **Szolgálatban:** ${Number(shifts.rows[0]?.count || 0)}`,
+    `🎫 **Nyitott ticket:** ${Number(tickets.rows[0]?.count || 0)}`
+  ].join('\n');
+  return { description, signature: description };
+}
+
+async function memberCountPanel(guild) {
+  const total = Number(guild.memberCount || 0);
+  const description = [
+    `👥 **Teljes taglétszám:** ${total.toLocaleString('hu-HU')}`,
+    `🔊 **Most VC-ben:** ${voiceMemberCount(guild).toLocaleString('hu-HU')}`,
+    `🎙️ **Aktív hangcsatornák:** ${activeVoiceChannelCount(guild).toLocaleString('hu-HU')}`
+  ].join('\n');
+  return { description, signature: description };
+}
+
+async function ticketStatusPanel(guild) {
+  const counts = await ticketCounts(guild.id);
+  if (!counts) return { description: '⚠️ A ticket-adatbázis nem érhető el.', signature: 'db-missing' };
+  const open = Number(counts.open || 0);
+  const closed = Number(counts.closed || 0);
+  const claimed = Number(counts.claimed || 0);
+  const description = [
+    `🎫 **Nyitott:** ${open.toLocaleString('hu-HU')}`,
+    `🧑‍💻 **Kezelt:** ${claimed.toLocaleString('hu-HU')}`,
+    `✅ **Lezárt:** ${closed.toLocaleString('hu-HU')}`,
+    `📊 **Összes rögzített:** ${Number(counts.total || 0).toLocaleString('hu-HU')}`
+  ].join('\n');
+  return { description, signature: description };
+}
+
+async function systemStatusPanel(client) {
+  const db = database();
+  let databaseState = '⚫ Nincs konfigurálva';
+  if (db) {
+    try {
+      await db.query('SELECT 1');
+      databaseState = '🟢 Kapcsolódik';
+    } catch {
+      databaseState = '🔴 Nem elérhető';
+    }
+  }
+  const ping = Number.isFinite(client.ws.ping) ? `${Math.max(0, Math.round(client.ws.ping))} ms` : 'mérés alatt';
+  const seconds = Math.max(0, Math.floor(process.uptime()));
+  const uptime = formatDuration(seconds);
+  const description = [
+    `🤖 **NEXA:** 🟢 Online`,
+    `📡 **Discord-késleltetés:** ${ping}`,
+    `🗄️ **Adatbázis:** ${databaseState}`,
+    `⏳ **Futásidő:** ${uptime}`,
+    `🌐 **Szerverek:** ${client.guilds.cache.size.toLocaleString('hu-HU')}`
+  ].join('\n');
+  return { description, signature: `${description}:${Math.floor(Date.now() / 60_000)}` };
+}
+
 async function updatePanel(client, guild, channel, kind) {
   const key = `${guild.id}:${kind}`;
   const footer = PANEL_FOOTERS[kind];
@@ -116,6 +227,14 @@ async function updatePanel(client, guild, channel, kind) {
   if (kind === 'voice') {
     description = activeVoiceDescription(guild);
     signature = description;
+  } else if (kind === 'overview') {
+    ({ description, signature } = await liveOverview(client, guild));
+  } else if (kind === 'members') {
+    ({ description, signature } = await memberCountPanel(guild));
+  } else if (kind === 'tickets') {
+    ({ description, signature } = await ticketStatusPanel(guild));
+  } else if (kind === 'system') {
+    ({ description, signature } = await systemStatusPanel(client));
   } else {
     ({ description, signature } = await activeShiftDescription(client, guild));
   }
@@ -123,8 +242,15 @@ async function updatePanel(client, guild, channel, kind) {
   const previous = panelState.get(key);
   if (previous?.channelId === channel.id && previous.signature === signature) return;
   const embed = new EmbedBuilder()
-    .setColor(kind === 'voice' ? 0x58a6ff : 0x57d39b)
-    .setTitle(kind === 'voice' ? '🎙️ Aktív hangcsatornák' : '⏱️ Aktív szolgálatok')
+    .setColor(kind === 'voice' ? 0x58a6ff : kind === 'system' ? 0xe7b96e : 0x57d39b)
+    .setTitle({
+      voice: '🎙️ Aktív hangcsatornák',
+      shift: '⏱️ Aktív szolgálatok',
+      overview: '📡 Élő szerveráttekintés',
+      members: '👥 Taglétszám',
+      tickets: '🎫 Ticket-állapot',
+      system: '🖥️ NEXA rendszerállapot'
+    }[kind])
     .setDescription(description)
     .setTimestamp(new Date())
     .setFooter({ text: footer });
@@ -160,7 +286,7 @@ function start(client, intervalMs = 30_000) {
       for (const guild of client.guilds.cache.values()) {
         const category = findCategory(guild);
         if (!category) continue;
-        for (const kind of ['voice', 'shift']) {
+        for (const kind of ['overview', 'members', 'tickets', 'voice', 'shift', 'system']) {
           const channel = findTarget(guild, category, kind);
           if (!channel) continue;
           try {
