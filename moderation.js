@@ -4,7 +4,8 @@ const {
   PermissionFlagsBits,
   SlashCommandBuilder
 } = require('discord.js');
-const { dbQuery, moduleEnabled, isSupportModerationPaused } = require('./config');
+const { dbQuery, moduleEnabled, isSupportModerationPaused, isBotOwner } = require('./config');
+const { BELV_GUILD_ID } = require('./belv-mdt');
 const { baseEmbed, sendLog } = require('./utils');
 const { COLORS } = require('./constants');
 const { recordAudit } = require('./telemetry');
@@ -249,6 +250,7 @@ async function handleModerationCommand(interaction) {
     await target.timeout(null, `${reason} • ${interaction.user.tag}`);
   }
   if (name === 'nick') {
+    if (interaction.guildId === BELV_GUILD_ID && isBotOwner(target.id)) return interaction.editReply('🔒 A NEXA a Belv szerveren nem módosítja a bot tulajdonosának becenevét.');
     if (!target.manageable) return interaction.editReply('❌ A bot nem tudja módosítani ezt a tagot.');
     action = 'Nickname';
     await target.setNickname(interaction.options.getString('becenev') || null, `${reason} • ${interaction.user.tag}`);
