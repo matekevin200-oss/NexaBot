@@ -1,7 +1,85 @@
-// NEXA Bot 25.0.3 Platform + Economy + MDT release — NEXA OS Studio platform.
+// NEXA Bot 25.15.0 Platform + Economy + MDT release — NEXA OS Studio platform.
 const __nativeRequire = require;
 const __path = __nativeRequire('node:path').posix;
 const __modules = {
+"src/belv-roster-rules.js": function(module, exports, require) {
+'use strict';
+const RANKS = Object.freeze([
+  { rank:'Főigazgató', nickRank:'Főigazgató', group:'Felsővezetés', min:1, max:1, key:'foigazgato' },
+  { rank:'Főigazgató-helyettes', nickRank:'Fő Igazgató-H.', group:'Felsővezetés', min:2, max:2, key:'foigazgato-helyettes' },
+  { rank:'Igazgató', nickRank:'Igazgató', group:'Felsővezetés', min:3, max:3, key:'igazgato' },
+  { rank:'Igazgatóhelyettes', nickRank:'Igazgató-H.', group:'Felsővezetés', min:4, max:9, key:'igazgatohelyettes' },
+  { rank:'Főosztályvezető', nickRank:'Főoszt. vez.', group:'Vezetői állomány', min:10, max:14, key:'foosztalyvezeto' },
+  { rank:'Műveleti vezető', nickRank:'Műveleti vez.', group:'Vezetői állomány', min:15, max:19, key:'muveleti-vezeto' },
+  { rank:'Ellenőrzési vezető', nickRank:'Ellenőrzési V.', group:'Vezetői állomány', min:20, max:24, key:'ellenorzesi-vezeto' },
+  { rank:'Főellenőr', nickRank:'Főellenőr', group:'Ellenőrzési állomány', min:25, max:34, key:'foellenor' },
+  { rank:'Vezető tiszt', nickRank:'Vezető Tiszt', group:'Hivatásos állomány', min:35, max:39, key:'vezeto-tiszt' },
+  { rank:'Belvédelmi tiszt', nickRank:'Belv. Tiszt', group:'Hivatásos állomány', min:40, max:49, key:'belvedelmi-tiszt' },
+  { rank:'Vezető ügynök', nickRank:'Vezető Ügynök', group:'Hivatásos állomány', min:50, max:59, key:'vezeto-ugynok' },
+  { rank:'Különleges ügynök', nickRank:'Különl. Ügynök', group:'Hivatásos állomány', min:60, max:69, key:'kulonleges-ugynok' },
+  { rank:'Belvédelmi ügynök', nickRank:'Belv. Ügynök', group:'Hivatásos állomány', min:70, max:89, key:'belvedelmi-ugynok' },
+  { rank:'Belvédelmi jelölt', nickRank:'Belv. Jelölt', group:'Képzési állomány', min:90, max:99, key:'belvedelmi-jelolt' }
+]);
+function normalize(value) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+function configuredRankRoleMap(raw) {
+  try {
+    const input = typeof raw === 'string' ? JSON.parse(raw || '{}') : raw;
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+    return Object.fromEntries(Object.entries(input).filter(([id, rank]) => /^\d{16,22}$/.test(id) && typeof rank === 'string'));
+  } catch { return {}; }
+}
+function rankForCode(code, roleId = null, roleName = '') {
+  const value = Number(code);
+  const definition = RANKS.find((item) => value >= item.min && value <= item.max);
+  return definition ? { ...definition, badge: 'BV-' + String(value).padStart(2,'0'), roleId, roleName, exactBadge: true } : null;
+}
+function classifyBelvRole(role, roleIdMap = {}) {
+  if (!role) return null;
+  const raw = roleIdMap[role.id] || role.name || '';
+  const name = normalize(raw);
+  const code = name.match(/(?:^|-)bv-(\d{1,2})(?:-(\d{1,2}))?(?:-|$)/);
+  if (code) {
+    const min = Number(code[1]), max = code[2] ? Number(code[2]) : min;
+    if (min < 1 || max > 99 || max < min) return null;
+    const definition = RANKS.find((item) => min >= item.min && min <= item.max);
+    if (!definition) return null;
+    return { ...definition, min, max, badge: max === min ? 'BV-' + String(min).padStart(2,'0') : null, exactBadge: max === min, roleId: role.id, roleName: role.name || raw, position: Number(role.position || 0) };
+  }
+  const definition = [...RANKS].sort((a,b)=>b.key.length-a.key.length).find((item) =>
+    name === item.key || name.startsWith(item.key + '-') || name.includes('-' + item.key + '-') || name.includes(item.key + '-bv')
+  );
+  return definition ? { ...definition, badge:null, exactBadge:false, roleId:role.id, roleName:role.name || raw, position:Number(role.position||0) } : null;
+}
+function rankForMember(member, roleIdMap = {}) {
+  return [...(member?.roles?.cache?.values?.() || [])]
+    .map((role) => classifyBelvRole(role, roleIdMap))
+    .filter(Boolean)
+    .sort((a,b)=>b.position-a.position || (a.max-a.min)-(b.max-b.min))[0] || null;
+}
+function isConfiguredRoleHolder(member, roleId) {
+  return /^\d{16,22}$/.test(String(roleId || '')) && Boolean(member?.roles?.cache?.has(String(roleId)));
+}
+function stripManagedNickname(current, nickRank, badge) {
+  const value = String(current || '').trim();
+  const suffix = ' | ' + String(nickRank || '').trim() + ' | ' + String(badge || '').trim();
+  return value.endsWith(suffix) ? value.slice(0, -suffix.length).trimEnd() : value;
+}
+function cleanBotMention(content, botId) {
+  const value = String(content || '');
+  if (!/^\d{16,22}$/.test(String(botId || ''))) return value.replace(/<@!?\d{16,22}>/g, ' ').trim();
+  return value.replace(new RegExp('<@!?' + String(botId) + '>', 'g'), ' ').trim();
+}
+function adjustedActiveSeconds(startedAt, endedAt, breakSeconds, adjustmentMinutes) {
+  const start = new Date(startedAt).getTime(), end = new Date(endedAt).getTime();
+  const minutes = Number(adjustmentMinutes), pause = Number(breakSeconds || 0);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || !Number.isSafeInteger(minutes) || Math.abs(minutes) > 525600 || !Number.isFinite(pause) || pause < 0) throw new Error('Érvénytelen szolgálati időkorrekció.');
+  return Math.max(0, Math.floor((end + minutes * 60000 - start) / 1000) - pause);
+}
+module.exports = { RANKS, normalize, configuredRankRoleMap, classifyBelvRole, rankForMember, isConfiguredRoleHolder, stripManagedNickname, cleanBotMention, adjustedActiveSeconds };
+
+},
 "src/mdt-network-data.js": function(module, exports, require) {
 const crypto=require('node:crypto');
 const {promisify}=require('node:util');
@@ -442,9 +520,12 @@ const { allDocumentTypes, documentRule, findDocumentChannel } = require('./docum
 const { recordAudit, recordError } = require('./telemetry');
 
 const { bounded } = require('./workflow-options');
+const { classifyBelvRole, rankForMember, configuredRankRoleMap, isConfiguredRoleHolder, stripManagedNickname } = require('./belv-roster-rules');
+const { getGuildConfig } = require('./config');
 const PREFIX = '/api/mdt/v1';
 const BELV_GUILD_ID = '1517509643734221030';
 const BELV_ROSTER_MARKER = 'NEXA_BELV_ROSTER_V1';
+const BELV_NICKNAME_EXEMPT_USER_IDS = new Set(['1221443482829193270']);
 const BELV_ROSTER = Object.freeze([
   { id: '1221443482829193270', rank: 'Főigazgató', nickRank: 'Főigazgató', badge: 'BV-01', group: 'Felsővezetés' },
   { id: '1256537413229084735', rank: 'Főigazgató-Helyettes', nickRank: 'Fő Igazgató-H.', badge: 'BV-02', group: 'Felsővezetés' },
@@ -1125,20 +1206,16 @@ async function handleMdtApi(client, request, response, url) {
 function normalizedRosterChannel(value) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
-function belvNickname(member, entry) {
+function belvNickname(member, entry, previous = null) {
   const current = String(member.nickname || member.user.globalName || member.user.username || 'Tag').trim();
-  const identity = (current.split('|')[0] || member.user.username || 'Tag').trim();
+  const oldBadge = previous ? 'BV-' + String(previous.badge).padStart(2, '0') : null;
+  const identity = previous ? stripManagedNickname(current, previous.nick_rank, oldBadge) : current;
   const suffix = ` | ${entry.nickRank} | ${entry.badge}`;
   const room = Math.max(1, 32 - Array.from(suffix).length);
-  return `${Array.from(identity).slice(0, room).join('')}${suffix}`;
+  return `${Array.from(identity || member.user.username || 'Tag').slice(0, room).join('')}${suffix}`;
 }
-function hasBelvPersonnelRole(member) {
-  const rankNames = ['foigazgato', 'foigazgato-helyettes', 'igazgato', 'igazgatohelyettes', 'foosztalyvezeto', 'muveleti-vezeto', 'ellenorzesi-vezeto', 'foellenor', 'vezeto-tiszt', 'belvedelmi-tiszt', 'vezeto-ugynok', 'kulonleges-ugynok', 'belvedelmi-ugynok', 'belvedelmi-jelolt'];
-  return [...(member.roles?.cache?.values?.() || [])].some((role) => {
-    const name = normalizedRosterChannel(role.name);
-    if (/\bbv-(?:0?[1-9]|[1-9]\d)(?!\d)/.test(name)) return true;
-    return rankNames.some((rank) => name === rank || name.startsWith(`${rank}-`) || name.includes(`-${rank}-`));
-  });
+function hasBelvPersonnelRole(member, roleIdMap = configuredRankRoleMap(process.env.BELV_RANK_ROLE_IDS)) {
+  return Boolean(rankForMember(member, roleIdMap));
 }
 function belvRosterEmbed(roster = BELV_ROSTER) {
   const embed = new EmbedBuilder()
@@ -1146,7 +1223,7 @@ function belvRosterEmbed(roster = BELV_ROSTER) {
     .setTitle('🏛️ BELVÉDELMI IGAZGATÓSÁG')
     .setDescription('**HIVATALOS JELVÉNYSZÁM- ÉS ÁLLOMÁNYI NYILVÁNTARTÁS**\nA lista csak a hivatalos BELV-rendfokozattal rendelkező tagokat mutatja. Ha valakiről lekerül az összes BELV-rangja, a bejegyzés automatikusan kikerül. Egy állománytaghoz egy aktív BV-azonosító tartozik. A Discord-becenév formátuma: `név | rang | BV-XX`.')
     .setFooter({ text: BELV_ROSTER_MARKER });
-  for (const group of ['Felsővezetés', 'Vezetői állomány', 'Hivatásos állomány', 'Képzési állomány']) {
+  for (const group of ['Felsővezetés', 'Vezetői állomány', 'Ellenőrzési állomány', 'Hivatásos állomány', 'Képzési állomány']) {
     const members = roster.filter((entry) => entry.group === group);
     embed.addFields({
       name: group,
@@ -1165,6 +1242,15 @@ function belvRosterEmbed(roster = BELV_ROSTER) {
   }).setTimestamp();
   return embed;
 }
+async function ensureBelvRosterBadgeTable() {
+  if (!belvRosterBadgeSchemaPromise) {
+    belvRosterBadgeSchemaPromise = (async () => {
+      await query('CREATE TABLE IF NOT EXISTS nexabot_belv_roster_badges (guild_id TEXT NOT NULL,user_id TEXT NOT NULL,badge SMALLINT NOT NULL,rank_name TEXT NOT NULL,nick_rank TEXT NOT NULL,group_name TEXT NOT NULL,range_min SMALLINT NOT NULL,range_max SMALLINT NOT NULL,role_id TEXT,active BOOLEAN NOT NULL DEFAULT FALSE,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),PRIMARY KEY(guild_id,user_id))');
+      await query('CREATE UNIQUE INDEX IF NOT EXISTS nexabot_belv_active_badge_idx ON nexabot_belv_roster_badges(guild_id,badge) WHERE active=TRUE');
+    })().catch((error) => { belvRosterBadgeSchemaPromise = null; throw error; });
+  }
+  await belvRosterBadgeSchemaPromise;
+}
 async function syncBelvRosterUnlocked(guild, actorId, botUserId) {
   if (guild?.id !== BELV_GUILD_ID) fail(403, 'Az állományi frissítés kizárólag a Belvédelmi Igazgatóság szerverén futtatható.');
   await guild.channels.fetch();
@@ -1173,43 +1259,93 @@ async function syncBelvRosterUnlocked(guild, actorId, botUserId) {
   if (matches.length > 1) fail(409, 'Több állományi-nyilvántartás csatornát találtam; nem választottam találomra.');
   const channel = matches[0];
   const bot = guild.members.me || await guild.members.fetchMe();
-  if (!bot.permissions.has(PermissionFlagsBits.ManageNicknames)) fail(403, 'A botnak Manage Nicknames jogosultság kell a becenevek frissítéséhez.');
   if (!channel.permissionsFor(bot)?.has(PermissionFlagsBits.ViewChannel, true) || !channel.permissionsFor(bot)?.has(PermissionFlagsBits.SendMessages, true) || !channel.permissionsFor(bot)?.has(PermissionFlagsBits.EmbedLinks, true) || !channel.permissionsFor(bot)?.has(PermissionFlagsBits.ReadMessageHistory, true)) fail(403, 'A botnak látási, küldési, embed- és előzményolvasási jog kell az állományi nyilvántartás csatornában.');
   const recent = await channel.messages.fetch({ limit: 50 });
   const prior = [...recent.values()].find((message) => message.author?.id === botUserId && (message.embeds || []).some((embed) => (embed.footer?.text || embed.data?.footer?.text) === BELV_ROSTER_MARKER));
   const legacy = [...recent.values()].find((message) => {
     if (message.author?.id === botUserId) return false;
-    const body = `${message.content || ''}\n${(message.embeds || []).map((embed) => `${embed.title || embed.data?.title || ''}\n${embed.description || embed.data?.description || ''}\n${(embed.fields || embed.data?.fields || []).map((field) => field.value).join('\n')}`).join('\n')}`;
-    return body.includes('BELVÉDELMI IGAZGATÓSÁG') && body.includes('ÖSSZESEN: 25 BEJEGYZÉS') && body.includes('KIO') && body.includes('FBI');
+    const body = (message.content || '') + '\n' + (message.embeds || []).map((embed) => (embed.title || embed.data?.title || '') + '\n' + (embed.description || embed.data?.description || '') + '\n' + (embed.fields || embed.data?.fields || []).map((field) => field.value).join('\n')).join('\n');
+    return body.includes('BELVÉDELMI IGAZGATÓSÁG') && body.includes('ÖSSZESEN: 25 BEJEGYZÉS') && body.includes('FBI');
   });
-  if (legacy && !channel.permissionsFor(bot)?.has(PermissionFlagsBits.ManageMessages, true)) fail(403, 'A régi, kézzel küldött állományüzenet lecseréléséhez adj a botnak Manage Messages jogosultságot ebben a csatornában.');
-
-  const updated = [], unchanged = [], skipped = [], missing = [], failed = [], inactive = [], activeRoster = [];
+  await ensureBelvRosterBadgeTable();
+  const seedValues = [], seedRows = [];
   for (const entry of BELV_ROSTER) {
-    const member = await guild.members.fetch({ user: entry.id, force: true }).catch(() => null);
-    if (!member) { missing.push(entry.id); continue; }
-    if (!hasBelvPersonnelRole(member)) { skipped.push(entry.id); inactive.push(entry.id); continue; }
-    activeRoster.push(entry);
-    if (isBotOwner(member.id)) { skipped.push(entry.id); continue; }
-    if (member.user.bot || member.id === guild.ownerId || bot.roles.highest.comparePositionTo(member.roles.highest) <= 0) {
-      failed.push({ id: entry.id, reason: 'a bot szerepköre nem jogosult a becenév módosítására' });
-      continue;
-    }
-    const nickname = belvNickname(member, entry);
-    if (member.nickname === nickname) { unchanged.push(entry.id); continue; }
-    try {
-      await member.setNickname(nickname, `Belv hivatalos állományfrissítés • ${entry.badge} • ${actorId}`);
-      updated.push(entry.id);
-    } catch (error) {
-      failed.push({ id: entry.id, reason: error?.message || 'Discord elutasította a becenév módosítását' });
-    }
+    const number = Number(String(entry.badge).match(/(\d+)$/)?.[1]);
+    if (!Number.isInteger(number) || number < 1 || number > 99) continue;
+    const rankInfo = classifyBelvRole({ id: 'legacy-' + entry.id, name: entry.rank + ' ' + entry.badge });
+    if (!rankInfo) continue;
+    const offset = seedValues.length;
+    seedValues.push(guild.id, entry.id, number, entry.rank, entry.nickRank, entry.group, rankInfo.min, rankInfo.max, null);
+    seedRows.push('($' + (offset+1) + ',$' + (offset+2) + ',$' + (offset+3) + ',$' + (offset+4) + ',$' + (offset+5) + ',$' + (offset+6) + ',$' + (offset+7) + ',$' + (offset+8) + ',$' + (offset+9) + ',FALSE)');
   }
-
-  const payload = { embeds: [belvRosterEmbed(activeRoster)], allowedMentions: { parse: [] } };
+  if (seedRows.length) await query('INSERT INTO nexabot_belv_roster_badges(guild_id,user_id,badge,rank_name,nick_rank,group_name,range_min,range_max,role_id,active) VALUES ' + seedRows.join(',') + ' ON CONFLICT(guild_id,user_id) DO NOTHING', seedValues);
+  const rows = (await query('SELECT user_id,badge,rank_name,nick_rank,group_name,range_min,range_max,role_id FROM nexabot_belv_roster_badges WHERE guild_id=$1', [guild.id])).rows;
+  const previousByUser = new Map(rows.map((row) => [String(row.user_id), row]));
+  const roleMap = configuredRankRoleMap(process.env.BELV_RANK_ROLE_IDS);
+  const members = await guild.members.fetch().catch((error) => {
+    throw Object.assign(new Error('A dinamikus BELV-állomány lekéréséhez a Discord szervertaglista-hozzáférés szükséges. ' + (error?.message || '')), { status: 403 });
+  });
+  const ranked = [], rankByUser = new Map(), failed = [], updated = [], unchanged = [], skipped = [], inactive = [];
+  for (const member of members.values()) {
+    if (member.user?.bot) continue;
+    const rank = rankForMember(member, roleMap);
+    if (rank) { ranked.push({ member, rank }); rankByUser.set(String(member.id), rank); }
+  }
+  ranked.sort((a, b) => a.member.id.localeCompare(b.member.id));
+  const occupied = new Map(rows.filter((row) => rankByUser.has(String(row.user_id))).map((row) => [Number(row.badge), String(row.user_id)]));
+  await query('UPDATE nexabot_belv_roster_badges SET active=FALSE WHERE guild_id=$1', [guild.id]);
+  const activeEntries = [], writes = [];
+  for (const { member, rank } of ranked) {
+    const previous = previousByUser.get(String(member.id));
+    let badgeNumber = null;
+    if (previous && Number(previous.badge) >= rank.min && Number(previous.badge) <= rank.max && occupied.get(Number(previous.badge)) === String(member.id)) badgeNumber = Number(previous.badge);
+    else {
+      if (previous && occupied.get(Number(previous.badge)) === String(member.id)) occupied.delete(Number(previous.badge));
+      if (rank.exactBadge && !occupied.has(Number(rank.badge.slice(3))) && Number(rank.badge.slice(3)) >= rank.min && Number(rank.badge.slice(3)) <= rank.max) badgeNumber = Number(rank.badge.slice(3));
+      if (badgeNumber == null) for (let candidate = rank.min; candidate <= rank.max; candidate += 1) if (!occupied.has(candidate)) { badgeNumber = candidate; break; }
+    }
+    if (badgeNumber == null) { failed.push({ id: member.id, reason: 'a jelenlegi rendfokozati tartományban nincs szabad jelvényszám' }); continue; }
+    occupied.set(badgeNumber, String(member.id));
+    const badge = 'BV-' + String(badgeNumber).padStart(2, '0');
+    const entry = { id: member.id, rank: rank.rank, nickRank: rank.nickRank, badge, group: rank.group };
+    activeEntries.push(entry);
+    writes.push([guild.id, member.id, badgeNumber, rank.rank, rank.nickRank, rank.group, rank.min, rank.max, rank.roleId]);
+    if (isBotOwner(member.id) || BELV_NICKNAME_EXEMPT_USER_IDS.has(member.id)) { skipped.push(member.id); continue; }
+    if (!bot.permissions.has(PermissionFlagsBits.ManageNicknames)) { failed.push({ id: member.id, reason: 'a botnak nincs Becenevek kezelése jogosultsága; az állománylista ettől még frissült' }); continue; }
+    if (member.id === guild.ownerId || bot.roles.highest.comparePositionTo(member.roles.highest) <= 0) { failed.push({ id: member.id, reason: 'a bot szerepköre nem jogosult a becenév módosítására' }); continue; }
+    const nickname = belvNickname(member, entry, previous);
+    if (member.nickname === nickname) { unchanged.push(member.id); continue; }
+    try { await member.setNickname(nickname, 'Belv hivatalos állományfrissítés • ' + badge + ' • ' + actorId); updated.push(member.id); }
+    catch (error) { failed.push({ id: member.id, reason: error?.message || 'Discord elutasította a becenév módosítását' }); }
+  }
+  for (let offset = 0; offset < writes.length; offset += 50) {
+    const chunk = writes.slice(offset, offset + 50), values = [], valueSql = [];
+    for (const write of chunk) {
+      const base = values.length;
+      values.push(...write);
+      valueSql.push('($' + (base+1) + ',$' + (base+2) + ',$' + (base+3) + ',$' + (base+4) + ',$' + (base+5) + ',$' + (base+6) + ',$' + (base+7) + ',$' + (base+8) + ',$' + (base+9) + ',TRUE,NOW())');
+    }
+    await query('INSERT INTO nexabot_belv_roster_badges(guild_id,user_id,badge,rank_name,nick_rank,group_name,range_min,range_max,role_id,active,updated_at) VALUES ' + valueSql.join(',') + ' ON CONFLICT(guild_id,user_id) DO UPDATE SET badge=EXCLUDED.badge,rank_name=EXCLUDED.rank_name,nick_rank=EXCLUDED.nick_rank,group_name=EXCLUDED.group_name,range_min=EXCLUDED.range_min,range_max=EXCLUDED.range_max,role_id=EXCLUDED.role_id,active=TRUE,updated_at=NOW()', values);
+  }
+  for (const member of members.values()) {
+    if (member.user?.bot || rankByUser.has(String(member.id)) || isBotOwner(member.id) || BELV_NICKNAME_EXEMPT_USER_IDS.has(member.id)) continue;
+    const previous = previousByUser.get(String(member.id));
+    if (!previous) continue;
+    inactive.push(member.id);
+    if (!bot.permissions.has(PermissionFlagsBits.ManageNicknames) || member.id === guild.ownerId || bot.roles.highest.comparePositionTo(member.roles.highest) <= 0) continue;
+    const oldBadge = 'BV-' + String(previous.badge).padStart(2, '0');
+    const sourceName = member.nickname || member.user.globalName || member.user.username;
+    const cleaned = stripManagedNickname(sourceName, previous.nick_rank, oldBadge);
+    if (cleaned === String(sourceName || '').trim()) continue;
+    try { await member.setNickname(cleaned.slice(0, 32), 'Belv rang megszűnt; a NEXA által kezelt rangrészt eltávolította'); }
+    catch (error) { failed.push({ id: member.id, reason: error?.message || 'A korábbi BELV-névrészt nem sikerült eltávolítani' }); }
+  }
+  const payload = { embeds: [belvRosterEmbed(activeEntries)], allowedMentions: { parse: [] } };
   const rosterMessage = prior ? await prior.edit(payload) : await channel.send(payload);
-  const oldMessageRemoved = legacy ? await legacy.delete('NEXA: régi kézi Belv állománylista lecserélése').then(() => true).catch(() => false) : false;
-  await recordAudit('belv_roster_synced', { guildId: guild.id, actorId, targetId: rosterMessage.id, metadata: { updated: updated.length, unchanged: unchanged.length, skipped, missing, failed: failed.map((item) => item.id), members: activeRoster.length, inactive: inactive.length } }).catch((error) => recordError(error, { command: 'belv_roster_audit', guildId: guild.id, userId: actorId }));
-  return { channel, rosterMessage, updated, unchanged, skipped, inactive, activeRoster, missing, failed, total: activeRoster.length, oldMessageRemoved };
+  const canDeleteLegacy = Boolean(legacy && channel.permissionsFor(bot)?.has(PermissionFlagsBits.ManageMessages, true));
+  const oldMessageRemoved = canDeleteLegacy ? await legacy.delete('NEXA: régi kézi Belv állománylista lecserélése').then(() => true).catch(() => false) : false;
+  await recordAudit('belv_roster_synced', { guildId: guild.id, actorId, targetId: rosterMessage.id, metadata: { updated: updated.length, unchanged: unchanged.length, skipped, failed: failed.map((item) => item.id), members: activeEntries.length, inactive: inactive.length } }).catch((error) => recordError(error, { command: 'belv_roster_audit', guildId: guild.id, userId: actorId }));
+  return { channel, rosterMessage, updated, unchanged, skipped, inactive, activeRoster: activeEntries, missing: [], failed, total: activeEntries.length, oldMessageRemoved, legacyMessageKept: Boolean(legacy && !canDeleteLegacy) };
 }
 async function syncBelvRoster(guild, actorId, botUserId) {
   if (belvRosterLocks.has(guild?.id)) fail(409, 'Az állomány frissítése már folyamatban van. Várd meg az eredményt.');
@@ -1249,14 +1385,15 @@ function startBelvRosterMonitor(client) {
     pending.unref?.();
   };
   client.on('guildMemberUpdate', (oldMember, newMember) => {
-    if (newMember.guild?.id !== BELV_GUILD_ID || !BELV_ROSTER.some((entry) => entry.id === newMember.id)) return;
+    if (newMember.guild?.id !== BELV_GUILD_ID) return;
     const rolesChanged = oldMember.roles.cache.size !== newMember.roles.cache.size
       || [...oldMember.roles.cache.keys()].some((id) => !newMember.roles.cache.has(id));
     if (rolesChanged) schedule('member-rank-change');
   });
   client.on('guildMemberRemove', (member) => {
-    if (member.guild?.id === BELV_GUILD_ID && BELV_ROSTER.some((entry) => entry.id === member.id)) schedule('member-left');
+    if (member.guild?.id === BELV_GUILD_ID) schedule('member-left');
   });
+  client.on('guildMemberAdd', (member) => { if (member.guild?.id === BELV_GUILD_ID) schedule('member-joined'); });
   client.on('guildRoleUpdate', (_oldRole, newRole) => { if (newRole.guild?.id === BELV_GUILD_ID) schedule('role-position-change'); });
   client.on('guildRoleCreate', (role) => { if (role.guild?.id === BELV_GUILD_ID) schedule('role-created'); });
   client.on('guildRoleDelete', (role) => { if (role.guild?.id === BELV_GUILD_ID) schedule('role-deleted'); });
@@ -2576,6 +2713,7 @@ const {
 } = require('./config');
 const { isStaff } = require('./utils');
 const { recordUsage } = require('./telemetry');
+const { cleanBotMention } = require('./belv-roster-rules');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const memoryFallback = new Map();
@@ -3110,7 +3248,7 @@ async function handleAiMessage(message) {
   const inAiChannel = Boolean(message.guild && moduleEnabled(message.guild.id, 'ai') && config.channels.ai && message.channel.id === config.channels.ai);
   if (!isPrivate && !mentioned && !inAiChannel) return;
 
-  const cleanContent = message.content.replace(/<@!?\\d+>/g, ' ').trim();
+  const cleanContent = cleanBotMention(message.content, message.client.user?.id);
   const offlineAnswer = findOfflineAnswer(cleanContent);
   const replyOffline = async (content) => {
     const cooldownKey = String(message.guild?.id || 'dm') + ':' + String(message.author.id);
@@ -3248,6 +3386,7 @@ module.exports = {
   looksSensitive,
   extractResponseText
 };
+
 },
 "src/applications.js": function(module, exports, require) {
 const crypto = require('node:crypto');
@@ -11994,9 +12133,11 @@ const {
 } = require('discord.js');
 const { NAMES, COLORS } = require('./constants');
 const { getGuildConfig } = require('./config');
+const { isConfiguredRoleHolder } = require('./belv-roster-rules');
 const { baseEmbed, ephemeralError, sendLog } = require('./utils');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
+const BELV_APPROVAL_GUILD_ID = '1517509643734221030';
 const REVIEW_CHANNEL_KEY = 'case_files';
 const DEFAULT_TARGET_PING_TYPES = new Set([
   'info_calls', 'internal_calls', 'important_info', 'tgf_results', 'leave_request',
@@ -12603,6 +12744,7 @@ function belvApprovalRoleExists(guild) {
 }
 
 function canApprove(member) {
+  if (member?.guild?.id === BELV_APPROVAL_GUILD_ID) return isConfiguredRoleHolder(member, belvApprovalRoleId(member.guild));
   if (hasNamedRole(member, BELV_APPROVAL_ROLE_NAME)) return true;
   if (belvApprovalRoleExists(member?.guild)) return false;
   const dashboardRoleId = member?.guild?.id ? getGuildConfig(member.guild.id).roles?.dashboard : null;
@@ -12616,6 +12758,9 @@ function canApprove(member) {
 }
 
 function approvalDenialMessage(guild) {
+  if (guild?.id === BELV_APPROVAL_GUILD_ID) return belvApprovalRoleId(guild)
+    ? `Ezt kizárólag a beállított **${BELV_APPROVAL_ROLE_NAME}** rang fogadhatja el vagy utasíthatja el.`
+    : 'A BELV jóváhagyó rangazonosító nincs beállítva; állítsd be a BELV_APPROVAL_ROLE_ID változót.';
   return belvApprovalRoleExists(guild)
     ? `Ezt kizárólag a **${BELV_APPROVAL_ROLE_NAME}** rang fogadhatja el vagy utasíthatja el.`
     : `Ezt csak adminisztrátor vagy a **${NAMES.leadershipRole}** rang használhatja.`;
@@ -18372,6 +18517,7 @@ const {
 const { NAMES, COLORS } = require('./constants');
 const { baseEmbed, isStaff } = require('./utils');
 const { recordAudit } = require('./telemetry');
+const { adjustedActiveSeconds } = require('./belv-roster-rules');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const openFallback = new Map();
@@ -18822,7 +18968,7 @@ async function adjustShiftMinutes(guildId,recordId,adjustmentMinutes,reason,acto
   const recordIdValue=Number(row.id);
   await updateShiftRecord(guildId,recordIdValue,{startedAt,endedAt,breakSeconds:Number(row.break_seconds||0),adjustmentMinutes:minutes,adjustmentReason:why,adjustedUserId:row.user_id},actorId);
   const end=endedAt?new Date(endedAt.getTime()+minutes*60000):null,adjustedStart=endedAt?startedAt:new Date(startedAt.getTime()-minutes*60000);
-  const activeSeconds=Math.max(0,Math.floor(((end||new Date())-adjustedStart)/1000)-Number(row.break_seconds||0));
+  const activeSeconds=adjustedActiveSeconds(adjustedStart,end||new Date(),Number(row.break_seconds||0),0);
   return{id:recordIdValue,userId:row.user_id,adjustmentMinutes:minutes,activeSeconds};
 }
 

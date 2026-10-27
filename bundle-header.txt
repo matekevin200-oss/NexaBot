@@ -1,4 +1,4 @@
-// NEXA Bot 20.1.1 CIA Expanded release — NEXA OS Studio platform.
+// NEXA Bot 25.15.0 Platform + Economy + MDT release — NEXA OS Studio platform.
 const __nativeRequire = require;
 const __path = __nativeRequire('node:path').posix;
 const __modules = {
