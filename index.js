@@ -467,15 +467,6 @@ const BELV_ROSTER = Object.freeze([
   { id: '1563584488477302874', rank: 'Belvédelmi Ügynök', nickRank: 'Belv. Ügynök', badge: 'BV-71', group: 'Hivatásos állomány' },
   { id: '1422651451418738731', rank: 'Belvédelmi Jelölt', nickRank: 'Belv. Jelölt', badge: 'BV-90', group: 'Képzési állomány' }
 ]);
-const BELV_ASSOCIATED_ROLES = Object.freeze([
-  { id: '1493594329418301452', name: 'KIO Igazgató-Helyettes' },
-  { id: '1481698002740576378', name: 'KIO Közúti Ügyintéző' },
-  { id: '1289277942760865884', name: 'KIO Közúti Munkatárs' },
-  { id: '1330269428990083083', name: 'KIO Közúti Munkatárs (Próbaidő)' },
-  { id: '1517184231057395816', name: 'KIO Közúti Munkatárs (Nagyon Próbaidő)' },
-  { id: '1232381121530953830', name: 'ARFK Vezetőség' }
-]);
-const BELV_ASSOCIATED_NAMES = Object.freeze(['Papaya — FBI Vezetőség', 'Ákos — FBI Tag']);
 const CODE_MS = 10 * 60 * 1000;
 const SESSION_MS = 6 * 60 * 60 * 1000;
 const windows = new Map();
@@ -1149,7 +1140,7 @@ function hasBelvPersonnelRole(member) {
     return rankNames.some((rank) => name === rank || name.startsWith(`${rank}-`) || name.includes(`-${rank}-`));
   });
 }
-function belvRosterEmbed(roster = BELV_ROSTER, associatedEntries = BELV_ASSOCIATED_ROLES) {
+function belvRosterEmbed(roster = BELV_ROSTER) {
   const embed = new EmbedBuilder()
     .setColor(0x1f4968)
     .setTitle('🏛️ BELVÉDELMI IGAZGATÓSÁG')
@@ -1163,26 +1154,13 @@ function belvRosterEmbed(roster = BELV_ROSTER, associatedEntries = BELV_ASSOCIAT
       inline: false
     });
   }
-  const primaryById = new Map(roster.map((entry) => [entry.id, entry]));
-  const associated = [
-    { id: '1366460534966452345', name: 'KIO Igazgató' },
-    ...associatedEntries
-  ];
-  embed.addFields({
-    name: 'KIO / ARFK szolgálati beosztások',
-    value: associated.map((entry) => {
-      const primary = primaryById.get(entry.id);
-      return `<@${entry.id}> — ${entry.name}${primary ? ` · elsődleges BV-azonosító: ${primary.badge}` : ' · BV-rangbesorolás nincs megadva'} `;
-    }).join('\n') || '—',
-    inline: false
-  });
   embed.addFields({
     name: 'Hivatalos BV-tartományok',
     value: 'Főigazgató **BV-01** · Főigazgató-helyettes **BV-02** · Igazgató **BV-03** · Igazgatóhelyettes **BV-04–09**\nFőosztályvezető **BV-10–14** · Műveleti vezető **BV-15–19** · Ellenőrzési vezető **BV-20–24** · Főellenőr **BV-25–34**\nVezető tiszt **BV-35–39** · Belvédelmi tiszt **BV-40–49** · Vezető ügynök **BV-50–59** · Különleges ügynök **BV-60–69** · Belvédelmi ügynök **BV-70–89** · Belvédelmi jelölt **BV-90–99**',
     inline: false
   }).addFields({
     name: 'Szabály',
-    value: 'Előléptetéskor a régi azonosító visszavonandó, és az új rangtartományból kell kiosztani a következőt. Jelvényszám önállóan nem választható vagy adható át. A rendszer nem talál ki BV-rangot a külön KIO/ARFK/FBI-beosztásokhoz; ehhez előbb hivatalos BV-rangbesorolás kell.',
+    value: 'Előléptetéskor a régi azonosító visszavonandó, és az új rangtartományból kell kiosztani a következőt. Jelvényszám önállóan nem választható vagy adható át. ',
     inline: false
   }).setTimestamp();
   return embed;
@@ -1227,22 +1205,7 @@ async function syncBelvRosterUnlocked(guild, actorId, botUserId) {
     }
   }
 
-  const associatedEntries = [];
-  const associatedCandidates = [
-    { id: '1366460534966452345', name: 'KIO Igazgató' },
-    ...BELV_ASSOCIATED_ROLES,
-    { id: '1219659632503558237', name: 'KIO Közúti Munkatárs (Próbaidő)' }
-  ];
-  for (const entry of associatedCandidates) {
-    const member = await guild.members.fetch({ user: entry.id, force: true }).catch(() => null);
-    if (!member) continue;
-    const expectedRole = normalizedRosterChannel(entry.name);
-    if ([...member.roles.cache.values()].some((role) => {
-      const name = normalizedRosterChannel(role.name);
-      return name === expectedRole || name.includes(expectedRole);
-    })) associatedEntries.push(entry);
-  }
-  const payload = { embeds: [belvRosterEmbed(activeRoster, associatedEntries)], allowedMentions: { parse: [] } };
+  const payload = { embeds: [belvRosterEmbed(activeRoster)], allowedMentions: { parse: [] } };
   const rosterMessage = prior ? await prior.edit(payload) : await channel.send(payload);
   const oldMessageRemoved = legacy ? await legacy.delete('NEXA: régi kézi Belv állománylista lecserélése').then(() => true).catch(() => false) : false;
   await recordAudit('belv_roster_synced', { guildId: guild.id, actorId, targetId: rosterMessage.id, metadata: { updated: updated.length, unchanged: unchanged.length, skipped, missing, failed: failed.map((item) => item.id), members: activeRoster.length, inactive: inactive.length } }).catch((error) => recordError(error, { command: 'belv_roster_audit', guildId: guild.id, userId: actorId }));
@@ -1326,7 +1289,7 @@ async function handleBelvRosterCommand(interaction) {
     const result = await syncBelvRoster(interaction.guild, member.id, interaction.client.user.id);
     const errors = result.failed.length ? `\n**Nem módosult:** ${result.failed.map((entry) => `<@${entry.id}> — ${entry.reason}`).join('\n').slice(0, 900)}` : '';
     const missing = result.missing.length ? `\n**Nem található a szerveren:** ${result.missing.map((id) => `<@${id}>`).join(', ')}` : '';
-    return interaction.editReply(`✅ **Belv állomány frissítve**\nCsatorna: ${result.channel}\nNyilvántartás: ${result.rosterMessage.url}\nAktív tag a listában: **${result.total}** · rang nélkül kikerült: **${result.inactive.length}**\nBecenév módosítva: **${result.updated.length}** · már megfelelő: **${result.unchanged.length}** · további kihagyva: **${result.skipped.length - result.inactive.length}**${result.oldMessageRemoved ? '\nA régi kézi nyilvántartás lecserélve.' : ''}${missing}${errors}\n\nA rang változását a bot automatikusan figyeli; a nyilvántartást néhány másodpercen belül, újraindulás után és időszakos ellenőrzéssel is frissíti. A KIO/ARFK/FBI külön beosztásaihoz nem rendelt a rendszer találomra BV-rangot.`);
+    return interaction.editReply(`✅ **Belv állomány frissítve**\nCsatorna: ${result.channel}\nNyilvántartás: ${result.rosterMessage.url}\nAktív tag a listában: **${result.total}** · rang nélkül kikerült: **${result.inactive.length}**\nBecenév módosítva: **${result.updated.length}** · már megfelelő: **${result.unchanged.length}** · további kihagyva: **${result.skipped.length - result.inactive.length}**${result.oldMessageRemoved ? '\nA régi kézi nyilvántartás lecserélve.' : ''}${missing}${errors}\n\nA rang változását a bot automatikusan figyeli; a nyilvántartást néhány másodpercen belül, újraindulás után és időszakos ellenőrzéssel is frissíti.`);
   } catch (error) {
     if (!error.status) await recordError(error, { command: 'belv_roster_sync', guildId: interaction.guildId, userId: interaction.user.id }).catch(() => {});
     return interaction.editReply(`❌ ${error.status ? error.message : 'Az állományi frissítés nem sikerült. Ellenőrizd a bot naplóját.'}`);
