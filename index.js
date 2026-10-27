@@ -724,6 +724,9 @@ async function provisionMdtOwnerChannels(guild, actorId, input, networkCommit=nu
     await query('DELETE FROM nexabot_mdt_provision_locks WHERE guild_id=$1 AND lease_token=$2', [guild.id, token]).catch(() => {});
   }
 }
+function hasBelvApprovalRole(member) {
+  return Boolean(member?.roles?.cache?.some((role) => normalizedRosterChannel(role.name) === 'belvedelmi-vezetoseg'));
+}
 function leader(member, settings) {
   return admin(member)||settings.reviewMode==='all_members'&&robloxIdsFor(settings,member?.id).length>0||settings.reviewerDiscordIds?.includes(member?.id)||member?.id===member?.guild?.ownerId||Boolean(member?.permissions?.has(PermissionFlagsBits.Administrator))||Boolean(member?.roles?.cache?.some(role=>(settings.leaderRoleIds||[]).includes(role.id)||LEADER_NAMES.has(normalized(role.name))));
 }
@@ -733,7 +736,7 @@ function assertAccess(guild, member, settings) {
   if (owner.blacklistedGuilds?.includes(guild.id) || owner.blacklistedUsers?.includes(member?.id)) fail(403, 'Ez a szerver vagy fiók le van tiltva a NEXA rendszerben.');
   if (owner.maintenance && !isBotOwner(member?.id)) fail(503, 'A NEXA jelenleg karbantartás alatt áll.');
   if (!settings.enabled) fail(403, 'Az MDT ezen a Discord-szerveren nincs bekapcsolva.');
-  if (!member || !isBotOwner(member.id) && !robloxIdsFor(settings, member.id).length && !settings.networkMemberIds?.includes(member.id) && !leader(member,settings)) fail(403, 'Nincs MDT-hozzáférésed. A vezetőségnek hozzá kell adnia a Discord-ID-det; játékbeli belépéshez saját Roblox-ID is kell.');
+  if (!member || !isBotOwner(member.id) && !robloxIdsFor(settings, member.id).length && !settings.networkMemberIds?.includes(member.id) && !leader(member,settings) && !(guild.id === BELV_GUILD_ID && hasBelvApprovalRole(member))) fail(403, 'Nincs MDT-hozzáférésed. A vezetőségnek hozzá kell adnia a Discord-ID-det; játékbeli belépéshez saját Roblox-ID is kell.');
 }
 async function freshMember(guild, userId) {
   return guild.members.fetch({ user: userId, force: true }).catch(() => null);
@@ -750,7 +753,7 @@ function definitions(guild, member, settings) {
   const generic = TYPES.filter(type=>!settings.disabledTypes?.includes(type.key)).map((type) => ({ ...type, approval:(settings.approvalTypes||TYPES.filter(item=>item.approval).map(item=>item.key)).includes(type.key), channelId: settings.channelIds?.[type.key] || settings.defaultChannelId, category: type.key }));
   const documents = (settings.exposeDocumentTemplates?allDocumentTypes(guild):[]).filter((type) => {
     const rule = documentRule(guild, type);
-    return admin(member) || robloxIdsFor(settings, member.id).length || rule.accessRoleId && member.roles.cache.has(rule.accessRoleId);
+    return admin(member) || hasBelvApprovalRole(member) || robloxIdsFor(settings, member.id).length || rule.accessRoleId && member.roles.cache.has(rule.accessRoleId);
   }).map((type) => ({ ...type, key: `doc:${type.key}`, channelId: findDocumentChannel(guild, type)?.id, category: 'document', documentKey: type.key }));
   return [...generic, ...documents].filter((type) => {
     const channel = textChannel(guild, type.channelId);
@@ -787,7 +790,7 @@ function publicTemplate(type) {
 function publicRecord(row, ctx) {
   const manager = admin(ctx.member);
   const owned = row.created_by === ctx.member.id;
-  return { id: String(row.id), guildId: row.guild_id, key: row.template_key, title: row.title, fields: row.fields, status: row.status, revision: row.revision, reviewedBy: row.reviewed_by || null, reviewReason: row.review_reason || null, createdBy: row.created_by, updatedBy: row.updated_by, createdAt: row.created_at, updatedAt: row.updated_at, discordState: row.discord_state, discordUrl: row.discord_message_id ? `https://discord.com/channels/${row.guild_id}/${row.discord_channel_id}/${row.discord_message_id}` : row.review_message_id ? `https://discord.com/channels/${row.guild_id}/${row.review_channel_id}/${row.review_message_id}` : null, canEdit: (owned || manager) && !['archived', 'published'].includes(row.status) || (owned || manager) && row.status === 'published' && !row.approval_required, canArchive: (owned || manager) && row.status !== 'archived', canReview: leader(ctx.member, ctx.settings) && row.status === 'pending' && (ctx.settings.allowSelfReview!==false||!owned||manager), canSync: owned || manager || leader(ctx.member, ctx.settings) && row.reviewed_by === ctx.member.id };
+  return { id: String(row.id), guildId: row.guild_id, key: row.template_key, title: row.title, fields: row.fields, status: row.status, revision: row.revision, reviewedBy: row.reviewed_by || null, reviewReason: row.review_reason || null, createdBy: row.created_by, updatedBy: row.updated_by, createdAt: row.created_at, updatedAt: row.updated_at, discordState: row.discord_state, discordUrl: row.discord_message_id ? `https://discord.com/channels/${row.guild_id}/${row.discord_channel_id}/${row.discord_message_id}` : row.review_message_id ? `https://discord.com/channels/${row.guild_id}/${row.review_channel_id}/${row.review_message_id}` : null, canEdit: (owned || manager) && !['archived', 'published'].includes(row.status) || (owned || manager) && row.status === 'published' && !row.approval_required, canArchive: (owned || manager) && row.status !== 'archived', canReview: (ctx.guild.id === BELV_GUILD_ID ? hasBelvApprovalRole(ctx.member) : leader(ctx.member, ctx.settings)) && row.status === 'pending' && (ctx.settings.allowSelfReview!==false||!owned||manager), canSync: owned || manager || leader(ctx.member, ctx.settings) && row.reviewed_by === ctx.member.id };
 }
 async function getRecord(ctx, id) {
   if (!/^\d{1,20}$/.test(String(id))) fail(400, 'Érvénytelen MDT-azonosító.');
@@ -798,7 +801,7 @@ async function getRecord(ctx, id) {
   return row;
 }
 function canReadRecord(ctx, row) {
-  return leader(ctx.member, ctx.settings) || row.created_by === ctx.member.id || row.status === 'published' || row.status === 'archived' && (!row.approval_required || Boolean(row.discord_message_id));
+  return leader(ctx.member, ctx.settings) || ctx.guild.id === BELV_GUILD_ID && hasBelvApprovalRole(ctx.member) || row.created_by === ctx.member.id || row.status === 'published' || row.status === 'archived' && (!row.approval_required || Boolean(row.discord_message_id));
 }
 function assertEdit(ctx, row) {
   if (row.created_by !== ctx.member.id && !admin(ctx.member)) fail(403, 'Csak a saját iratodat módosíthatod; más iratát a fő owner kezelheti.');
@@ -895,7 +898,7 @@ async function mutateRecord(ctx, id, body, action) {
     let fields = row.fields, title = row.title, status = row.status, reviewedBy = row.reviewed_by, reason = row.review_reason;
     if (action === 'review') {
       if(row.created_by===ctx.member.id&&ctx.settings.allowSelfReview===false&&!admin(ctx.member))fail(403,'A saját iratodat egy másik MDT-tagnak kell bírálnia.');
-      if (!leader(ctx.member, ctx.settings)) fail(403, 'Az MDT-iratokat a felvett MDT-tagok és a fő owner bírálhatják.');
+      if (!(ctx.guild.id === BELV_GUILD_ID ? hasBelvApprovalRole(ctx.member) : leader(ctx.member, ctx.settings))) fail(403, ctx.guild.id === BELV_GUILD_ID ? 'Az iratokat kizárólag a BELVÉDELMI VEZETŐSÉG rang bírálhatja el.' : 'Az MDT-iratokat a felvett MDT-tagok és a fő owner bírálhatják.');
       if (row.status !== 'pending') fail(409, 'Ez az irat már nem vár jóváhagyásra.');
       if (!['approve', 'reject'].includes(body.decision)) fail(400, 'Érvénytelen döntés.');
       status = body.decision === 'approve' ? 'published' : 'rejected';
@@ -1143,21 +1146,21 @@ function hasBelvPersonnelRole(member) {
   if (/^\d{16,22}$/.test(configuredId)) return Boolean(member.roles?.cache?.has(configuredId));
   return [...(member.roles?.cache?.values?.() || [])].some((role) => normalizedRosterChannel(role.name) === 'belvedelmi-allomany');
 }
-function belvRosterEmbed() {
+function belvRosterEmbed(roster = BELV_ROSTER) {
   const embed = new EmbedBuilder()
     .setColor(0x1f4968)
     .setTitle('🏛️ BELVÉDELMI IGAZGATÓSÁG')
-    .setDescription('**HIVATALOS JELVÉNYSZÁM- ÉS ÁLLOMÁNYI NYILVÁNTARTÁS**\nEgy állománytaghoz egy aktív BV-azonosító tartozik. A Discord-becenév formátuma: `név | rang | BV-XX`.')
+    .setDescription('**HIVATALOS JELVÉNYSZÁM- ÉS ÁLLOMÁNYI NYILVÁNTARTÁS**\nA lista csak a „Belvédelmi állomány” ranggal rendelkező tagokat mutatja; a rang levételekor a bot automatikusan kiveszi a bejegyzést. Egy állománytaghoz egy aktív BV-azonosító tartozik. A Discord-becenév formátuma: `név | rang | BV-XX`.')
     .setFooter({ text: BELV_ROSTER_MARKER });
   for (const group of ['Felsővezetés', 'Vezetői állomány', 'Hivatásos állomány', 'Képzési állomány']) {
-    const members = BELV_ROSTER.filter((entry) => entry.group === group);
+    const members = roster.filter((entry) => entry.group === group);
     embed.addFields({
       name: group,
       value: members.map((entry) => `<@${entry.id}> — **${entry.rank}** · **${entry.badge}**`).join('\n') || '—',
       inline: false
     });
   }
-  const primaryById = new Map(BELV_ROSTER.map((entry) => [entry.id, entry]));
+  const primaryById = new Map(roster.map((entry) => [entry.id, entry]));
   const associated = [
     { id: '1366460534966452345', name: 'KIO Igazgató' },
     ...BELV_ASSOCIATED_ROLES,
@@ -1201,12 +1204,13 @@ async function syncBelvRosterUnlocked(guild, actorId, botUserId) {
   });
   if (legacy && !channel.permissionsFor(bot)?.has(PermissionFlagsBits.ManageMessages, true)) fail(403, 'A régi, kézzel küldött állományüzenet lecseréléséhez adj a botnak Manage Messages jogosultságot ebben a csatornában.');
 
-  const updated = [], unchanged = [], skipped = [], missing = [], failed = [];
+  const updated = [], unchanged = [], skipped = [], missing = [], failed = [], inactive = [], activeRoster = [];
   for (const entry of BELV_ROSTER) {
     const member = await guild.members.fetch({ user: entry.id, force: true }).catch(() => null);
     if (!member) { missing.push(entry.id); continue; }
+    if (!hasBelvPersonnelRole(member)) { skipped.push(entry.id); inactive.push(entry.id); continue; }
+    activeRoster.push(entry);
     if (isBotOwner(member.id)) { skipped.push(entry.id); continue; }
-    if (!hasBelvPersonnelRole(member)) { skipped.push(entry.id); continue; }
     if (member.user.bot || member.id === guild.ownerId || bot.roles.highest.comparePositionTo(member.roles.highest) <= 0) {
       failed.push({ id: entry.id, reason: 'a bot szerepköre nem jogosult a becenév módosítására' });
       continue;
@@ -1221,11 +1225,11 @@ async function syncBelvRosterUnlocked(guild, actorId, botUserId) {
     }
   }
 
-  const payload = { embeds: [belvRosterEmbed()], allowedMentions: { parse: [] } };
+  const payload = { embeds: [belvRosterEmbed(activeRoster)], allowedMentions: { parse: [] } };
   const rosterMessage = prior ? await prior.edit(payload) : await channel.send(payload);
   const oldMessageRemoved = legacy ? await legacy.delete('NEXA: régi kézi Belv állománylista lecserélése').then(() => true).catch(() => false) : false;
-  await recordAudit('belv_roster_synced', { guildId: guild.id, actorId, targetId: rosterMessage.id, metadata: { updated: updated.length, unchanged: unchanged.length, skipped, missing, failed: failed.map((item) => item.id), members: BELV_ROSTER.length } }).catch((error) => recordError(error, { command: 'belv_roster_audit', guildId: guild.id, userId: actorId }));
-  return { channel, rosterMessage, updated, unchanged, skipped, missing, failed, total: BELV_ROSTER.length, oldMessageRemoved };
+  await recordAudit('belv_roster_synced', { guildId: guild.id, actorId, targetId: rosterMessage.id, metadata: { updated: updated.length, unchanged: unchanged.length, skipped, missing, failed: failed.map((item) => item.id), members: activeRoster.length, inactive: inactive.length } }).catch((error) => recordError(error, { command: 'belv_roster_audit', guildId: guild.id, userId: actorId }));
+  return { channel, rosterMessage, updated, unchanged, skipped, inactive, activeRoster, missing, failed, total: activeRoster.length, oldMessageRemoved };
 }
 async function syncBelvRoster(guild, actorId, botUserId) {
   if (belvRosterLocks.has(guild?.id)) fail(409, 'Az állomány frissítése már folyamatban van. Várd meg az eredményt.');
@@ -1270,6 +1274,9 @@ function startBelvRosterMonitor(client) {
       || [...oldMember.roles.cache.keys()].some((id) => !newMember.roles.cache.has(id));
     if (rolesChanged) schedule('member-rank-change');
   });
+  client.on('guildMemberRemove', (member) => {
+    if (member.guild?.id === BELV_GUILD_ID && BELV_ROSTER.some((entry) => entry.id === member.id)) schedule('member-left');
+  });
   client.on('guildRoleUpdate', (_oldRole, newRole) => { if (newRole.guild?.id === BELV_GUILD_ID) schedule('role-position-change'); });
   client.on('guildRoleCreate', (role) => { if (role.guild?.id === BELV_GUILD_ID) schedule('role-created'); });
   client.on('guildRoleDelete', (role) => { if (role.guild?.id === BELV_GUILD_ID) schedule('role-deleted'); });
@@ -1302,7 +1309,7 @@ async function handleBelvRosterCommand(interaction) {
     const result = await syncBelvRoster(interaction.guild, member.id, interaction.client.user.id);
     const errors = result.failed.length ? `\n**Nem módosult:** ${result.failed.map((entry) => `<@${entry.id}> — ${entry.reason}`).join('\n').slice(0, 900)}` : '';
     const missing = result.missing.length ? `\n**Nem található a szerveren:** ${result.missing.map((id) => `<@${id}>`).join(', ')}` : '';
-    return interaction.editReply(`✅ **Belv állomány frissítve**\nCsatorna: ${result.channel}\nNyilvántartás: ${result.rosterMessage.url}\nBecenév módosítva: **${result.updated.length}** · már megfelelő: **${result.unchanged.length}** · „Belvédelmi állomány” rang nélkül kihagyva: **${result.skipped.length}**${result.oldMessageRemoved ? '\nA régi kézi nyilvántartás lecserélve.' : ''}${missing}${errors}\n\nBecenevet csak a „Belvédelmi állomány” ranggal rendelkező tagok kaptak. A KIO/ARFK/FBI külön beosztásaihoz nem rendelt a rendszer találomra BV-rangot.`);
+    return interaction.editReply(`✅ **Belv állomány frissítve**\nCsatorna: ${result.channel}\nNyilvántartás: ${result.rosterMessage.url}\nAktív tag a listában: **${result.total}** · rang nélkül kikerült: **${result.inactive.length}**\nBecenév módosítva: **${result.updated.length}** · már megfelelő: **${result.unchanged.length}** · további kihagyva: **${result.skipped.length - result.inactive.length}**${result.oldMessageRemoved ? '\nA régi kézi nyilvántartás lecserélve.' : ''}${missing}${errors}\n\nA rang változását a bot automatikusan figyeli; a nyilvántartást néhány másodpercen belül, újraindulás után és időszakos ellenőrzéssel is frissíti. A KIO/ARFK/FBI külön beosztásaihoz nem rendelt a rendszer találomra BV-rangot.`);
   } catch (error) {
     if (!error.status) await recordError(error, { command: 'belv_roster_sync', guildId: interaction.guildId, userId: interaction.user.id }).catch(() => {});
     return interaction.editReply(`❌ ${error.status ? error.message : 'Az állományi frissítés nem sikerült. Ellenőrizd a bot naplóját.'}`);
@@ -1942,7 +1949,7 @@ function hubPayload(guild, settings) {
       { name: '03 • Iratkezelés', value: 'Játékosadatlap, személyek, járművek, ügyiratok, RP-körözések, szolgálati napló és engedélyezett frakciós iratsablonok.', inline: false },
       { name: 'Hozzáférés', value: `${(settings.members || []).length} felvett MDT-ügyintéző + fő owner`, inline: true },
       { name: 'Állományi nézet', value: settings.staffRoleId ? `<@&${settings.staffRoleId}> • közzétett iratok` : 'A fő owner az Owner Centerben választ állományi rangot.', inline: true },
-      { name: 'Vezetői döntés', value: 'A jóváhagyást a beállított vezetőség vagy kijelölt ellenőr végzi. A tagkezeléshez vezetőségi Discord-rang és jelszó kell; a telepítés fő owner feladat.', inline: false })
+      { name: 'Vezetői döntés', value: guild?.id === BELV_GUILD_ID ? 'A BELV-iratokat kizárólag a 🏛️ | BELVÉDELMI VEZETŐSÉG rang fogadhatja el vagy utasíthatja el. A tagkezeléshez vezetőségi Discord-rang és jelszó kell; a telepítés fő owner feladat.' : 'A jóváhagyást a beállított vezetőség vagy kijelölt ellenőr végzi. A tagkezeléshez vezetőségi Discord-rang és jelszó kell; a telepítés fő owner feladat.', inline: false })
     .setFooter({ text: guild?markerFor(guild):MARKER }).setTimestamp();
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('mdt_hub:script').setLabel('Saját betöltő').setStyle(ButtonStyle.Primary),
@@ -12553,7 +12560,9 @@ function documentPanel(type, guild = null) {
     .setTitle(`${type.emoji} ${type.title}`)
     .setDescription(
       type.approval
-        ? 'Az adatlap kitöltése után a dokumentum a **Vezetőség** jóváhagyására kerül. Jóváhagyás után a NexaBot teszi közzé ebben a csatornában.'
+        ? belvApprovalRoleExists(guild)
+          ? 'Az adatlap kitöltése után a dokumentum a **BELVÉDELMI VEZETŐSÉG** jóváhagyására kerül. Jóváhagyás után a NexaBot teszi közzé ebben a csatornában.'
+          : 'Az adatlap kitöltése után a dokumentum a **Vezetőség** jóváhagyására kerül. Jóváhagyás után a NexaBot teszi közzé ebben a csatornában.'
         : 'Töltsd ki az adatlapot. A kész bejegyzést a NexaBot teszi közzé ebben a csatornában.'
     )
     .addFields(
@@ -12606,7 +12615,16 @@ function isOperative(member) {
   return hasNamedRole(member, NAMES.operativeRole);
 }
 
+const BELV_APPROVAL_ROLE_NAME = 'BELVÉDELMI VEZETŐSÉG';
+
+function belvApprovalRoleExists(guild) {
+  const expected = normalizeName(BELV_APPROVAL_ROLE_NAME);
+  return Boolean(guild?.roles?.cache?.some((role) => normalizeName(role.name) === expected));
+}
+
 function canApprove(member) {
+  if (hasNamedRole(member, BELV_APPROVAL_ROLE_NAME)) return true;
+  if (belvApprovalRoleExists(member?.guild)) return false;
   const dashboardRoleId = member?.guild?.id ? getGuildConfig(member.guild.id).roles?.dashboard : null;
   const managerRoleIds = member?.guild?.id ? getGuildConfig(member.guild.id).documents?.managerRoleIds || [] : [];
   return Boolean(
@@ -12615,6 +12633,12 @@ function canApprove(member) {
     managerRoleIds.some((roleId) => member?.roles?.cache?.has(roleId)) ||
     hasNamedRole(member, NAMES.leadershipRole)
   );
+}
+
+function approvalDenialMessage(guild) {
+  return belvApprovalRoleExists(guild)
+    ? `Ezt kizárólag a **${BELV_APPROVAL_ROLE_NAME}** rang fogadhatja el vagy utasíthatja el.`
+    : `Ezt csak adminisztrátor vagy a **${NAMES.leadershipRole}** rang használhatja.`;
 }
 
 function bviCaseNumber(date = new Date()) {
@@ -12634,7 +12658,7 @@ function documentEmbed(type, interaction, caseNumber, status, targetUserId = nul
   return baseEmbed(
     status === 'pending' ? `⏳ Jóváhagyásra vár • ${type.title}` : `${type.emoji} ${type.title}`,
     status === 'pending'
-      ? 'A dokumentum a **Vezetőség** vagy egy adminisztrátor döntésére vár.'
+      ? 'A dokumentum a kijelölt vezetői rang jóváhagyására vár.'
       : 'Hivatalos bejegyzés a NexaBot dokumentációs rendszeréből.',
     status === 'pending' ? COLORS.warning : COLORS.primary
   ).addFields(
@@ -12690,7 +12714,7 @@ async function handleDocumentButton(interaction) {
 
   if (id.startsWith('doc_approve:')) {
     if (!canApprove(interaction.member)) {
-      return ephemeralError(interaction, `Ezt csak adminisztrátor vagy a **${NAMES.leadershipRole}** rang használhatja.`);
+      return ephemeralError(interaction, approvalDenialMessage(interaction.guild));
     }
     const [, key, targetChannelId, submitterId, selectedUserId] = id.split(':');
     const targetUserId = /^\d{16,22}$/.test(selectedUserId || '') ? selectedUserId : null;
@@ -12731,7 +12755,7 @@ async function handleDocumentButton(interaction) {
 
   if (id.startsWith('doc_reject:')) {
     if (!canApprove(interaction.member)) {
-      return ephemeralError(interaction, `Ezt csak adminisztrátor vagy a **${NAMES.leadershipRole}** rang használhatja.`);
+      return ephemeralError(interaction, approvalDenialMessage(interaction.guild));
     }
     const [, , , submitterId] = id.split(':');
     return interaction.showModal(rejectionModal(interaction.message.id, submitterId));
@@ -12795,7 +12819,7 @@ async function handleDocumentModal(interaction) {
 
   if (interaction.customId.startsWith('doc_reject_submit:')) {
     if (!canApprove(interaction.member)) {
-      return ephemeralError(interaction, `Ezt csak adminisztrátor vagy a **${NAMES.leadershipRole}** rang használhatja.`);
+      return ephemeralError(interaction, approvalDenialMessage(interaction.guild));
     }
     await interaction.deferReply({ flags: EPHEMERAL });
     const [, messageId, submitterId] = interaction.customId.split(':');
