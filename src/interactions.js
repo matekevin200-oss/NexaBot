@@ -272,6 +272,7 @@ async function handleCommand(interaction) {
     }
   }
   if(interaction.commandName==='moderacio')return require('./platform-moderation').panel(interaction);
+  if (['zene', 'music'].includes(interaction.commandName)) return require('./music').handleMusicCommand(interaction);
   if (['penz','gazdasag'].includes(interaction.commandName)) return handleEconomyCommand(interaction);
   if (interaction.commandName === 'help') return handleHelpCommand(interaction);
   if (interaction.commandName === 'chronoguard') return handleChronoGuardCommand(interaction);
