@@ -535,12 +535,34 @@ function documentAccessLabel(guild, type) {
   const roleIds = documentRule(guild, type).accessRoleIds;
   return roleIds.length
     ? roleIds.map((roleId) => guild?.roles?.cache?.get(roleId)?.name || `Rang: ${roleId}`).join(', ').slice(0, 900)
-    : 'nincs beállítva';
+    : 'mindenki';
 }
 
 function canUseDocument(member, type) {
+  if (!member) return false;
   const roleIds = documentRule(member?.guild, type).accessRoleIds;
-  return roleIds.some((roleId) => member?.roles?.cache?.has(roleId));
+  return roleIds.length === 0 || roleIds.some((roleId) => member?.roles?.cache?.has(roleId));
+}
+
+const DOCUMENT_PERMISSION_LABELS = new Map([
+  [PermissionFlagsBits.ViewChannel, 'Csatorna megtekintése'],
+  [PermissionFlagsBits.SendMessages, 'Üzenetek küldése'],
+  [PermissionFlagsBits.ReadMessageHistory, 'Üzenetek olvasási előzményei'],
+  [PermissionFlagsBits.EmbedLinks, 'Hivatkozások beágyazása'],
+  [PermissionFlagsBits.MentionEveryone, 'Mindenki és rangok megemlítése']
+]);
+
+function missingDocumentPermissions(channel, botMember, requiredPermissions) {
+  if (!channel || !botMember) return ['a csatorna vagy a Nexa tagsági adatai nem érhetők el'];
+  const permissions = channel.permissionsFor(botMember);
+  if (!permissions) return ['a csatorna megtekintése'];
+  return requiredPermissions
+    .filter((permission) => !permissions.has(permission))
+    .map((permission) => DOCUMENT_PERMISSION_LABELS.get(permission) || 'szükséges csatornajogosultság');
+}
+
+function documentPermissionError(channel, missing) {
+  return `A Nexának nincs jogosultsága a ${channel} csatornában. Add meg neki: **${missing.join(', ')}**.`;
 }
 
 function targetPicker(type) {
@@ -566,7 +588,7 @@ function documentPanel(type, guild = null) {
         : 'Töltsd ki az adatlapot. A kész bejegyzést a NexaBot teszi közzé ebben a csatornában.'
     )
     .addFields(
-      { name: 'Hozzáférés', value: rule.accessRoleIds.length ? `A használati vagy iratkezelői rangok bármelyikével használható: **${documentAccessLabel(guild, type)}**.` : 'Az Owner Centerben még nincs használati rang beállítva.', inline: true },
+      { name: 'Hozzáférés', value: rule.accessRoleIds.length ? `A használati vagy iratkezelői rangok bármelyikével használható: **${documentAccessLabel(guild, type)}**.` : '**Minden szervertag használhatja.**', inline: true },
       { name: 'Ügyszám', value: rule.caseNumber ? 'Bekapcsolva' : 'Kikapcsolva', inline: true },
       { name: 'Személy megjelölése', value: rule.pingTarget ? 'Kötelező' : 'Nincs', inline: true },
       { name: 'Értesítendő rang', value: rule.notificationRoleId ? `<@&${rule.notificationRoleId}>` : 'Nincs', inline: true }
@@ -726,6 +748,14 @@ async function handleDocumentButton(interaction) {
     const target = interaction.guild.channels.cache.get(targetChannelId);
     if (!type || !target?.isTextBased()) return ephemeralError(interaction, 'A célcsatorna nem található.');
     const notificationRoleId = documentRule(interaction.guild, type).notificationRoleId;
+    const botMember = interaction.guild.members.me;
+    const requiredTargetPermissions = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks];
+    const notifyRole = notificationRoleId ? interaction.guild.roles.cache.get(notificationRoleId) : null;
+    if (notifyRole && !notifyRole.mentionable) requiredTargetPermissions.push(PermissionFlagsBits.MentionEveryone);
+    const missingTargetPermissions = missingDocumentPermissions(target, botMember, requiredTargetPermissions);
+    if (missingTargetPermissions.length) return ephemeralError(interaction, documentPermissionError(target, missingTargetPermissions));
+    const missingReviewPermissions = missingDocumentPermissions(interaction.channel, botMember, [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]);
+    if (missingReviewPermissions.length) return ephemeralError(interaction, documentPermissionError(interaction.channel, missingReviewPermissions));
     const mentions = documentMentions(targetUserId, notificationRoleId);
     await interaction.deferReply({ flags: EPHEMERAL });
     const approved = EmbedBuilder.from(interaction.message.embeds[0])
@@ -761,6 +791,8 @@ async function handleDocumentButton(interaction) {
     if (!canApprove(interaction.member)) {
       return ephemeralError(interaction, approvalDenialMessage(interaction.guild));
     }
+    const missingPermissions = missingDocumentPermissions(interaction.channel, interaction.guild.members.me, [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages]);
+    if (missingPermissions.length) return ephemeralError(interaction, documentPermissionError(interaction.channel, missingPermissions));
     const [, , , submitterId] = id.split(':');
     return interaction.showModal(rejectionModal(interaction.message.id, submitterId));
   }
@@ -825,6 +857,8 @@ async function handleDocumentModal(interaction) {
     if (!canApprove(interaction.member)) {
       return ephemeralError(interaction, approvalDenialMessage(interaction.guild));
     }
+    const missingPermissions = missingDocumentPermissions(interaction.channel, interaction.guild.members.me, [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages]);
+    if (missingPermissions.length) return ephemeralError(interaction, documentPermissionError(interaction.channel, missingPermissions));
     await interaction.deferReply({ flags: EPHEMERAL });
     const [, messageId, submitterId] = interaction.customId.split(':');
     const reason = interaction.fields.getTextInputValue('reject_reason').trim();
