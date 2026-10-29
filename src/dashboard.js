@@ -1706,7 +1706,6 @@ async function ownerArchitectPage(guild, session, options = {}) {
 }
 
 function ownerDocumentsPage(guild, session, saved = false) {
-  const config = getGuildConfig(guild.id);
   const categoryNames = {
     root: 'Alaprendszer',
     informaciok: 'Információk és nyilvántartások',
