@@ -102,6 +102,7 @@ async function registerCommands(readyClient) {
         ...engagementCommands(),
         ...economyCommands(),
         require('./platform-moderation').command(),
+        ...require('./music').buildMusicCommands(),
         ...moderationCommands(),
         ...communityCommands()
       ].map((item) => localizeCommandJson(item.toJSON()))
