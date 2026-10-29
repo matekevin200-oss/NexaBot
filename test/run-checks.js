@@ -49,7 +49,9 @@ assert.ok(!belv.includes('if (!bot.permissions.has(PermissionFlagsBits.ManageNic
 const docs = read('src/documents.js');
 assert.ok(docs.includes('return Boolean(member);'), 'document forms are available to every server member');
 assert.ok(docs.includes('missingDocumentPermissions(target, botMember, requiredTargetPermissions)'), 'document approval checks destination-channel permissions before publishing');
-assert.ok(!read('src/dashboard.js').includes('doc_default_roles') && !read('src/dashboard.js').includes('doc_roles_'), 'Owner Center no longer configures per-document access roles');
+const dashboard = read('src/dashboard.js');
+assert.ok(!dashboard.includes('doc_default_roles') && !dashboard.includes('doc_manager_roles') && !dashboard.includes('doc_roles_') && !dashboard.includes('access_role_ids'), 'Owner Center no longer configures document access roles');
+assert.ok(dashboard.includes('defaultAccessRoleIds: [], managerRoleIds: []'), 'saving document settings clears old global access-role restrictions');
 const approval = docs.slice(docs.indexOf('function canApprove(member)'), docs.indexOf('\nfunction approvalDenialMessage'));
 assert.ok(approval.includes('isConfiguredRoleHolder(member, belvApprovalRoleId(member.guild))'), 'BELV approval uses the configured exact role ID');
 assert.ok(!/if \([^\n]+BELV_APPROVAL_GUILD_ID[^\n]+\) return[\s\S]{0,150}Administrator/.test(approval), 'BELV approval must not fall back to admin');
