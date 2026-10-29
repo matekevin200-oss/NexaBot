@@ -17,6 +17,10 @@ const expectedBundle = read('bundle-header.txt')
   + order.map((name) => '"' + name + '": function(module, exports, require) {\n' + read(name).replace(/\n+$/, '') + '\n\n}').join(',\n')
   + read('bundle-footer.txt');
 assert.equal(read('index.js'), expectedBundle, 'index.js is stale; run python3 bundle.py');
+new vm.Script(read('live-status.js'), { filename: 'live-status.js' });
+const liveStatus = read('live-status.js');
+assert.ok(!liveStatus.includes(".setName('belv-jogok')") && !liveStatus.includes('handleBelvPermissionsCommand'), 'BELV rank-permission command implementation is removed');
+assert.ok(liveStatus.includes('removeBelvPermissionsCommand'), 'the previously registered BELV permission command is removed from Discord');
 
 const roster = require('../src/belv-roster-rules.js');
 assert.equal(roster.classifyBelvRole({ id: '123456789012345678', name: 'Főigazgató BV-01', position: 10 }).rank, 'Főigazgató');
