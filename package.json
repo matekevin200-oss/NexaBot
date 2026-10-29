@@ -10,8 +10,11 @@
     "test": "node test/run-checks.js"
   },
   "dependencies": {
+    "@discordjs/voice": "0.18.0",
     "discord.js": "14.27.0",
     "dotenv": "16.6.1",
+    "ffmpeg-static": "5.2.0",
+    "opusscript": "0.0.8",
     "pg": "^8.23.0"
   },
   "devDependencies": {
