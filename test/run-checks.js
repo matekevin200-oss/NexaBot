@@ -47,9 +47,13 @@ assert.ok(belv.includes("client.on('guildMemberAdd'"), 'new members trigger rost
 assert.ok(belv.includes("client.on('guildMemberRemove'"), 'departed members trigger roster reconciliation');
 assert.ok(!belv.includes('if (!bot.permissions.has(PermissionFlagsBits.ManageNicknames)) fail'), 'nickname permission must not block roster publishing');
 const docs = read('src/documents.js');
+assert.ok(docs.includes('return Boolean(member);'), 'document forms are available to every server member');
+assert.ok(docs.includes('missingDocumentPermissions(target, botMember, requiredTargetPermissions)'), 'document approval checks destination-channel permissions before publishing');
+assert.ok(!read('src/dashboard.js').includes('doc_default_roles') && !read('src/dashboard.js').includes('doc_roles_'), 'Owner Center no longer configures per-document access roles');
 const approval = docs.slice(docs.indexOf('function canApprove(member)'), docs.indexOf('\nfunction approvalDenialMessage'));
 assert.ok(approval.includes('isConfiguredRoleHolder(member, belvApprovalRoleId(member.guild))'), 'BELV approval uses the configured exact role ID');
 assert.ok(!/if \([^\n]+BELV_APPROVAL_GUILD_ID[^\n]+\) return[\s\S]{0,150}Administrator/.test(approval), 'BELV approval must not fall back to admin');
+assert.ok(read('src/interactions.js').includes('discordErrorCode === 50013'), 'missing Discord permissions receive a specific interaction error');
 const shifts = read('src/shifts.js');
 assert.ok(shifts.includes('WHERE guild_id=$1 AND user_id=$2 AND ended_at IS NOT NULL ORDER BY ended_at DESC,id DESC LIMIT 1'), 'targeted service correction selects that member latest closed shift');
 assert.ok(shifts.includes('String(row.user_id)!==String(targetUserId)'), 'targeted shift correction verifies row owner');
