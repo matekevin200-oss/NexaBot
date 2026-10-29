@@ -490,20 +490,6 @@ function documentRule(guildOrId, type) {
   const guildId = typeof guildOrId === 'string' ? guildOrId : guildOrId?.id;
   const documents = guildId ? getGuildConfig(guildId).documents : null;
   const stored = documents?.types?.[type.key];
-  const normalizeRoleIds = (value, legacyValue) => [...new Set(
-    (Array.isArray(value) && value.length ? value : [legacyValue])
-      .map((id) => /^\d{16,22}$/.test(String(id || '')) ? String(id) : null)
-      .filter(Boolean)
-  )].slice(0, 20);
-  const overrideAccessRoleIds = normalizeRoleIds(type?.accessRoleIds || stored?.accessRoleIds, type?.accessRoleId || stored?.accessRoleId);
-  const defaultAccessRoleIds = normalizeRoleIds(documents?.defaultAccessRoleIds, documents?.defaultAccessRoleId);
-  const usageRoleIds = overrideAccessRoleIds.length
-    ? overrideAccessRoleIds
-    : type?.accessRoleId || stored?.accessRoleId
-      ? normalizeRoleIds(null, type?.accessRoleId || stored?.accessRoleId)
-      : defaultAccessRoleIds;
-  const managerRoleIds = normalizeRoleIds(documents?.managerRoleIds, null);
-  const accessRoleIds = [...new Set([...usageRoleIds, ...managerRoleIds])].slice(0, 40);
   return {
     caseNumber: typeof type?.caseNumber === 'boolean'
       ? type.caseNumber
@@ -511,14 +497,7 @@ function documentRule(guildOrId, type) {
     pingTarget: typeof type?.pingTarget === 'boolean'
       ? type.pingTarget
       : typeof stored?.pingTarget === 'boolean' ? stored.pingTarget : DEFAULT_TARGET_PING_TYPES.has(type.key),
-    accessRoleIds,
-    accessRoleId: accessRoleIds[0] || null,
     notificationRoleId: type?.notificationRoleId || stored?.notificationRoleId || null,
-    overrideAccessRoleIds,
-    overrideAccessRoleId: overrideAccessRoleIds[0] || null,
-    defaultAccessRoleIds,
-    defaultAccessRoleId: defaultAccessRoleIds[0] || null,
-    managerRoleIds
   };
 }
 
@@ -531,17 +510,8 @@ function documentMentions(targetUserId = null, notificationRoleId = null) {
   };
 }
 
-function documentAccessLabel(guild, type) {
-  const roleIds = documentRule(guild, type).accessRoleIds;
-  return roleIds.length
-    ? roleIds.map((roleId) => guild?.roles?.cache?.get(roleId)?.name || `Rang: ${roleId}`).join(', ').slice(0, 900)
-    : 'mindenki';
-}
-
 function canUseDocument(member, type) {
-  if (!member) return false;
-  const roleIds = documentRule(member?.guild, type).accessRoleIds;
-  return roleIds.length === 0 || roleIds.some((roleId) => member?.roles?.cache?.has(roleId));
+  return Boolean(member);
 }
 
 const DOCUMENT_PERMISSION_LABELS = new Map([
@@ -588,7 +558,7 @@ function documentPanel(type, guild = null) {
         : 'Töltsd ki az adatlapot. A kész bejegyzést a NexaBot teszi közzé ebben a csatornában.'
     )
     .addFields(
-      { name: 'Hozzáférés', value: rule.accessRoleIds.length ? `A használati vagy iratkezelői rangok bármelyikével használható: **${documentAccessLabel(guild, type)}**.` : '**Minden szervertag használhatja.**', inline: true },
+      { name: 'Használat', value: '**Minden szervertag használhatja.**', inline: true },
       { name: 'Ügyszám', value: rule.caseNumber ? 'Bekapcsolva' : 'Kikapcsolva', inline: true },
       { name: 'Személy megjelölése', value: rule.pingTarget ? 'Kötelező' : 'Nincs', inline: true },
       { name: 'Értesítendő rang', value: rule.notificationRoleId ? `<@&${rule.notificationRoleId}>` : 'Nincs', inline: true }
@@ -724,9 +694,7 @@ async function handleDocumentButton(interaction) {
     if (!type) return ephemeralError(interaction, 'Ismeretlen dokumentumtípus.');
     if (!canUseDocument(interaction.member, type)) {
       const rule = documentRule(interaction.guild, type);
-      return ephemeralError(interaction, rule.accessRoleIds.length
-        ? `Ezt a következő rangok bármelyike használhatja: **${documentAccessLabel(interaction.guild, type)}**.`
-        : 'Ehhez a dokumentumhoz még nincs használati rang beállítva az Owner Centerben.');
+      return ephemeralError(interaction, 'Ehhez a dokumentumhoz szervertagság szükséges.');
     }
     if (documentRule(interaction.guild, type).pingTarget) {
       return interaction.reply({
@@ -803,9 +771,7 @@ async function handleDocumentSelect(interaction) {
   if (!type) return ephemeralError(interaction, 'Ismeretlen dokumentumtípus.');
   if (!canUseDocument(interaction.member, type)) {
     const rule = documentRule(interaction.guild, type);
-    return ephemeralError(interaction, rule.accessRoleIds.length
-      ? `Ezt a következő rangok bármelyike használhatja: **${documentAccessLabel(interaction.guild, type)}**.`
-      : 'Ehhez a dokumentumhoz még nincs használati rang beállítva az Owner Centerben.');
+    return ephemeralError(interaction, 'Ehhez a dokumentumhoz szervertagság szükséges.');
   }
   const targetUserId = interaction.values?.[0];
   if (!/^\d{16,22}$/.test(targetUserId || '')) return ephemeralError(interaction, 'Nem sikerült kiválasztani a személyt.');
@@ -819,9 +785,7 @@ async function handleDocumentModal(interaction) {
     if (!type) return ephemeralError(interaction, 'Ismeretlen dokumentumtípus.');
     if (!canUseDocument(interaction.member, type)) {
       const rule = documentRule(interaction.guild, type);
-      return ephemeralError(interaction, rule.accessRoleIds.length
-        ? `Ezt a következő rangok bármelyike használhatja: **${documentAccessLabel(interaction.guild, type)}**.`
-        : 'Ehhez a dokumentumhoz még nincs használati rang beállítva az Owner Centerben.');
+      return ephemeralError(interaction, 'Ehhez a dokumentumhoz szervertagság szükséges.');
     }
     const rule = documentRule(interaction.guild, type);
     const targetUserId = rule.pingTarget && /^\d{16,22}$/.test(selectedUserId || '') ? selectedUserId : null;
@@ -891,7 +855,6 @@ module.exports = {
   documentPanel,
   documentRule,
   documentMentions,
-  documentAccessLabel,
   canUseDocument,
   targetPicker,
   approvalControls,
