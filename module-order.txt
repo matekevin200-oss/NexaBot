@@ -47,6 +47,7 @@ src/runtime.js
 src/security.js
 src/setup.js
 src/shifts.js
+src/music.js
 src/cia-content.js
 src/support-server.js
 src/telemetry.js
