@@ -801,15 +801,19 @@ async function handleDocumentModal(interaction) {
     const caseNumber = rule.caseNumber ? bviCaseNumber() : null;
     if (type.approval) {
       const reviewType = findDocumentType(REVIEW_CHANNEL_KEY, interaction.guild);
-      const reviewChannel = findDocumentChannel(interaction.guild, reviewType);
+      const dedicatedReview = interaction.guild?.id === BELV_APPROVAL_GUILD_ID
+        ? interaction.guild.channels.cache.find((channel) => normalizeName(channel.name) === normalizeName('vezetőségi-elbírálás'))
+        : null;
+      const reviewChannel = dedicatedReview || findDocumentChannel(interaction.guild, reviewType);
       if (!reviewChannel) {
         return interaction.editReply('❌ A meglévő **ügyiratok** jóváhagyási csatornát nem találom. Új csatornát nem hoztam létre.');
       }
       const embed = documentEmbed(type, interaction, caseNumber, 'pending', targetUserId)
         .addFields({ name: 'Célcsatorna', value: `${interaction.channel}` });
+      const publishChannelId = type.channelId || interaction.channelId;
       const message = await reviewChannel.send({
         embeds: [embed],
-        components: [approvalControls(type, interaction.channelId, interaction.user.id, targetUserId)]
+        components: [approvalControls(type, publishChannelId, interaction.user.id, targetUserId)]
       });
       return interaction.editReply(`✅ A dokumentum jóváhagyásra elküldve: ${message.url}${caseNumber ? `\n**Ügyszám:** ${caseNumber}` : ''}`);
     }
