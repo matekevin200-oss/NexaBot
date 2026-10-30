@@ -24,7 +24,7 @@ const CHANNELS = Object.freeze([
   { key: 'minutes', name: 'jegyzőkönyv', optional: true }
 ]);
 const FORM_TYPES = Object.freeze([
-  { key: 'custom_belv_bej', title: 'Fegyelmi bejelentés', emoji: '📩', channel: 'intake', fields: [
+  { key: 'custom_belv_bej', title: 'Fegyelmi bejelentés', emoji: '📩', channel: 'intake', pingTarget: true, fields: [
     { label: 'Bejelentett személy neve és szolgálati azonosítója', placeholder: 'Név és azonosító' },
     { label: 'Érintett frakciója', placeholder: 'BELV, FBI, CIA, TEK, NAV, BV, ARFK, BBO vagy KR' },
     { label: 'Szabályszegés részletes leírása', placeholder: 'Mi történt és milyen szolgálati szabály sérülhetett?', style: 'paragraph' },
@@ -203,6 +203,32 @@ async function saveSubmission(interaction, type, caseNumber, targetUserId) {
   const answers = Object.fromEntries(type.fields.map((field) => [field.label, interaction.fields.getTextInputValue(field.id).trim()]));
   const linkedCaseNumber = String(answers['Ügyszám'] || answers['Ügyazonosító'] || '').trim();
   if (linkedCaseNumber && !/^RP-[0-9]{8}-[0-9]{4}(?:-[0-9]{1,22})?$/.test(linkedCaseNumber)) throw new Error('Az ügyazonosító formátuma nem megfelelő.');
+  if (linkedCaseNumber) {
+    const parent = await dbQuery(
+      'SELECT case_number FROM nexabot_belv_cases WHERE guild_id=$1 AND (case_number=$2 OR linked_case_number=$2) AND status NOT IN (\'rejected\',\'closed\') LIMIT 1',
+      [interaction.guildId, linkedCaseNumber]
+    );
+    if (!parent?.rowCount) throw new Error('A megadott kapcsolódó fegyelmi ügy nem található vagy már nem aktív.');
+  }
+  if (type.key === 'custom_belv_hat') {
+    const report = await dbQuery(
+      "SELECT case_number FROM nexabot_belv_cases WHERE guild_id=$1 AND linked_case_number=$2 AND form_key='custom_belv_viz' AND status='approved' LIMIT 1",
+      [interaction.guildId, linkedCaseNumber]
+    );
+    if (!report?.rowCount) throw new Error('Vezetőségi döntéshez előbb egy vizsgálati jelentés jóváhagyása szükséges.');
+  }
+  if (type.key === 'custom_belv_lez') {
+    const decision = await dbQuery(
+      "SELECT case_number FROM nexabot_belv_cases WHERE guild_id=$1 AND linked_case_number=$2 AND form_key='custom_belv_hat' AND status='approved' LIMIT 1",
+      [interaction.guildId, linkedCaseNumber]
+    );
+    const appeal = await dbQuery(
+      "SELECT case_number FROM nexabot_belv_cases WHERE guild_id=$1 AND linked_case_number=$2 AND form_key='custom_belv_felulviz' AND status IN ('pending_review','decision_processing') LIMIT 1",
+      [interaction.guildId, linkedCaseNumber]
+    );
+    if (!decision?.rowCount) throw new Error('Az ügy nem zárható le jóváhagyott határozat nélkül.');
+    if (appeal?.rowCount) throw new Error('Az ügy nem zárható le, amíg felülvizsgálati kérelem van elbírálás alatt.');
+  }
   if (type.key === 'custom_belv_felulviz') {
     const decision = await dbQuery(
       "SELECT case_number FROM nexabot_belv_cases WHERE guild_id=$1 AND (case_number=$2 OR linked_case_number=$2) AND form_key='custom_belv_hat' AND status='approved' AND decision_at >= NOW()-INTERVAL '72 hours' ORDER BY decision_at DESC LIMIT 1",
