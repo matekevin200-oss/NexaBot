@@ -1993,13 +1993,58 @@ function option(value, label, selected) {
   return `<option value="${escapeHtml(value)}"${value === selected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
 }
 
+function channelSectionPosition(channel) {
+  return Number(channel?.rawPosition ?? channel?.position ?? 0);
+}
+
+function orderedChannelSections(guild, predicate) {
+  const allChannels = [...guild.channels.cache.values()];
+  const categories = new Map(allChannels
+    .filter((channel) => channel.type === ChannelType.GuildCategory)
+    .map((channel) => [channel.id, channel]));
+  const grouped = new Map();
+  const ungrouped = [];
+
+  for (const channel of allChannels.filter(predicate)) {
+    const parentId = channel.parentId || channel.parent?.id || null;
+    if (parentId && categories.has(parentId)) {
+      if (!grouped.has(parentId)) grouped.set(parentId, []);
+      grouped.get(parentId).push(channel);
+    } else {
+      ungrouped.push(channel);
+    }
+  }
+
+  const sections = ungrouped.map((channel) => ({
+    position: channelSectionPosition(channel),
+    category: false,
+    channels: [channel]
+  }));
+  for (const [categoryId, channels] of grouped) {
+    const category = categories.get(categoryId);
+    channels.sort((a, b) => channelSectionPosition(a) - channelSectionPosition(b) || a.name.localeCompare(b.name, 'hu'));
+    sections.push({ position: channelSectionPosition(category), category: true, name: category.name, channels });
+  }
+
+  return sections.sort((a, b) => a.position - b.position || Number(b.category) - Number(a.category) || String(a.name || a.channels[0]?.name || '').localeCompare(String(b.name || b.channels[0]?.name || ''), 'hu'));
+}
+
+function renderChannelSections(guild, selected, predicate, prefix = '# ') {
+  return orderedChannelSections(guild, predicate).map((section) => {
+    const options = section.channels.map((channel) => option(channel.id, prefix + channel.name, selected)).join('');
+    return section.category ? '<optgroup label="' + escapeHtml(section.name) + '">' + options + '</optgroup>' : options;
+  }).join('');
+}
+
 function channelOptions(guild, selected, categoriesOnly = false) {
-  const channels = [...guild.channels.cache.values()]
-    .filter((channel) => categoriesOnly
-      ? channel.type === ChannelType.GuildCategory
-      : channel.isTextBased?.() && !channel.isThread?.())
-    .sort((a, b) => a.rawPosition - b.rawPosition || a.name.localeCompare(b.name, 'hu'));
-  return option('', 'Nincs kiválasztva', selected) + channels.map((channel) => option(channel.id, `# ${channel.name}`, selected)).join('');
+  if (categoriesOnly) {
+    const categories = [...guild.channels.cache.values()]
+      .filter((channel) => channel.type === ChannelType.GuildCategory)
+      .sort((a, b) => channelSectionPosition(a) - channelSectionPosition(b) || a.name.localeCompare(b.name, 'hu'));
+    return option('', 'Nincs kiválasztva', selected) + categories.map((channel) => option(channel.id, channel.name, selected)).join('');
+  }
+  const textChannels = (channel) => channel.isTextBased?.() && !channel.isThread?.();
+  return option('', 'Nincs kiválasztva', selected) + renderChannelSections(guild, selected, textChannels);
 }
 
 function roleOptions(guild, selected, emptyLabel = 'Nincs kiválasztva') {
@@ -2029,18 +2074,16 @@ function roleCheckboxes(guild, name, selected = []) {
 
 function channelOptionsMulti(guild, selected = []) {
   const selectedIds = new Set(selected);
-  return [...guild.channels.cache.values()]
-    .filter((channel) => channel.isTextBased?.() && !channel.isThread?.())
-    .sort((a, b) => a.rawPosition - b.rawPosition || a.name.localeCompare(b.name, 'hu'))
-    .map((channel) => `<option value="${escapeHtml(channel.id)}"${selectedIds.has(channel.id) ? ' selected' : ''}># ${escapeHtml(channel.name)}</option>`)
-    .join('');
+  const textChannels = (channel) => channel.isTextBased?.() && !channel.isThread?.();
+  return orderedChannelSections(guild, textChannels).map((section) => {
+    const options = section.channels.map((channel) => '<option value="' + escapeHtml(channel.id) + '"' + (selectedIds.has(channel.id) ? ' selected' : '') + '># ' + escapeHtml(channel.name) + '</option>').join('');
+    return section.category ? '<optgroup label="' + escapeHtml(section.name) + '">' + options + '</optgroup>' : options;
+  }).join('');
 }
 
 function voiceChannelOptions(guild, selected) {
-  const channels = [...guild.channels.cache.values()]
-    .filter((channel) => channel.type === ChannelType.GuildVoice)
-    .sort((a, b) => a.rawPosition - b.rawPosition || a.name.localeCompare(b.name, 'hu'));
-  return option('', 'Nincs kiválasztva', selected) + channels.map((channel) => option(channel.id, `🔊 ${channel.name}`, selected)).join('');
+  const voiceChannels = (channel) => channel.type === ChannelType.GuildVoice;
+  return option('', 'Nincs kiválasztva', selected) + renderChannelSections(guild, selected, voiceChannels, '🔊 ');
 }
 
 function check(name, label, checked, help = '') {
