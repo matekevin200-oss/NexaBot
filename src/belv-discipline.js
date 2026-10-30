@@ -156,10 +156,23 @@ async function saveSubmission(interaction, type, caseNumber, targetUserId) {
 async function attachReviewMessage(guildId, caseNumber, channelId, messageId) {
   await dbQuery('UPDATE nexabot_belv_cases SET review_channel_id=$3,review_message_id=$4,updated_at=NOW() WHERE guild_id=$1 AND case_number=$2', [guildId, caseNumber, channelId, messageId]);
 }
+async function claimCaseDecision(guildId, caseNumber, actorId) {
+  if (!caseNumber || !String(caseNumber).startsWith('RP-')) return true;
+  const result = await dbQuery(
+    'UPDATE nexabot_belv_cases SET status=\'decision_processing\',decision_by=$3,updated_at=NOW() WHERE guild_id=$1 AND case_number=$2 AND status=\'pending_review\' RETURNING id',
+    [guildId, caseNumber, actorId]
+  );
+  if (!result?.rowCount) return false;
+  await dbQuery(
+    'INSERT INTO nexabot_belv_case_audit(guild_id,case_number,actor_id,action,details) VALUES($1,$2,$3,$4,$5::jsonb)',
+    [guildId, caseNumber, actorId, 'decision_started', '{}']
+  );
+  return true;
+}
 async function setCaseStatus(guildId, caseNumber, actorId, status, details = {}) {
   if (!caseNumber || !String(caseNumber).startsWith('RP-')) return false;
   const updated = await dbQuery(
-    'UPDATE nexabot_belv_cases SET status=$3,decision_by=$4,decision_at=NOW(),updated_at=NOW() WHERE guild_id=$1 AND case_number=$2 AND status=\'pending_review\' RETURNING id',
+    'UPDATE nexabot_belv_cases SET status=$3,decision_by=$4,decision_at=NOW(),updated_at=NOW() WHERE guild_id=$1 AND case_number=$2 AND status=\'decision_processing\' RETURNING id',
     [guildId, caseNumber, status, actorId]
   );
   if (!updated?.rowCount) return false;
@@ -236,4 +249,4 @@ async function handleCommand(interaction) {
     return interaction.editReply('❌ ' + (error.message || 'A BELV rendszer telepítése nem sikerült.'));
   }
 }
-module.exports = { buildCommand, handleCommand, BELV_GUILD_ID, CHANNELS, FORM_TYPES, saveSubmission, attachReviewMessage, setCaseStatus };
+module.exports = { buildCommand, handleCommand, BELV_GUILD_ID, CHANNELS, FORM_TYPES, saveSubmission, attachReviewMessage, claimCaseDecision, setCaseStatus };
