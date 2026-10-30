@@ -47,6 +47,7 @@ assert.throws(() => roster.adjustedActiveSeconds('bad', '2026-01-01T00:00:00Z', 
 const belv = read('src/belv-mdt.js');
 assert.ok(!belv.includes('KIO'), 'KIO must not remain in BELV roster handling');
 assert.ok(belv.includes('guild.members.fetch()'), 'roster reads current guild membership');
+assert.ok(belv.includes('let belvRosterBadgeSchemaPromise = null;'), 'BELV roster badge schema initialization is declared');
 assert.ok(belv.includes("client.on('guildMemberAdd'"), 'new members trigger roster reconciliation');
 assert.ok(belv.includes("client.on('guildMemberRemove'"), 'departed members trigger roster reconciliation');
 assert.ok(!belv.includes('if (!bot.permissions.has(PermissionFlagsBits.ManageNicknames)) fail'), 'nickname permission must not block roster publishing');
