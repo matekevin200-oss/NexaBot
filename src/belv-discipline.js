@@ -284,7 +284,8 @@ async function provision(interaction, install) {
     resolved.set(spec.key, channel);
     created.push(channel.name);
   }
-  await publishReferences(resolved, me.id);\n  const types = await configureForms(guild, resolved);
+  await publishReferences(resolved, me.id);
+  const types = await configureForms(guild, resolved);
   const byKey = new Map(types.map((type) => [type.key, type]));
   const panels = [];
   for (const form of FORM_TYPES) {
