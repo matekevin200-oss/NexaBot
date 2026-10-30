@@ -511,7 +511,12 @@ function documentMentions(targetUserId = null, notificationRoleId = null) {
 }
 
 function canUseDocument(member, type) {
-  return Boolean(member);
+  if (!member) return false;
+  if (member.guild?.id !== BELV_APPROVAL_GUILD_ID || !String(type?.key || '').startsWith('custom_belv_')) return true;
+  if (['custom_belv_viz', 'custom_belv_hat', 'custom_belv_lez'].includes(type.key)) {
+    return isConfiguredRoleHolder(member, belvApprovalRoleId(member.guild));
+  }
+  return true;
 }
 
 const DOCUMENT_PERMISSION_LABELS = new Map([
@@ -789,6 +794,7 @@ async function handleDocumentSelect(interaction) {
   }
   const targetUserId = interaction.values?.[0];
   if (!/^\d{16,22}$/.test(targetUserId || '')) return ephemeralError(interaction, 'Nem sikerült kiválasztani a személyt.');
+  if (type.key === 'custom_belv_jegyz' && String(targetUserId) !== String(interaction.user.id)) return ephemeralError(interaction, 'A jegyzőkönyvben csak a saját nyilatkozatodat adhatod meg.');
   return interaction.showModal(documentModal(type, targetUserId));
 }
 
@@ -804,6 +810,7 @@ async function handleDocumentModal(interaction) {
     const rule = documentRule(interaction.guild, type);
     const targetUserId = rule.pingTarget && /^\d{16,22}$/.test(selectedUserId || '') ? selectedUserId : null;
     if (rule.pingTarget && !targetUserId) return ephemeralError(interaction, 'Ehhez a bejegyzéshez előbb válassz ki egy megjelölendő személyt.');
+    if (type.key === 'custom_belv_jegyz' && String(targetUserId) !== String(interaction.user.id)) return ephemeralError(interaction, 'A jegyzőkönyvben csak a saját nyilatkozatodat adhatod meg.');
     await interaction.deferReply({ flags: EPHEMERAL });
     let caseNumber = rule.caseNumber ? bviCaseNumber() : null;
     if (type.custom && String(type.key).startsWith('custom_belv_')) {
