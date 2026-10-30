@@ -4,7 +4,7 @@ const { ChannelType, EmbedBuilder, MessageFlags, PermissionFlagsBits, SlashComma
 const { getGuildConfig, setGuildConfig, isBotOwner, isPersistentStore, dbQuery } = require('./config');
 const { recordAudit, recordError } = require('./telemetry');
 const { normalizeName, customDocumentTypes, documentPanel } = require('./documents');
-const { isConfiguredRoleHolder } = require('./belv-roster-rules');
+const { classifyBelvRole, rankForMember } = require('./belv-roster-rules');
 
 const BELV_GUILD_ID = '1517509643734221030';
 const CATEGORY = '⚖️┃BELV • FEGYELMI ÉS JOGI OSZTÁLY';
@@ -122,10 +122,16 @@ function buildCommand() {
     .addSubcommand((sub) => sub.setName('telepites').setDescription('Létrehozza a hiányzó BELV ügykezelő csatornákat és űrlapokat.'));
 }
 
-function leadership(guild) {
-  const expected = normalizeName(LEADERSHIP_ROLE);
-  return guild.roles.cache.find((role) => normalizeName(role.name) === expected) || null;
+function belvRankRoles(guild) {
+  return [...guild.roles.cache.values()]
+    .map((role) => ({ role, rank: classifyBelvRole(role) }))
+    .filter((item) => item.rank);
 }
+function canManageDiscipline(member) {
+  const rank = rankForMember(member);
+  return Boolean(rank && rank.min <= 9);
+}
+
 function resolvePlan(guild) {
   const categories = [...guild.channels.cache.values()].filter((c) => c.type === ChannelType.GuildCategory && normalizeName(c.name) === normalizeName(CATEGORY));
   if (categories.length > 1) throw new Error('Több azonos BELV ügykezelő kategória van. Semmit nem módosítottam.');
@@ -139,7 +145,7 @@ function resolvePlan(guild) {
   if (conflicts.length) throw new Error(conflicts.join('\n') + '\nSemmit nem módosítottam.');
   return { category: categories[0] || null, channels };
 }
-function checkExisting(guild, role, plan) {
+function checkExisting(guild, rankRoles, plan) {
   const errors = [];
   for (const spec of CHANNELS) {
     const channel = plan.channels.get(spec.key);
@@ -147,18 +153,19 @@ function checkExisting(guild, role, plan) {
     const permissions = channel.permissionsFor(guild.members.me);
     if (!permissions || !permissions.has(PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.ReadMessageHistory))
       errors.push('#' + channel.name + ': a Nexának csatornamegtekintés, üzenetküldés, beágyazás és előzményolvasás kell.');
-    if (!spec.public && (!role || channel.permissionsFor(guild.roles.everyone)?.has(PermissionFlagsBits.ViewChannel)))
+    if (!spec.public && (!rankRoles.some((item) => item.rank.min <= 24) || channel.permissionsFor(guild.roles.everyone)?.has(PermissionFlagsBits.ViewChannel)))
       errors.push('#' + channel.name + ': érzékeny ügyiratcsatorna, amelyet @everyone láthat vagy nincs vezetőségi rang. Meglévő jogosultságot nem változtatok.');
     if (spec.public && channel.permissionsFor(guild.roles.everyone)?.has(PermissionFlagsBits.SendMessages))
       errors.push('#' + channel.name + ': a nyilvános BELV-csatornának olvashatónak, de nem írhatónak kell lennie. Meglévő jogosultságot nem változtatok.');
   }
   return errors;
 }
-function overwrites(guild, me, role) {
-  if (!role) throw new Error('A „' + LEADERSHIP_ROLE + '” rang hiányzik; biztonságos privát csatornákat nem hozok létre.');
+function overwrites(guild, me, rankRoles) {
+  const trusted = rankRoles.filter((item) => item.rank.min <= 24);
+  if (!trusted.length) throw new Error('Nem találok felismerhető BELV BV-01–24 rangot; nem hozok létre hozzáférhetetlen ügycsatornákat.');
   return [
     { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-    { id: role.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] },
+    ...trusted.map((item) => ({ id: item.role.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] })),
     { id: me.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] }
   ];
 }
@@ -282,20 +289,20 @@ async function provision(interaction, install) {
   await guild.channels.fetch();
   await guild.roles.fetch();
   const member = await guild.members.fetch(interaction.user.id).catch(() => null);
-  const role = leadership(guild);
-  if (!member || !(member.id === guild.ownerId || isBotOwner(member.id) || isConfiguredRoleHolder(member, role?.id)))
-    throw new Error('Ezt csak a szerver tulajdonosa, a NEXA fő ownere vagy a „' + LEADERSHIP_ROLE + '” rang használhatja.');
+  const rankRoles = belvRankRoles(guild);
+  if (!member || !(member.id === guild.ownerId || isBotOwner(member.id) || canManageDiscipline(member)))
+    throw new Error('Ezt a parancsot csak a szerver tulajdonosa, a NEXA fő ownere vagy BV-01–09 rang használhatja.');
   const me = guild.members.me || await guild.members.fetchMe();
   if (!me.permissions.has(PermissionFlagsBits.ManageChannels)) throw new Error('A Nexának hiányzik a Csatornák kezelése jogosultság.');
   const plan = resolvePlan(guild);
-  const failures = checkExisting(guild, role, plan);
+  const failures = checkExisting(guild, rankRoles, plan);
   if (failures.length) throw new Error(failures.join('\n') + '\nMeglévő jogosultságot nem módosítottam.');
   const missing = CHANNELS.filter((s) => !s.optional && !plan.channels.get(s.key));
   if (!install) return { created: [], reused: CHANNELS.filter((s) => plan.channels.get(s.key)).map((s) => plan.channels.get(s.key).name), missing: missing.map((s) => s.name), categoryMissing: !plan.category };
 
   await ensureSchema();
   let category = plan.category;
-  const base = overwrites(guild, me, role);
+  const base = overwrites(guild, me, rankRoles);
   if (!category) category = await guild.channels.create({ name: CATEGORY, type: ChannelType.GuildCategory, permissionOverwrites: base, reason: 'BELV ügykezelő kategória • ' + interaction.user.id });
   const created = [], resolved = new Map(plan.channels);
   for (const spec of missing) {
