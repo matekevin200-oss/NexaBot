@@ -38,7 +38,7 @@ const FORM_TYPES = Object.freeze([
     { label: 'Megállapítások és bizonyítékok', placeholder: 'Tények, hivatkozások', style: 'paragraph' },
     { label: 'Javaslat', placeholder: 'További intézkedés vagy lezárás', style: 'paragraph' }
   ] },
-  { key: 'custom_belv_hat', title: 'Fegyelmi határozat', emoji: '⚖️', channel: 'decisions', fields: [
+  { key: 'custom_belv_hat', title: 'Fegyelmi határozat', emoji: '⚖️', channel: 'decisions', pingTarget: true, fields: [
     { label: 'Ügyszám', placeholder: 'RP-ÉÉÉÉHHNN-ÓÓPP' },
     { label: 'Elbírált tényállás', placeholder: 'Rövid összefoglaló', style: 'paragraph' },
     { label: 'Hivatkozott szabály', placeholder: 'Pontos fejezet és pont' },
@@ -46,7 +46,7 @@ const FORM_TYPES = Object.freeze([
     { label: 'Felülvizsgálat határideje', placeholder: 'ÉÉÉÉ.HH.NN.' }
   ] },
   { key: 'custom_belv_fel', title: 'Fegyelmi felülvizsgálati kérelem', emoji: '🔁', channel: 'appeals', fields: [
-    { label: 'Ügyszám és kérelmező', placeholder: 'Ügyszám, név, rang' },
+    { label: 'Ügyazonosító', placeholder: 'Az eredeti fegyelmi ügy RP-azonosítója' },
     { label: 'Megtámadott döntés', placeholder: 'Döntés dátuma és tárgya' },
     { label: 'Kérelem indoka', placeholder: 'Részletes indoklás', style: 'paragraph' },
     { label: 'Új bizonyíték', placeholder: 'Leírás vagy hivatkozás', required: false, style: 'paragraph' },
@@ -186,7 +186,7 @@ async function ensureSchema() {
   const sql = [
     'CREATE TABLE IF NOT EXISTS nexabot_belv_cases (',
     'id BIGSERIAL PRIMARY KEY, guild_id TEXT NOT NULL, case_number TEXT NOT NULL, form_key TEXT NOT NULL,',
-    'interaction_id TEXT NOT NULL, submitter_id TEXT NOT NULL, subject_user_id TEXT, answers JSONB NOT NULL DEFAULT \'{}\'::jsonb,',
+    'interaction_id TEXT NOT NULL, submitter_id TEXT NOT NULL, subject_user_id TEXT, linked_case_number TEXT, answers JSONB NOT NULL DEFAULT \'{}\'::jsonb,',
     'status TEXT NOT NULL DEFAULT \'pending_review\', review_channel_id TEXT, review_message_id TEXT, decision_by TEXT, decision_at TIMESTAMPTZ,',
     'created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),',
     'UNIQUE(guild_id, case_number), UNIQUE(guild_id, interaction_id));',
@@ -200,14 +200,23 @@ async function ensureSchema() {
 async function saveSubmission(interaction, type, caseNumber, targetUserId) {
   if (!String(type?.key || '').startsWith('custom_belv_')) return true;
   const answers = Object.fromEntries(type.fields.map((field) => [field.label, interaction.fields.getTextInputValue(field.id).trim()]));
+  const linkedCaseNumber = String(answers['Ügyszám'] || answers['Ügyazonosító'] || '').trim();
+  if (linkedCaseNumber && !/^RP-[0-9]{8}-[0-9]{4}(?:-[0-9]{1,22})?$/.test(linkedCaseNumber)) throw new Error('Az ügyazonosító formátuma nem megfelelő.');
+  if (type.key === 'custom_belv_felulviz') {
+    const decision = await dbQuery(
+      "SELECT case_number FROM nexabot_belv_cases WHERE guild_id=$1 AND (case_number=$2 OR linked_case_number=$2) AND form_key='custom_belv_hat' AND status='approved' AND decision_at >= NOW()-INTERVAL '72 hours' ORDER BY decision_at DESC LIMIT 1",
+      [interaction.guildId, linkedCaseNumber]
+    );
+    if (!decision?.rowCount) throw new Error('A megadott ügynek nincs jóváhagyott határozata, vagy a 72 órás felülvizsgálati határidő lejárt.');
+  }
   const inserted = await dbQuery(
-    'INSERT INTO nexabot_belv_cases(guild_id,case_number,form_key,interaction_id,submitter_id,subject_user_id,answers,status) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,\'pending_review\') ON CONFLICT(guild_id,interaction_id) DO NOTHING RETURNING case_number',
-    [interaction.guildId, caseNumber, type.key, interaction.id, interaction.user.id, targetUserId, JSON.stringify(answers)]
+    "INSERT INTO nexabot_belv_cases(guild_id,case_number,form_key,interaction_id,submitter_id,subject_user_id,linked_case_number,answers,status) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,'pending_review') ON CONFLICT(guild_id,interaction_id) DO NOTHING RETURNING case_number",
+    [interaction.guildId, caseNumber, type.key, interaction.id, interaction.user.id, targetUserId, linkedCaseNumber || null, JSON.stringify(answers)]
   );
   if (!inserted?.rowCount) throw new Error('Ezt az űrlapot már rögzítette a rendszer, nem küldtem be kétszer.');
   await dbQuery(
     'INSERT INTO nexabot_belv_case_audit(guild_id,case_number,actor_id,action,details) VALUES($1,$2,$3,$4,$5::jsonb)',
-    [interaction.guildId, caseNumber, interaction.user.id, 'submitted', JSON.stringify({ formKey: type.key })]
+    [interaction.guildId, caseNumber, interaction.user.id, 'submitted', JSON.stringify({ formKey: type.key, linkedCaseNumber: linkedCaseNumber || null })]
   );
   return true;
 }
