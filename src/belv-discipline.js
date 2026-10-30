@@ -1,6 +1,6 @@
 'use strict';
 
-const { ChannelType, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
+const { ChannelType, EmbedBuilder, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
 const { getGuildConfig, setGuildConfig, isBotOwner, isPersistentStore, dbQuery } = require('./config');
 const { recordAudit, recordError } = require('./telemetry');
 const { normalizeName, customDocumentTypes, documentPanel } = require('./documents');
@@ -68,6 +68,51 @@ const FORM_TYPES = Object.freeze([
   ] }
 ]);
 
+const STATUTE_NOTICE = 'A feltöltött specifikáció csak a 3–18. § címét és büntetési tartományát tartalmazza. Az 1–2. és 19–25. § teljes szövege nincs mellékelve; ez a közlés ezért nem teljes BTK.';
+const PENALTY_TEXT = [
+  'I. Szóbeli figyelmeztetés',
+  'II. Írásbeli figyelmeztetés',
+  'III. Hivatalos megrovás',
+  'IV. 1–7 nap szolgálati felfüggesztés',
+  'V. Lefokozás vagy vezetői felmentés',
+  'VI. Állományból eltávolítás',
+  '',
+  '3. § Indokolatlan villogóhasználat: II–IV.',
+  '4. § Villogóval visszaélés: III–V.',
+  '5. § Indokolatlan igazoltatás: II–III.',
+  '6. § Jogellenes előállítás: III–V.',
+  '7. § Hatáskörrel visszaélés: III–VI.',
+  '8. § Szolgálati járművel visszaélés: II–IV.',
+  '9. § Jogszerű utasítás megtagadása: II–IV.',
+  '10. § Szolgálati mulasztás: I–V.',
+  '11. § Bizalmas információ kiadása: IV–VI.',
+  '12. § Bizonyítékhamisítás: V–VI.',
+  '13. § Hamis jelentés: III–VI.',
+  '14. § Indokolatlan erőalkalmazás: IV–VI.',
+  '15. § Korrupció: V–VI.',
+  '16. § Vezetői visszaélés: IV–VI.',
+  '17. § Intézkedés akadályozása: III–V.',
+  '18. § Ismételt súlyos szabályszegés: V–VI.'
+].join(String.fromCharCode(10));
+async function upsertReference(channel, botId, key, title, description) {
+  const footer = 'NexaBot • BELV referencia • ' + key;
+  const embed = new EmbedBuilder().setColor(0x9d2638).setTitle(title).setDescription(description).setFooter({ text: footer });
+  const messages = await channel.messages.fetch({ limit: 50 });
+  const existing = messages.find((message) => message.author.id === botId && message.embeds[0]?.footer?.text === footer);
+  if (existing) await existing.edit({ embeds: [embed] });
+  else await channel.send({ embeds: [embed] });
+}
+async function publishReferences(channels, botId) {
+  const rules = [
+    'Ügyút: bejelentés → előzetes ellenőrzés → vizsgálat → meghallgatás → jelentés → vezetőségi döntés → határozat → legfeljebb 72 órán belüli felülvizsgálati kérelem → lezárás.',
+    'Állapotok: BEJELENTVE, ELŐZETES ELLENŐRZÉS, VIZSGÁLAT ALATT, MEGHALLGATÁSRA VÁR, JELENTÉS ELKÉSZÜLT, VEZETŐSÉGI ELBÍRÁLÁS, HATÁROZAT KIADVA, FELÜLVIZSGÁLAT ALATT, LEZÁRVA vagy MEGSZÜNTETVE.',
+    'A NEXA nem alkalmaz automatikus büntetést. A döntést jogosult vezetőnek kell jóváhagynia. Más frakció tagjánál közvetlen szankció helyett alapértelmezés szerint javaslat készül.',
+    STATUTE_NOTICE
+  ].join(String.fromCharCode(10) + String.fromCharCode(10));
+  await upsertReference(channels.get('statute'), botId, 'belv-btk', 'BELV-BTK/2026 • A rendelkezésre álló szövegrész', STATUTE_NOTICE + String.fromCharCode(10) + String.fromCharCode(10) + PENALTY_TEXT);
+  await upsertReference(channels.get('penalties'), botId, 'buntetesi-tetelek', 'Fegyelmi fokozatok és tételek', PENALTY_TEXT + String.fromCharCode(10) + String.fromCharCode(10) + 'A megadott büntetési sáv nem automatikus döntés; az ügy körülményeit ember bírálja el.');
+  await upsertReference(channels.get('rules'), botId, 'eljarasi-rend', 'BELV fegyelmi ügykezelés • eljárási kivonat', rules);
+}
 function buildCommand() {
   return new SlashCommandBuilder()
     .setName('belv-rendszer')
@@ -104,6 +149,8 @@ function checkExisting(guild, role, plan) {
       errors.push('#' + channel.name + ': a Nexának csatornamegtekintés, üzenetküldés, beágyazás és előzményolvasás kell.');
     if (!spec.public && (!role || channel.permissionsFor(guild.roles.everyone)?.has(PermissionFlagsBits.ViewChannel)))
       errors.push('#' + channel.name + ': érzékeny ügyiratcsatorna, amelyet @everyone láthat vagy nincs vezetőségi rang. Meglévő jogosultságot nem változtatok.');
+    if (spec.public && channel.permissionsFor(guild.roles.everyone)?.has(PermissionFlagsBits.SendMessages))
+      errors.push('#' + channel.name + ': a nyilvános BELV-csatornának olvashatónak, de nem írhatónak kell lennie. Meglévő jogosultságot nem változtatok.');
   }
   return errors;
 }
@@ -227,7 +274,7 @@ async function provision(interaction, install) {
     resolved.set(spec.key, channel);
     created.push(channel.name);
   }
-  const types = await configureForms(guild, resolved);
+  await publishReferences(resolved, me.id);\n  const types = await configureForms(guild, resolved);
   const byKey = new Map(types.map((type) => [type.key, type]));
   const panels = [];
   for (const form of FORM_TYPES) {
