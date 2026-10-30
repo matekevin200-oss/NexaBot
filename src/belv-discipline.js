@@ -1,7 +1,7 @@
 'use strict';
 
 const { ChannelType, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
-const { getGuildConfig, setGuildConfig, isBotOwner } = require('./config');
+const { getGuildConfig, setGuildConfig, isBotOwner, isPersistentStore, dbQuery } = require('./config');
 const { recordAudit, recordError } = require('./telemetry');
 const { normalizeName, customDocumentTypes, documentPanel } = require('./documents');
 const { isConfiguredRoleHolder } = require('./belv-roster-rules');
@@ -123,6 +123,52 @@ async function publishPanel(channel, botId, type, guild) {
   if (previous) await previous.edit(documentPanel(type, guild));
   else await channel.send(documentPanel(type, guild));
 }
+async function ensureSchema() {
+  if (!isPersistentStore()) throw new Error('A BELV ügyek tartós tárolásához működő PostgreSQL-adatbázis szükséges.');
+  const sql = [
+    'CREATE TABLE IF NOT EXISTS nexabot_belv_cases (',
+    'id BIGSERIAL PRIMARY KEY, guild_id TEXT NOT NULL, case_number TEXT NOT NULL, form_key TEXT NOT NULL,',
+    'interaction_id TEXT NOT NULL, submitter_id TEXT NOT NULL, subject_user_id TEXT, answers JSONB NOT NULL DEFAULT \'{}\'::jsonb,',
+    'status TEXT NOT NULL DEFAULT \'pending_review\', review_channel_id TEXT, review_message_id TEXT, decision_by TEXT, decision_at TIMESTAMPTZ,',
+    'created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),',
+    'UNIQUE(guild_id, case_number), UNIQUE(guild_id, interaction_id))',
+    'CREATE TABLE IF NOT EXISTS nexabot_belv_case_audit (',
+    'id BIGSERIAL PRIMARY KEY, guild_id TEXT NOT NULL, case_number TEXT NOT NULL, actor_id TEXT NOT NULL,',
+    'action TEXT NOT NULL, details JSONB NOT NULL DEFAULT \'{}\'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())',
+    'INSERT INTO nexabot_schema_migrations(version,name) VALUES(26,\'belv_discipline_cases\') ON CONFLICT(version) DO NOTHING'
+  ].join(String.fromCharCode(10));
+  await dbQuery(sql);
+}
+async function saveSubmission(interaction, type, caseNumber, targetUserId) {
+  if (!String(type?.key || '').startsWith('custom_belv_')) return true;
+  const answers = Object.fromEntries(type.fields.map((field) => [field.label, interaction.fields.getTextInputValue(field.id).trim()]));
+  const inserted = await dbQuery(
+    'INSERT INTO nexabot_belv_cases(guild_id,case_number,form_key,interaction_id,submitter_id,subject_user_id,answers,status) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,\'pending_review\') ON CONFLICT(guild_id,interaction_id) DO NOTHING RETURNING case_number',
+    [interaction.guildId, caseNumber, type.key, interaction.id, interaction.user.id, targetUserId, JSON.stringify(answers)]
+  );
+  if (!inserted?.rowCount) throw new Error('Ezt az űrlapot már rögzítette a rendszer, nem küldtem be kétszer.');
+  await dbQuery(
+    'INSERT INTO nexabot_belv_case_audit(guild_id,case_number,actor_id,action,details) VALUES($1,$2,$3,$4,$5::jsonb)',
+    [interaction.guildId, caseNumber, interaction.user.id, 'submitted', JSON.stringify({ formKey: type.key })]
+  );
+  return true;
+}
+async function attachReviewMessage(guildId, caseNumber, channelId, messageId) {
+  await dbQuery('UPDATE nexabot_belv_cases SET review_channel_id=$3,review_message_id=$4,updated_at=NOW() WHERE guild_id=$1 AND case_number=$2', [guildId, caseNumber, channelId, messageId]);
+}
+async function setCaseStatus(guildId, caseNumber, actorId, status, details = {}) {
+  if (!caseNumber || !String(caseNumber).startsWith('RP-')) return false;
+  const updated = await dbQuery(
+    'UPDATE nexabot_belv_cases SET status=$3,decision_by=$4,decision_at=NOW(),updated_at=NOW() WHERE guild_id=$1 AND case_number=$2 AND status=\'pending_review\' RETURNING id',
+    [guildId, caseNumber, status, actorId]
+  );
+  if (!updated?.rowCount) return false;
+  await dbQuery(
+    'INSERT INTO nexabot_belv_case_audit(guild_id,case_number,actor_id,action,details) VALUES($1,$2,$3,$4,$5::jsonb)',
+    [guildId, caseNumber, actorId, status, JSON.stringify(details)]
+  );
+  return true;
+}
 async function provision(interaction, install) {
   const guild = interaction.guild;
   if (!guild || guild.id !== BELV_GUILD_ID) throw new Error('Ez a parancs kizárólag a BELV szerveren használható.');
@@ -140,6 +186,7 @@ async function provision(interaction, install) {
   const missing = CHANNELS.filter((s) => !plan.channels.get(s.key));
   if (!install) return { created: [], reused: CHANNELS.filter((s) => plan.channels.get(s.key)).map((s) => plan.channels.get(s.key).name), missing: missing.map((s) => s.name), categoryMissing: !plan.category };
 
+  await ensureSchema();
   let category = plan.category;
   const base = overwrites(guild, me, role);
   if (!category) category = await guild.channels.create({ name: CATEGORY, type: ChannelType.GuildCategory, permissionOverwrites: base, reason: 'BELV ügykezelő kategória • ' + interaction.user.id });
@@ -189,4 +236,4 @@ async function handleCommand(interaction) {
     return interaction.editReply('❌ ' + (error.message || 'A BELV rendszer telepítése nem sikerült.'));
   }
 }
-module.exports = { buildCommand, handleCommand, BELV_GUILD_ID, CHANNELS, FORM_TYPES };
+module.exports = { buildCommand, handleCommand, BELV_GUILD_ID, CHANNELS, FORM_TYPES, saveSubmission, attachReviewMessage, setCaseStatus };
