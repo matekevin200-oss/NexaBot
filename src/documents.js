@@ -670,7 +670,7 @@ function documentEmbed(type, interaction, caseNumber, status, targetUserId = nul
     ...(targetUserId ? [{ name: 'Megjelölt személy', value: `<@${targetUserId}>`, inline: true }] : []),
     ...formFields,
     { name: 'Állapot', value: status === 'pending' ? '⏳ Jóváhagyásra vár' : '✅ Közzétéve' }
-  );
+  ).setFooter({ text: 'NexaBot • Irat • ' + type.key });
 }
 
 async function installDocumentPanels(guild, botUser) {
