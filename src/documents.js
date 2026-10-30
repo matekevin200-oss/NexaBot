@@ -12,7 +12,7 @@ const {
 } = require('discord.js');
 const { NAMES, COLORS } = require('./constants');
 const { getGuildConfig } = require('./config');
-const { isConfiguredRoleHolder } = require('./belv-roster-rules');
+const { configuredRankRoleMap, isConfiguredRoleHolder, rankForMember } = require('./belv-roster-rules');
 const { baseEmbed, ephemeralError, sendLog } = require('./utils');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
@@ -510,12 +510,20 @@ function documentMentions(targetUserId = null, notificationRoleId = null) {
   };
 }
 
+function isBelvDecisionMaker(member) {
+  if (!member || member.guild?.id !== BELV_APPROVAL_GUILD_ID) return false;
+  const configured = String(process.env.BELV_APPROVAL_ROLE_ID || '').trim();
+  if (/^\d{16,22}$/.test(configured)) return isConfiguredRoleHolder(member, configured);
+  const roleId = belvApprovalRoleId(member.guild);
+  if (roleId) return isConfiguredRoleHolder(member, roleId);
+  const rank = rankForMember(member, configuredRankRoleMap(process.env.BELV_RANK_ROLE_IDS));
+  return Boolean(rank && rank.min <= 9);
+}
+
 function canUseDocument(member, type) {
   if (!member) return false;
   if (member.guild?.id !== BELV_APPROVAL_GUILD_ID || !String(type?.key || '').startsWith('custom_belv_')) return true;
-  if (['custom_belv_viz', 'custom_belv_hat', 'custom_belv_lez'].includes(type.key)) {
-    return isConfiguredRoleHolder(member, belvApprovalRoleId(member.guild));
-  }
+  if (['custom_belv_viz', 'custom_belv_hat', 'custom_belv_lez'].includes(type.key)) return isBelvDecisionMaker(member);
   return true;
 }
 
@@ -627,7 +635,7 @@ function belvApprovalRoleExists(guild) {
 }
 
 function canApprove(member) {
-  if (member?.guild?.id === BELV_APPROVAL_GUILD_ID) return isConfiguredRoleHolder(member, belvApprovalRoleId(member.guild));
+  if (member?.guild?.id === BELV_APPROVAL_GUILD_ID) return isBelvDecisionMaker(member);
   if (hasNamedRole(member, BELV_APPROVAL_ROLE_NAME)) return true;
   if (belvApprovalRoleExists(member?.guild)) return false;
   const dashboardRoleId = member?.guild?.id ? getGuildConfig(member.guild.id).roles?.dashboard : null;
@@ -641,9 +649,7 @@ function canApprove(member) {
 }
 
 function approvalDenialMessage(guild) {
-  if (guild?.id === BELV_APPROVAL_GUILD_ID) return belvApprovalRoleId(guild)
-    ? `Ezt kizárólag a beállított **${BELV_APPROVAL_ROLE_NAME}** rang fogadhatja el vagy utasíthatja el.`
-    : 'A BELV jóváhagyó rangazonosító nincs beállítva; állítsd be a BELV_APPROVAL_ROLE_ID változót.';
+  if (guild?.id === BELV_APPROVAL_GUILD_ID) return 'Ezt a jóváhagyást a BELV BV-01–09 vezetői rangjai vagy a BELV_APPROVAL_ROLE_ID változóban beállított rang végezheti el.';
   return belvApprovalRoleExists(guild)
     ? `Ezt kizárólag a **${BELV_APPROVAL_ROLE_NAME}** rang fogadhatja el vagy utasíthatja el.`
     : `Ezt csak adminisztrátor vagy a **${NAMES.leadershipRole}** rang használhatja.`;
