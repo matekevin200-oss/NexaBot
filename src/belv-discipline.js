@@ -118,8 +118,9 @@ function overwrites(guild, me, role) {
 async function configureForms(guild, channels) {
   const old = getGuildConfig(guild.id);
   const customTypes = (old.documents?.customTypes || []).filter((x) => !FORM_TYPES.some((item) => item.key === x.key));
+  if (customTypes.length + FORM_TYPES.length > 25) throw new Error('A BELV űrlapok nem férnek el a NEXA 25 egyedi irattípusos korlátjában. Meglévő iratot nem töröltem.');
   const nextTypes = FORM_TYPES.map((type) => ({
-    ...type, approval: true, caseNumber: true, pingTarget: false, active: true,
+    ...type, approval: true, caseNumber: true, pingTarget: Boolean(type.pingTarget), active: true,
     channelId: (channels.get(type.channel === 'intake' ? 'review' : type.channel)?.id || channels.get('open')?.id),
     fields: type.fields.map((field) => ({ ...field }))
   }));
