@@ -12716,6 +12716,13 @@ function isOperative(member) {
 
 const BELV_APPROVAL_ROLE_NAME = 'BELVÉDELMI VEZETŐSÉG';
 
+function belvApprovalRoleId(guild) {
+  const configured = String(process.env.BELV_APPROVAL_ROLE_ID || '').trim();
+  if (/^\d{16,22}$/.test(configured)) return configured;
+  const expected = normalizeName(BELV_APPROVAL_ROLE_NAME);
+  return guild?.roles?.cache?.find((role) => normalizeName(role.name) === expected)?.id || null;
+}
+
 function belvApprovalRoleExists(guild) {
   const expected = normalizeName(BELV_APPROVAL_ROLE_NAME);
   return Boolean(guild?.roles?.cache?.some((role) => normalizeName(role.name) === expected));
