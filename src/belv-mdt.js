@@ -39,6 +39,7 @@ const SESSION_MS = 6 * 60 * 60 * 1000;
 const windows = new Map();
 const syncLocks = new Map();
 const belvRosterLocks = new Set();
+let belvRosterBadgeSchemaPromise = null;
 const belvRosterMonitorClients = new WeakSet();
 const belvRosterNoticeAt = new Map();
 const field = (id, label, paragraph = false, required = true, maxLength = paragraph ? 1000 : 160) => ({ id, label, style: paragraph ? 'paragraph' : 'short', required, maxLength, placeholder: label });
