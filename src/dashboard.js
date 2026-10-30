@@ -3919,7 +3919,8 @@ function buildRpCommands() {
       .setName('dokumentum-panelek')
       .setDescription('Telepíti az RP dokumentumpaneleket a meglévő csatornákba.')
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-      .setDMPermission(false)
+      .setDMPermission(false),
+    require('./belv-discipline').buildCommand()
   ];
 }
 
