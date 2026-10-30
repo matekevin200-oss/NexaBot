@@ -51,13 +51,20 @@ assert.ok(belv.includes("client.on('guildMemberAdd'"), 'new members trigger rost
 assert.ok(belv.includes("client.on('guildMemberRemove'"), 'departed members trigger roster reconciliation');
 assert.ok(!belv.includes('if (!bot.permissions.has(PermissionFlagsBits.ManageNicknames)) fail'), 'nickname permission must not block roster publishing');
 const docs = read('src/documents.js');
-assert.ok(docs.includes('return Boolean(member);'), 'document forms are available to every server member');
+assert.ok(docs.includes('if (!member) return false;') && docs.includes('function isBelvDecisionMaker(member)'), 'BELV decision forms enforce server-side role checks');
 assert.ok(docs.includes('missingDocumentPermissions(target, botMember, requiredTargetPermissions)'), 'document approval checks destination-channel permissions before publishing');
+const discipline = read('src/belv-discipline.js');
+assert.ok(order.includes('src/belv-discipline.js'), 'BELV discipline module is included in the runtime bundle');
+assert.ok(discipline.includes('nexabot_belv_cases') && discipline.includes('nexabot_belv_case_audit'), 'BELV cases and audit events are persisted');
+assert.ok(discipline.includes('UNIQUE(guild_id, interaction_id)'), 'BELV form submissions are idempotent');
+assert.ok(discipline.includes('CHANNELS.filter((s) => !s.optional && !plan.channels.get(s.key))'), 'BELV installer creates only missing required channels');
+assert.ok(discipline.includes('Meglévő jogosultságot nem módosítottam'), 'BELV installer never changes reused channel permissions');
+assert.ok(discipline.includes('A megadott ügynek nincs jóváhagyott határozata') && discipline.includes('72 hours'), 'BELV appeal deadline is checked server-side');
 const dashboard = read('src/dashboard.js');
 assert.ok(!dashboard.includes('doc_default_roles') && !dashboard.includes('doc_manager_roles') && !dashboard.includes('doc_roles_') && !dashboard.includes('access_role_ids'), 'Owner Center no longer configures document access roles');
 assert.ok(dashboard.includes('defaultAccessRoleIds: [], managerRoleIds: []'), 'saving document settings clears old global access-role restrictions');
 const approval = docs.slice(docs.indexOf('function canApprove(member)'), docs.indexOf('\nfunction approvalDenialMessage'));
-assert.ok(approval.includes('isConfiguredRoleHolder(member, belvApprovalRoleId(member.guild))'), 'BELV approval uses the configured exact role ID');
+assert.ok(approval.includes('return isBelvDecisionMaker(member)'), 'BELV approval recognizes the configured role or senior BELV rank');
 assert.ok(docs.includes('function belvApprovalRoleId(guild)'), 'BELV approval role ID resolver is defined');
 
 const previousApprovalRoleId = process.env.BELV_APPROVAL_ROLE_ID;
@@ -75,6 +82,12 @@ try {
   };
   assert.equal(documentModule.canApprove(approver), true, 'the BELV leadership role can approve');
   assert.equal(documentModule.canApprove(nonApprover), false, 'members without the BELV leadership role cannot approve');
+  const deputyRole = { id: '223456789012345678', name: 'BV-04 Igazgatóhelyettes', position: 20 };
+  const deputy = {
+    guild: { id: '1517509643734221030', roles: { cache: [deputyRole] } },
+    roles: { cache: new Map([[deputyRole.id, deputyRole]]) }
+  };
+  assert.equal(documentModule.canApprove(deputy), true, 'BV-01–09 leadership ranks can approve without a specially named role');
 } finally {
   if (previousApprovalRoleId === undefined) delete process.env.BELV_APPROVAL_ROLE_ID;
   else process.env.BELV_APPROVAL_ROLE_ID = previousApprovalRoleId;

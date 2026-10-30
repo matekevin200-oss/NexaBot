@@ -12,7 +12,7 @@ const {
 } = require('discord.js');
 const { NAMES, COLORS } = require('./constants');
 const { getGuildConfig } = require('./config');
-const { isConfiguredRoleHolder } = require('./belv-roster-rules');
+const { configuredRankRoleMap, isConfiguredRoleHolder, rankForMember } = require('./belv-roster-rules');
 const { baseEmbed, ephemeralError, sendLog } = require('./utils');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
@@ -510,8 +510,21 @@ function documentMentions(targetUserId = null, notificationRoleId = null) {
   };
 }
 
+function isBelvDecisionMaker(member) {
+  if (!member || member.guild?.id !== BELV_APPROVAL_GUILD_ID) return false;
+  const configured = String(process.env.BELV_APPROVAL_ROLE_ID || '').trim();
+  if (/^\d{16,22}$/.test(configured)) return isConfiguredRoleHolder(member, configured);
+  const roleId = belvApprovalRoleId(member.guild);
+  if (roleId) return isConfiguredRoleHolder(member, roleId);
+  const rank = rankForMember(member, configuredRankRoleMap(process.env.BELV_RANK_ROLE_IDS));
+  return Boolean(rank && rank.min <= 9);
+}
+
 function canUseDocument(member, type) {
-  return Boolean(member);
+  if (!member) return false;
+  if (member.guild?.id !== BELV_APPROVAL_GUILD_ID || !String(type?.key || '').startsWith('custom_belv_')) return true;
+  if (['custom_belv_viz', 'custom_belv_hat', 'custom_belv_lez'].includes(type.key)) return isBelvDecisionMaker(member);
+  return true;
 }
 
 const DOCUMENT_PERMISSION_LABELS = new Map([
@@ -622,7 +635,7 @@ function belvApprovalRoleExists(guild) {
 }
 
 function canApprove(member) {
-  if (member?.guild?.id === BELV_APPROVAL_GUILD_ID) return isConfiguredRoleHolder(member, belvApprovalRoleId(member.guild));
+  if (member?.guild?.id === BELV_APPROVAL_GUILD_ID) return isBelvDecisionMaker(member);
   if (hasNamedRole(member, BELV_APPROVAL_ROLE_NAME)) return true;
   if (belvApprovalRoleExists(member?.guild)) return false;
   const dashboardRoleId = member?.guild?.id ? getGuildConfig(member.guild.id).roles?.dashboard : null;
@@ -636,9 +649,7 @@ function canApprove(member) {
 }
 
 function approvalDenialMessage(guild) {
-  if (guild?.id === BELV_APPROVAL_GUILD_ID) return belvApprovalRoleId(guild)
-    ? `Ezt kizárólag a beállított **${BELV_APPROVAL_ROLE_NAME}** rang fogadhatja el vagy utasíthatja el.`
-    : 'A BELV jóváhagyó rangazonosító nincs beállítva; állítsd be a BELV_APPROVAL_ROLE_ID változót.';
+  if (guild?.id === BELV_APPROVAL_GUILD_ID) return 'Ezt a jóváhagyást a BELV BV-01–09 vezetői rangjai vagy a BELV_APPROVAL_ROLE_ID változóban beállított rang végezheti el.';
   return belvApprovalRoleExists(guild)
     ? `Ezt kizárólag a **${BELV_APPROVAL_ROLE_NAME}** rang fogadhatja el vagy utasíthatja el.`
     : `Ezt csak adminisztrátor vagy a **${NAMES.leadershipRole}** rang használhatja.`;
@@ -670,7 +681,7 @@ function documentEmbed(type, interaction, caseNumber, status, targetUserId = nul
     ...(targetUserId ? [{ name: 'Megjelölt személy', value: `<@${targetUserId}>`, inline: true }] : []),
     ...formFields,
     { name: 'Állapot', value: status === 'pending' ? '⏳ Jóváhagyásra vár' : '✅ Közzétéve' }
-  );
+  ).setFooter({ text: 'NexaBot • Irat • ' + type.key });
 }
 
 async function installDocumentPanels(guild, botUser) {
@@ -720,6 +731,7 @@ async function handleDocumentButton(interaction) {
     const [, key, targetChannelId, submitterId, selectedUserId] = id.split(':');
     const targetUserId = /^\d{16,22}$/.test(selectedUserId || '') ? selectedUserId : null;
     const type = findDocumentType(key, interaction.guild);
+    if (type?.custom && String(type.key).startsWith('custom_belv_') && String(submitterId) === String(interaction.user.id)) return ephemeralError(interaction, 'Saját fegyelmi ügyedben nem hagyhatsz jóvá döntést.');
     const target = interaction.guild.channels.cache.get(targetChannelId);
     if (!type || !target?.isTextBased()) return ephemeralError(interaction, 'A célcsatorna nem található.');
     const notificationRoleId = documentRule(interaction.guild, type).notificationRoleId;
@@ -733,6 +745,11 @@ async function handleDocumentButton(interaction) {
     if (missingReviewPermissions.length) return ephemeralError(interaction, documentPermissionError(interaction.channel, missingReviewPermissions));
     const mentions = documentMentions(targetUserId, notificationRoleId);
     await interaction.deferReply({ flags: EPHEMERAL });
+    const belvCaseNumber = interaction.message.embeds[0]?.fields?.find((field) => field.name === 'Ügyszám')?.value || null;
+    if (type?.custom && String(type.key).startsWith('custom_belv_')) {
+      const claimed = await require('./belv-discipline').claimCaseDecision(interaction.guildId, belvCaseNumber, interaction.user.id);
+      if (!claimed) return interaction.editReply('❌ Ezt az ügyet már elbírálták, vagy egy másik döntéshozó éppen kezeli.');
+    }
     const approved = EmbedBuilder.from(interaction.message.embeds[0])
       .setTitle(`✅ Jóváhagyva • ${type.title}`)
       .setColor(COLORS.success);
@@ -759,6 +776,7 @@ async function handleDocumentButton(interaction) {
     const submitter = await interaction.client.users.fetch(submitterId).catch(() => null);
     await submitter?.send(`✅ A **${type.title}** dokumentumodat jóváhagyták a **${interaction.guild.name}** szerveren.`).catch(() => null);
     await sendLog(interaction.guild, baseEmbed('✅ Dokumentum jóváhagyva', `${type.title} • ${interaction.user.tag}`, COLORS.success));
+    if (type?.custom && String(type.key).startsWith('custom_belv_')) await require('./belv-discipline').setCaseStatus(interaction.guildId, belvCaseNumber, interaction.user.id, 'approved');
     return interaction.editReply(`✅ A dokumentum jóváhagyva és közzétéve itt: ${target}`);
   }
 
@@ -782,6 +800,7 @@ async function handleDocumentSelect(interaction) {
   }
   const targetUserId = interaction.values?.[0];
   if (!/^\d{16,22}$/.test(targetUserId || '')) return ephemeralError(interaction, 'Nem sikerült kiválasztani a személyt.');
+  if (type.key === 'custom_belv_jegyz' && String(targetUserId) !== String(interaction.user.id)) return ephemeralError(interaction, 'A jegyzőkönyvben csak a saját nyilatkozatodat adhatod meg.');
   return interaction.showModal(documentModal(type, targetUserId));
 }
 
@@ -797,20 +816,33 @@ async function handleDocumentModal(interaction) {
     const rule = documentRule(interaction.guild, type);
     const targetUserId = rule.pingTarget && /^\d{16,22}$/.test(selectedUserId || '') ? selectedUserId : null;
     if (rule.pingTarget && !targetUserId) return ephemeralError(interaction, 'Ehhez a bejegyzéshez előbb válassz ki egy megjelölendő személyt.');
+    if (type.key === 'custom_belv_jegyz' && String(targetUserId) !== String(interaction.user.id)) return ephemeralError(interaction, 'A jegyzőkönyvben csak a saját nyilatkozatodat adhatod meg.');
     await interaction.deferReply({ flags: EPHEMERAL });
-    const caseNumber = rule.caseNumber ? bviCaseNumber() : null;
+    let caseNumber = rule.caseNumber ? bviCaseNumber() : null;
+    if (type.custom && String(type.key).startsWith('custom_belv_')) {
+      const suffix = String(interaction.id).slice(-12);
+      caseNumber = (caseNumber || bviCaseNumber()) + '-' + suffix;
+      await require('./belv-discipline').saveSubmission(interaction, type, caseNumber, targetUserId);
+    }
     if (type.approval) {
       const reviewType = findDocumentType(REVIEW_CHANNEL_KEY, interaction.guild);
-      const reviewChannel = findDocumentChannel(interaction.guild, reviewType);
+      const dedicatedReview = interaction.guild?.id === BELV_APPROVAL_GUILD_ID
+        ? interaction.guild.channels.cache.find((channel) => normalizeName(channel.name) === normalizeName('vezetőségi-elbírálás'))
+        : null;
+      const reviewChannel = dedicatedReview || findDocumentChannel(interaction.guild, reviewType);
       if (!reviewChannel) {
         return interaction.editReply('❌ A meglévő **ügyiratok** jóváhagyási csatornát nem találom. Új csatornát nem hoztam létre.');
       }
       const embed = documentEmbed(type, interaction, caseNumber, 'pending', targetUserId)
         .addFields({ name: 'Célcsatorna', value: `${interaction.channel}` });
+      const publishChannelId = type.channelId || interaction.channelId;
       const message = await reviewChannel.send({
         embeds: [embed],
-        components: [approvalControls(type, interaction.channelId, interaction.user.id, targetUserId)]
+        components: [approvalControls(type, publishChannelId, interaction.user.id, targetUserId)]
       });
+      if (caseNumber && type.custom && String(type.key).startsWith('custom_belv_')) {
+        await require('./belv-discipline').attachReviewMessage(interaction.guildId, caseNumber, reviewChannel.id, message.id);
+      }
       return interaction.editReply(`✅ A dokumentum jóváhagyásra elküldve: ${message.url}${caseNumber ? `\n**Ügyszám:** ${caseNumber}` : ''}`);
     }
     const embed = documentEmbed(type, interaction, caseNumber, 'published', targetUserId);
@@ -832,9 +864,16 @@ async function handleDocumentModal(interaction) {
     if (missingPermissions.length) return ephemeralError(interaction, documentPermissionError(interaction.channel, missingPermissions));
     await interaction.deferReply({ flags: EPHEMERAL });
     const [, messageId, submitterId] = interaction.customId.split(':');
+    if (interaction.guildId === BELV_APPROVAL_GUILD_ID && String(submitterId) === String(interaction.user.id)) return interaction.editReply('❌ Saját fegyelmi ügyedet nem utasíthatod el.');
     const reason = interaction.fields.getTextInputValue('reject_reason').trim();
     const pending = await interaction.channel.messages.fetch(messageId).catch(() => null);
     if (!pending?.embeds?.length) return interaction.editReply('❌ A jóváhagyásra váró dokumentum nem található.');
+    const belvCaseNumber = pending.embeds[0]?.fields?.find((field) => field.name === 'Ügyszám')?.value || null;
+    const typeKey = pending.embeds[0]?.footer?.text?.split('•').at(-1)?.trim();
+    if (String(typeKey || '').startsWith('custom_belv_')) {
+      const claimed = await require('./belv-discipline').claimCaseDecision(interaction.guildId, belvCaseNumber, interaction.user.id);
+      if (!claimed) return interaction.editReply('❌ Ezt az ügyet már elbírálták, vagy egy másik döntéshozó éppen kezeli.');
+    }
     const rejected = EmbedBuilder.from(pending.embeds[0]).setTitle('❌ Elutasított dokumentum').setColor(COLORS.danger);
     rejected.setFields(
       ...rejected.data.fields.filter((field) => field.name !== 'Állapot'),
@@ -842,6 +881,7 @@ async function handleDocumentModal(interaction) {
       { name: 'Elutasítás indoka', value: reason }
     );
     await pending.edit({ embeds: [rejected], components: [] });
+    if (String(typeKey || '').startsWith('custom_belv_')) await require('./belv-discipline').setCaseStatus(interaction.guildId, belvCaseNumber, interaction.user.id, 'rejected', { reason });
     const submitter = await interaction.client.users.fetch(submitterId).catch(() => null);
     const dmSent = await submitter?.send(
       `❌ A dokumentumodat elutasították a **${interaction.guild.name}** szerveren.\n**Indok:** ${reason}`

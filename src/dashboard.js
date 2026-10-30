@@ -2783,7 +2783,9 @@ async function syncGuildCommandLanguage(guild, language = 'auto') {
     await requireBelvGuild(guild.id);
     commands.push(buildMdtCommand());
     const belvMdt = require('./belv-mdt');
-    if (guild.id === belvMdt.BELV_GUILD_ID) commands.push(belvMdt.buildBelvRosterCommand());
+    if (guild.id === belvMdt.BELV_GUILD_ID) {
+      commands.push(belvMdt.buildBelvRosterCommand(), require('./belv-discipline').buildCommand());
+    }
   } catch (error) { if (error.status !== 403) throw error; }
   if (guild.id === SUPPORT_GUILD_ID) commands.push(buildSupportSetupCommand());
   const payload = commands.map((command) => forceCommandLocale(localizeCommandJson(command.toJSON()), language));
@@ -3919,7 +3921,8 @@ function buildRpCommands() {
       .setName('dokumentum-panelek')
       .setDescription('Telepíti az RP dokumentumpaneleket a meglévő csatornákba.')
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-      .setDMPermission(false)
+      .setDMPermission(false),
+    
   ];
 }
 
