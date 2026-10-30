@@ -798,7 +798,12 @@ async function handleDocumentModal(interaction) {
     const targetUserId = rule.pingTarget && /^\d{16,22}$/.test(selectedUserId || '') ? selectedUserId : null;
     if (rule.pingTarget && !targetUserId) return ephemeralError(interaction, 'Ehhez a bejegyzéshez előbb válassz ki egy megjelölendő személyt.');
     await interaction.deferReply({ flags: EPHEMERAL });
-    const caseNumber = rule.caseNumber ? bviCaseNumber() : null;
+    let caseNumber = rule.caseNumber ? bviCaseNumber() : null;
+    if (type.custom && String(type.key).startsWith('custom_belv_')) {
+      const suffix = String(interaction.id).slice(-12);
+      caseNumber = (caseNumber || bviCaseNumber()) + '-' + suffix;
+      await require('./belv-discipline').saveSubmission(interaction, type, caseNumber, targetUserId);
+    }
     if (type.approval) {
       const reviewType = findDocumentType(REVIEW_CHANNEL_KEY, interaction.guild);
       const dedicatedReview = interaction.guild?.id === BELV_APPROVAL_GUILD_ID
@@ -815,6 +820,9 @@ async function handleDocumentModal(interaction) {
         embeds: [embed],
         components: [approvalControls(type, publishChannelId, interaction.user.id, targetUserId)]
       });
+      if (caseNumber && type.custom && String(type.key).startsWith('custom_belv_')) {
+        await require('./belv-discipline').attachReviewMessage(interaction.guildId, caseNumber, reviewChannel.id, message.id);
+      }
       return interaction.editReply(`✅ A dokumentum jóváhagyásra elküldve: ${message.url}${caseNumber ? `\n**Ügyszám:** ${caseNumber}` : ''}`);
     }
     const embed = documentEmbed(type, interaction, caseNumber, 'published', targetUserId);
