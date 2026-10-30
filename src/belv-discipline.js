@@ -10,26 +10,26 @@ const BELV_GUILD_ID = '1517509643734221030';
 const CATEGORY = '⚖️┃BELV • FEGYELMI ÉS JOGI OSZTÁLY';
 const LEADERSHIP_ROLE = 'BELVÉDELMI VEZETŐSÉG';
 const CHANNELS = Object.freeze([
-  { key: 'statute', name: 'belv-btk', public: true },
-  { key: 'penalties', name: 'büntetési-tételek', public: true },
-  { key: 'rules', name: 'fegyelmi-szabályzat', public: true },
-  { key: 'intake', name: 'fegyelmi-bejelentések', public: true },
-  { key: 'open', name: 'folyamatban-lévő-eljárások', aliases: ['fegyelmi-eljárások'] },
-  { key: 'review', name: 'vezetőségi-elbírálás', aliases: ['ügyiratok'] },
-  { key: 'decisions', name: 'fegyelmi-határozatok', aliases: ['határozatok'] },
-  { key: 'appeals', name: 'fegyelmi-felülvizsgálatok' },
-  { key: 'archive', name: 'lezárt-fegyelmi-ügyek', aliases: ['archívum'] },
+  { key: 'statute', name: '📕┃belv-btk', public: true },
+  { key: 'penalties', name: '⚖️┃büntetési-tételek', public: true },
+  { key: 'rules', name: '📜┃fegyelmi-szabályzat', public: true },
+  { key: 'intake', name: '📩┃fegyelmi-bejelentések', public: true },
+  { key: 'open', name: '🔎┃folyamatban-lévő-eljárások', aliases: ['fegyelmi-eljárások'] },
+  { key: 'review', name: '🧑‍⚖️┃vezetőségi-elbírálás', aliases: ['ügyiratok'] },
+  { key: 'decisions', name: '📋┃fegyelmi-határozatok', aliases: ['határozatok'] },
+  { key: 'appeals', name: '📨┃fegyelmi-felülvizsgálatok' },
+  { key: 'archive', name: '🗄️┃lezárt-fegyelmi-ügyek', aliases: ['archívum'] },
   { key: 'internal', name: 'belső-vizsgálatok', optional: true },
   { key: 'reports', name: 'vizsgálati-jelentések', optional: true },
   { key: 'minutes', name: 'jegyzőkönyv', optional: true }
 ]);
 const FORM_TYPES = Object.freeze([
-  { key: 'custom_belv_bej', title: 'Fegyelmi bejelentés', emoji: '📨', channel: 'intake', fields: [
-    { label: 'Érintett személy, rang', placeholder: 'Név és beosztás' },
-    { label: 'Esemény időpontja', placeholder: 'ÉÉÉÉ.HH.NN. ÓÓ:PP' },
-    { label: 'Bejelentés tárgya', placeholder: 'Rövid, tényszerű megnevezés' },
-    { label: 'Tényállás és szabály', placeholder: 'Mi történt, mely szabály érintett?', style: 'paragraph' },
-    { label: 'Bizonyíték vagy tanú', placeholder: 'Hivatkozás vagy elérhetőség', required: false }
+  { key: 'custom_belv_bej', title: 'Fegyelmi bejelentés', emoji: '📩', channel: 'intake', fields: [
+    { label: 'Bejelentett személy neve és szolgálati azonosítója', placeholder: 'Név és azonosító' },
+    { label: 'Érintett frakciója', placeholder: 'BELV, FBI, CIA, TEK, NAV, BV, ARFK, BBO vagy KR' },
+    { label: 'Szabályszegés részletes leírása', placeholder: 'Mi történt és milyen szolgálati szabály sérülhetett?', style: 'paragraph' },
+    { label: 'Esemény időpontja és helyszíne', placeholder: 'Dátum, időpont és pontos RP-helyszín' },
+    { label: 'Bizonyítékok', placeholder: 'Videó, kép, üzenetlink, tanú vagy egyéb bizonyíték', required: false, style: 'paragraph' }
   ] },
   { key: 'custom_belv_viz', title: 'Vizsgálati jelentés', emoji: '🔎', channel: 'reports', fields: [
     { label: 'Ügyszám', placeholder: 'RP-ÉÉÉÉHHNN-ÓÓPP' },
@@ -39,7 +39,7 @@ const FORM_TYPES = Object.freeze([
     { label: 'Javaslat', placeholder: 'További intézkedés vagy lezárás', style: 'paragraph' }
   ] },
   { key: 'custom_belv_hat', title: 'Fegyelmi határozat', emoji: '⚖️', channel: 'decisions', fields: [
-    { label: 'Ügyszám és érintett', placeholder: 'Ügyszám, név, rang' },
+    { label: 'Ügyszám', placeholder: 'RP-ÉÉÉÉHHNN-ÓÓPP' },
     { label: 'Elbírált tényállás', placeholder: 'Rövid összefoglaló', style: 'paragraph' },
     { label: 'Hivatkozott szabály', placeholder: 'Pontos fejezet és pont' },
     { label: 'Döntés vagy javaslat', placeholder: 'Indoklással', style: 'paragraph' },
