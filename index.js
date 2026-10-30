@@ -9907,14 +9907,6 @@ async function ownerArchitectPage(guild, session, options = {}) {
 }
 
 function ownerDocumentsPage(guild, session, saved = false) {
-  const config = getGuildConfig(guild.id);
-  const defaultAccessRoleIds = config.documents?.defaultAccessRoleIds?.length
-    ? config.documents.defaultAccessRoleIds
-    : config.documents?.defaultAccessRoleId ? [config.documents.defaultAccessRoleId] : [];
-  const defaultAccessRoleName = defaultAccessRoleIds.length
-    ? defaultAccessRoleIds.map((id) => guild.roles.cache.get(id)?.name || 'Ismeretlen rang').join(', ')
-    : 'Nincs beállítva';
-  const managerRoleIds = config.documents?.managerRoleIds || [];
   const categoryNames = {
     root: 'Alaprendszer',
     informaciok: 'Információk és nyilvántartások',
@@ -9931,14 +9923,14 @@ function ownerDocumentsPage(guild, session, saved = false) {
   const sections = [...groups.entries()].map(([groupKey, types]) => {
     const cards = types.map((type) => {
       const rule = documentRule(guild, type);
-      return `<article class="card"><div class="section-kicker"># ${escapeHtml(type.channel || type.channelPrefix)}</div><h3>${escapeHtml(type.emoji)} ${escapeHtml(type.title)}</h3><div class="field-grid"><div><label for="doc_roles_${escapeHtml(type.key)}">Használatra jogosult rangok</label>${roleCheckboxes(guild, `doc_roles_${type.key}`, rule.overrideAccessRoleIds)}<div class="help">Pipálj be egy vagy több rangot. Üresen az alapértelmezett ranglista érvényes (${escapeHtml(defaultAccessRoleName)}).</div></div><div><label for="doc_notify_${escapeHtml(type.key)}">Értesítendő rang</label><select id="doc_notify_${escapeHtml(type.key)}" name="doc_notify_${escapeHtml(type.key)}">${roleOptions(guild, rule.notificationRoleId, 'Ne pingeljen rangot')}</select><div class="help">A bot a kész irat közzétételekor ezt a rangot pingeli.</div></div><div><label class="switch"><input type="checkbox" name="doc_case_${escapeHtml(type.key)}"${rule.caseNumber ? ' checked' : ''}><span><strong>Ügyszám hozzáadása</strong><br><span class="muted">Kikapcsolva a felhívásoknál és egyszerű közleményeknél.</span></span></label></div><div><label class="switch"><input type="checkbox" name="doc_ping_${escapeHtml(type.key)}"${rule.pingTarget ? ' checked' : ''}><span><strong>Személy kiválasztása és pingelése</strong><br><span class="muted">A beküldő Discord-listából választ; ID beírása nem kell.</span></span></label></div></div></article>`;
+      return `<article class="card"><div class="section-kicker"># ${escapeHtml(type.channel || type.channelPrefix)}</div><h3>${escapeHtml(type.emoji)} ${escapeHtml(type.title)}</h3><div class="field-grid"><div><strong>Használat</strong><div class="help">Minden szervertag kitöltheti ezt az iratot.</div></div><div><label for="doc_notify_${escapeHtml(type.key)}">Értesítendő rang</label><select id="doc_notify_${escapeHtml(type.key)}" name="doc_notify_${escapeHtml(type.key)}">${roleOptions(guild, rule.notificationRoleId, 'Ne pingeljen rangot')}</select><div class="help">A bot a kész irat közzétételekor ezt a rangot pingeli.</div></div><div><label class="switch"><input type="checkbox" name="doc_case_${escapeHtml(type.key)}"${rule.caseNumber ? ' checked' : ''}><span><strong>Ügyszám hozzáadása</strong><br><span class="muted">Kikapcsolva a felhívásoknál és egyszerű közleményeknél.</span></span></label></div><div><label class="switch"><input type="checkbox" name="doc_ping_${escapeHtml(type.key)}"${rule.pingTarget ? ' checked' : ''}><span><strong>Személy kiválasztása és pingelése</strong><br><span class="muted">A beküldő Discord-listából választ; ID beírása nem kell.</span></span></label></div></div></article>`;
     }).join('');
     return `<section class="section" style="margin-top:28px"><div class="page-head"><div><div class="section-kicker">Dokumentumcsoport</div><h2>${escapeHtml(categoryNames[groupKey] || groupKey)}</h2></div></div><div class="grid">${cards}</div></section>`;
   }).join('');
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 25.8.4 • Owner Document Control</div><h1>Irat- és jogosultságvezérlés</h1><p class="muted">${escapeHtml(guild.name)} • Itt állíthatod be, melyik Discord-rang használhatja a dokumentumpaneleket.</p></div><a class="btn secondary" href="/owner">← Owner Center</a></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA Bot 25.8.4 • Owner Document Control</div><h1>Iratbeállítások</h1><p class="muted">${escapeHtml(guild.name)} • A dokumentumpaneleket minden szervertag használhatja. A jóváhagyás a BELV vezetőségi ranghoz kötött.</p></div><a class="btn secondary" href="/owner">← Owner Center</a></div>
 ${saved ? '<div class="notice">✅ A dokumentumszabályok mentve, a meglévő Discord-panelek frissítve.</div>' : ''}
 <div class="notice warn">Az egyszerű felhívások és tájékoztatások alapból nem kapnak ügyszámot. A hivatalos, jóváhagyásos iratok alapból igen.</div>
-<form method="post" action="/owner/documents/${escapeHtml(guild.id)}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><section class="card section"><div class="section-kicker">Globális jogosultság</div><h2 class="section-title">Ki használhatja és kezelheti az iratokat?</h2><div class="field-grid"><div><label for="doc_manager_roles">Iratkezelői és jóváhagyói rangok</label>${roleCheckboxes(guild, 'doc_manager_roles', managerRoleIds)}<div class="help">Pipáld be azokat a rangokat, amelyek minden iratot kitölthetnek, jóváhagyhatnak és elutasíthatnak.</div></div><div><label for="doc_default_roles">Alapértelmezett használati rangok</label>${roleCheckboxes(guild, 'doc_default_roles', defaultAccessRoleIds)}<div class="help">Pipálj be egy vagy több rangot. Bármelyik kijelölt rang használhatja az összes olyan panelt, amelynél lent nincs külön rang megadva.</div></div></div></section>${sections}<div class="savebar"><span class="muted">A mentés után a bot frissíti a már kihelyezett dokumentumpaneleket is.</span><button class="btn green" type="submit">Minden szabály mentése</button></div></form>`;
+<form method="post" action="/owner/documents/${escapeHtml(guild.id)}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><section class="card section"><div class="section-kicker">Hozzáférés</div><h2 class="section-title">Minden szervertag használhatja az iratokat</h2><p class="muted">A „ki mit használhat” rangkorlátozásokat eltávolítottuk. A BELV állomány és annak kezelése külön jogosultsági rendszerben marad.</p></section>${sections}<div class="savebar"><span class="muted">A mentés után a bot frissíti a már kihelyezett dokumentumpaneleket is.</span><button class="btn green" type="submit">Iratbeállítások mentése</button></div></form>`;
   return layout(`Iratvezérlés • ${guild.name}`, content, session);
 }
 
@@ -9958,16 +9950,14 @@ function ownerDocumentStudioPage(guild, session, options = {}) {
   }).join('');
   const cards = templates.length ? templates.map((template) => {
     const channel = guild.channels.cache.get(template.channelId);
-    const templateRoleIds = template.accessRoleIds?.length ? template.accessRoleIds : template.accessRoleId ? [template.accessRoleId] : config.documents.defaultAccessRoleIds?.length ? config.documents.defaultAccessRoleIds : config.documents.defaultAccessRoleId ? [config.documents.defaultAccessRoleId] : [];
-    const rolesLabel = templateRoleIds.map((id) => guild.roles.cache.get(id)?.name || 'Ismeretlen rang').join(', ') || 'alapértelmezett rang';
     const notificationRole = guild.roles.cache.get(template.notificationRoleId);
-    return `<article class="card template-card"><div class="section-kicker">${escapeHtml(template.key)}</div><h3>${escapeHtml(template.emoji)} ${escapeHtml(template.title)}</h3><p class="muted">${template.fields.length} kérdés • ${channel ? `#${escapeHtml(channel.name)}` : 'hiányzó csatorna'} • használat: ${escapeHtml(rolesLabel)} • értesítés: ${notificationRole ? `@${escapeHtml(notificationRole.name)}` : 'nincs rangping'}</p><div class="actions"><a class="btn secondary small" href="/owner/document-studio/${guild.id}?edit=${encodeURIComponent(template.key)}">Szerkesztés</a><form method="post" action="/owner/document-studio/${guild.id}/install"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="template_key" value="${escapeHtml(template.key)}"><button class="btn green small" type="submit">Panel kihelyezése</button></form><form method="post" action="/owner/document-studio/${guild.id}/delete"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="template_key" value="${escapeHtml(template.key)}"><button class="btn danger small" type="submit">Törlés</button></form></div></article>`;
+    return `<article class="card template-card"><div class="section-kicker">${escapeHtml(template.key)}</div><h3>${escapeHtml(template.emoji)} ${escapeHtml(template.title)}</h3><p class="muted">${template.fields.length} kérdés • ${channel ? `#${escapeHtml(channel.name)}` : 'hiányzó csatorna'} • használat: minden szervertag • értesítés: ${notificationRole ? `@${escapeHtml(notificationRole.name)}` : 'nincs rangping'}</p><div class="actions"><a class="btn secondary small" href="/owner/document-studio/${guild.id}?edit=${encodeURIComponent(template.key)}">Szerkesztés</a><form method="post" action="/owner/document-studio/${guild.id}/install"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="template_key" value="${escapeHtml(template.key)}"><button class="btn green small" type="submit">Panel kihelyezése</button></form><form method="post" action="/owner/document-studio/${guild.id}/delete"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="template_key" value="${escapeHtml(template.key)}"><button class="btn danger small" type="submit">Törlés</button></form></div></article>`;
   }).join('') : '<div class="notice warn">Még nincs egyedi dokumentumsablon. Készítsd el az elsőt az alábbi szerkesztőben.</div>';
-  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 25.8.4 • Workflow Studio</div><h1>Egyedi dokumentumstúdió</h1><p class="muted">${escapeHtml(guild.name)} • Saját kérdések, célcsatorna, rang, ping, ügyszám és vezetői jóváhagyás.</p></div><div class="actions"><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a><a class="btn" href="/owner/documents/${guild.id}">Alap iratok</a></div></div>
+  const content = `<div class="page-head"><div><div class="section-kicker">NEXA 25.8.4 • Workflow Studio</div><h1>Egyedi dokumentumstúdió</h1><p class="muted">${escapeHtml(guild.name)} • Saját kérdések, célcsatorna, ping, ügyszám és vezetői jóváhagyás. Minden szervertag használhatja.</p></div><div class="actions"><a class="btn secondary" href="/owner/guild/${guild.id}">← Szerver</a><a class="btn" href="/owner/documents/${guild.id}">Alap iratok</a></div></div>
   ${options.saved ? '<div class="notice">✅ A sablon mentve. A panel most már kihelyezhető a kiválasztott Discord-csatornába.</div>' : ''}
   ${options.installed ? '<div class="notice">✅ A dokumentumpanel kihelyezve vagy frissítve.</div>' : ''}
   <section class="section"><div class="page-head"><div><div class="section-kicker">Aktív sablonok</div><h2>Dokumentumfolyamatok</h2></div></div><div class="grid">${cards}</div></section>
-  <section class="card section" style="margin-top:24px"><div class="section-kicker">${selected ? 'Sablon szerkesztése' : 'Új sablon'}</div><h2 class="section-title">${selected ? escapeHtml(selected.title) : 'Egyedi adatlap létrehozása'}</h2><form method="post" action="/owner/document-studio/${guild.id}/save"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="template_key" value="${escapeHtml(selected?.key || '')}"><div class="field-grid"><div><label>Dokumentum neve *</label><input type="text" name="title" maxlength="45" value="${escapeHtml(selected?.title || '')}" placeholder="Például: Egyedi ügyirat" required></div><div><label>Emoji</label><input type="text" name="emoji" maxlength="16" value="${escapeHtml(selected?.emoji || '📄')}"></div><div><label>Célcsatorna *</label><select name="channel_id" required><option value="">Válassz csatornát</option>${textChannels}</select></div><div><label>Használatra jogosult rangok</label>${roleCheckboxes(guild, 'access_role_ids', selected?.accessRoleIds?.length ? selected.accessRoleIds : selected?.accessRoleId ? [selected.accessRoleId] : [])}<div class="help">Pipáld be azokat a rangokat, amelyek használhatják ezt a saját iratot. Üresen az alapértelmezett dokumentumrangok érvényesek.</div></div><div><label>Értesítendő rang</label><select name="notification_role_id">${roleOptions(guild, selected?.notificationRoleId || null, 'Ne pingeljen rangot')}</select><div class="help">A kész irat közzétételekor a bot ezt a rangot pingeli.</div></div></div><div class="module-grid" style="margin:18px 0"><label class="switch"><input type="checkbox" name="approval"${selected?.approval ? ' checked' : ''}><span><strong>Vezetői jóváhagyás</strong><br><span class="muted">Az ügyiratok csatornába kerül döntésre.</span></span></label><label class="switch"><input type="checkbox" name="case_number"${selected?.caseNumber ? ' checked' : ''}><span><strong>Automatikus ügyszám</strong><br><span class="muted">RP-ÉÉÉÉHHNN-ÓÓPP formátum.</span></span></label><label class="switch"><input type="checkbox" name="ping_target"${selected?.pingTarget ? ' checked' : ''}><span><strong>Személy kiválasztása</strong><br><span class="muted">Discord-listából választ és pingel.</span></span></label></div><h3>Kérdések</h3><p class="muted">A Discord egy adatlapon legfeljebb 5 kérdést enged, ezért egy sablonban legfeljebb öt mező használható.</p><div class="record-list">${questionRows}</div><div class="actions"><button class="btn green" type="submit">${selected ? 'Sablon frissítése' : 'Sablon létrehozása'}</button>${selected ? `<a class="btn secondary" href="/owner/document-studio/${guild.id}">Mégse</a>` : ''}</div></form></section>`;
+  <section class="card section" style="margin-top:24px"><div class="section-kicker">${selected ? 'Sablon szerkesztése' : 'Új sablon'}</div><h2 class="section-title">${selected ? escapeHtml(selected.title) : 'Egyedi adatlap létrehozása'}</h2><form method="post" action="/owner/document-studio/${guild.id}/save"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="template_key" value="${escapeHtml(selected?.key || '')}"><div class="field-grid"><div><label>Dokumentum neve *</label><input type="text" name="title" maxlength="45" value="${escapeHtml(selected?.title || '')}" placeholder="Például: Egyedi ügyirat" required></div><div><label>Emoji</label><input type="text" name="emoji" maxlength="16" value="${escapeHtml(selected?.emoji || '📄')}"></div><div><label>Célcsatorna *</label><select name="channel_id" required><option value="">Válassz csatornát</option>${textChannels}</select></div><div><strong>Használat</strong><div class="help">Minden szervertag használhatja ezt a saját iratot.</div></div><div><label>Értesítendő rang</label><select name="notification_role_id">${roleOptions(guild, selected?.notificationRoleId || null, 'Ne pingeljen rangot')}</select><div class="help">A kész irat közzétételekor a bot ezt a rangot pingeli.</div></div></div><div class="module-grid" style="margin:18px 0"><label class="switch"><input type="checkbox" name="approval"${selected?.approval ? ' checked' : ''}><span><strong>Vezetői jóváhagyás</strong><br><span class="muted">Az ügyiratok csatornába kerül döntésre.</span></span></label><label class="switch"><input type="checkbox" name="case_number"${selected?.caseNumber ? ' checked' : ''}><span><strong>Automatikus ügyszám</strong><br><span class="muted">RP-ÉÉÉÉHHNN-ÓÓPP formátum.</span></span></label><label class="switch"><input type="checkbox" name="ping_target"${selected?.pingTarget ? ' checked' : ''}><span><strong>Személy kiválasztása</strong><br><span class="muted">Discord-listából választ és pingel.</span></span></label></div><h3>Kérdések</h3><p class="muted">A Discord egy adatlapon legfeljebb 5 kérdést enged, ezért egy sablonban legfeljebb öt mező használható.</p><div class="record-list">${questionRows}</div><div class="actions"><button class="btn green" type="submit">${selected ? 'Sablon frissítése' : 'Sablon létrehozása'}</button>${selected ? `<a class="btn secondary" href="/owner/document-studio/${guild.id}">Mégse</a>` : ''}</div></form></section>`;
   return layout(`Workflow Studio • ${guild.name}`, content, session, config.branding);
 }
 
@@ -11708,7 +11698,7 @@ async function handleRequest(client, request, response, healthProvider = null) {
               channelId,
               approval: form.has('approval'),
               active: true,
-              accessRoleIds: validRoleIds(guild, form.getAll('access_role_ids')),
+              accessRoleIds: [],
               notificationRoleId: validRoleId(guild, form.get('notification_role_id')),
               caseNumber: form.has('case_number'),
               pingTarget: form.has('ping_target'),
@@ -11821,19 +11811,15 @@ async function handleRequest(client, request, response, healthProvider = null) {
         const form = await readBody(request);
         if (form.get('csrf') !== session.csrf) return sendHtml(response, 403, errorPage('Lejárt munkamenet', 'Frissítsd az oldalt.', session));
         const current = getGuildConfig(guild.id);
-        const defaultAccessRoleIds = validRoleIds(guild, form.getAll('doc_default_roles'));
-        const managerRoleIds = validRoleIds(guild, form.getAll('doc_manager_roles'));
-        if (!defaultAccessRoleIds.length) {
-          return sendHtml(response, 400, errorPage('Használati rang szükséges', 'Válassz ki legalább egy Discord-rangot, amely alapból használhatja a dokumentumpaneleket.', session));
-        }
         const types = Object.fromEntries(DOCUMENT_TYPES.map((type) => [type.key, {
           caseNumber: form.has(`doc_case_${type.key}`),
           pingTarget: form.has(`doc_ping_${type.key}`),
-          accessRoleIds: validRoleIds(guild, form.getAll(`doc_roles_${type.key}`)),
+          accessRoleIds: [],
           notificationRoleId: validRoleId(guild, form.get(`doc_notify_${type.key}`))
         }]));
         try {
-          await setGuildConfig(guild.id, { ...current, documents: { ...current.documents, defaultAccessRoleId: defaultAccessRoleIds[0], defaultAccessRoleIds, managerRoleIds, types } });
+          const customTypes = (current.documents?.customTypes || []).map((template) => ({ ...template, accessRoleIds: [], accessRoleId: null }));
+          await setGuildConfig(guild.id, { ...current, documents: { ...current.documents, defaultAccessRoleId: null, defaultAccessRoleIds: [], managerRoleIds: [], types, customTypes } });
           await installDocumentPanels(guild, client.user);
           await recordAudit('owner_document_rules_save', { actorId: session.user.id, guildId: guild.id });
           return redirect(response, `/owner/documents/${guild.id}?saved=1`);
@@ -12611,20 +12597,6 @@ function documentRule(guildOrId, type) {
   const guildId = typeof guildOrId === 'string' ? guildOrId : guildOrId?.id;
   const documents = guildId ? getGuildConfig(guildId).documents : null;
   const stored = documents?.types?.[type.key];
-  const normalizeRoleIds = (value, legacyValue) => [...new Set(
-    (Array.isArray(value) && value.length ? value : [legacyValue])
-      .map((id) => /^\d{16,22}$/.test(String(id || '')) ? String(id) : null)
-      .filter(Boolean)
-  )].slice(0, 20);
-  const overrideAccessRoleIds = normalizeRoleIds(type?.accessRoleIds || stored?.accessRoleIds, type?.accessRoleId || stored?.accessRoleId);
-  const defaultAccessRoleIds = normalizeRoleIds(documents?.defaultAccessRoleIds, documents?.defaultAccessRoleId);
-  const usageRoleIds = overrideAccessRoleIds.length
-    ? overrideAccessRoleIds
-    : type?.accessRoleId || stored?.accessRoleId
-      ? normalizeRoleIds(null, type?.accessRoleId || stored?.accessRoleId)
-      : defaultAccessRoleIds;
-  const managerRoleIds = normalizeRoleIds(documents?.managerRoleIds, null);
-  const accessRoleIds = [...new Set([...usageRoleIds, ...managerRoleIds])].slice(0, 40);
   return {
     caseNumber: typeof type?.caseNumber === 'boolean'
       ? type.caseNumber
@@ -12632,14 +12604,7 @@ function documentRule(guildOrId, type) {
     pingTarget: typeof type?.pingTarget === 'boolean'
       ? type.pingTarget
       : typeof stored?.pingTarget === 'boolean' ? stored.pingTarget : DEFAULT_TARGET_PING_TYPES.has(type.key),
-    accessRoleIds,
-    accessRoleId: accessRoleIds[0] || null,
     notificationRoleId: type?.notificationRoleId || stored?.notificationRoleId || null,
-    overrideAccessRoleIds,
-    overrideAccessRoleId: overrideAccessRoleIds[0] || null,
-    defaultAccessRoleIds,
-    defaultAccessRoleId: defaultAccessRoleIds[0] || null,
-    managerRoleIds
   };
 }
 
@@ -12652,16 +12617,29 @@ function documentMentions(targetUserId = null, notificationRoleId = null) {
   };
 }
 
-function documentAccessLabel(guild, type) {
-  const roleIds = documentRule(guild, type).accessRoleIds;
-  return roleIds.length
-    ? roleIds.map((roleId) => guild?.roles?.cache?.get(roleId)?.name || `Rang: ${roleId}`).join(', ').slice(0, 900)
-    : 'nincs beállítva';
+function canUseDocument(member, type) {
+  return Boolean(member);
 }
 
-function canUseDocument(member, type) {
-  const roleIds = documentRule(member?.guild, type).accessRoleIds;
-  return roleIds.some((roleId) => member?.roles?.cache?.has(roleId));
+const DOCUMENT_PERMISSION_LABELS = new Map([
+  [PermissionFlagsBits.ViewChannel, 'Csatorna megtekintése'],
+  [PermissionFlagsBits.SendMessages, 'Üzenetek küldése'],
+  [PermissionFlagsBits.ReadMessageHistory, 'Üzenetek olvasási előzményei'],
+  [PermissionFlagsBits.EmbedLinks, 'Hivatkozások beágyazása'],
+  [PermissionFlagsBits.MentionEveryone, 'Mindenki és rangok megemlítése']
+]);
+
+function missingDocumentPermissions(channel, botMember, requiredPermissions) {
+  if (!channel || !botMember) return ['a csatorna vagy a Nexa tagsági adatai nem érhetők el'];
+  const permissions = channel.permissionsFor(botMember);
+  if (!permissions) return ['a csatorna megtekintése'];
+  return requiredPermissions
+    .filter((permission) => !permissions.has(permission))
+    .map((permission) => DOCUMENT_PERMISSION_LABELS.get(permission) || 'szükséges csatornajogosultság');
+}
+
+function documentPermissionError(channel, missing) {
+  return `A Nexának nincs jogosultsága a ${channel} csatornában. Add meg neki: **${missing.join(', ')}**.`;
 }
 
 function targetPicker(type) {
@@ -12687,7 +12665,7 @@ function documentPanel(type, guild = null) {
         : 'Töltsd ki az adatlapot. A kész bejegyzést a NexaBot teszi közzé ebben a csatornában.'
     )
     .addFields(
-      { name: 'Hozzáférés', value: rule.accessRoleIds.length ? `A használati vagy iratkezelői rangok bármelyikével használható: **${documentAccessLabel(guild, type)}**.` : 'Az Owner Centerben még nincs használati rang beállítva.', inline: true },
+      { name: 'Használat', value: '**Minden szervertag használhatja.**', inline: true },
       { name: 'Ügyszám', value: rule.caseNumber ? 'Bekapcsolva' : 'Kikapcsolva', inline: true },
       { name: 'Személy megjelölése', value: rule.pingTarget ? 'Kötelező' : 'Nincs', inline: true },
       { name: 'Értesítendő rang', value: rule.notificationRoleId ? `<@&${rule.notificationRoleId}>` : 'Nincs', inline: true }
@@ -12737,6 +12715,13 @@ function isOperative(member) {
 }
 
 const BELV_APPROVAL_ROLE_NAME = 'BELVÉDELMI VEZETŐSÉG';
+
+function belvApprovalRoleId(guild) {
+  const configured = String(process.env.BELV_APPROVAL_ROLE_ID || '').trim();
+  if (/^\d{16,22}$/.test(configured)) return configured;
+  const expected = normalizeName(BELV_APPROVAL_ROLE_NAME);
+  return guild?.roles?.cache?.find((role) => normalizeName(role.name) === expected)?.id || null;
+}
 
 function belvApprovalRoleExists(guild) {
   const expected = normalizeName(BELV_APPROVAL_ROLE_NAME);
@@ -12823,9 +12808,7 @@ async function handleDocumentButton(interaction) {
     if (!type) return ephemeralError(interaction, 'Ismeretlen dokumentumtípus.');
     if (!canUseDocument(interaction.member, type)) {
       const rule = documentRule(interaction.guild, type);
-      return ephemeralError(interaction, rule.accessRoleIds.length
-        ? `Ezt a következő rangok bármelyike használhatja: **${documentAccessLabel(interaction.guild, type)}**.`
-        : 'Ehhez a dokumentumhoz még nincs használati rang beállítva az Owner Centerben.');
+      return ephemeralError(interaction, 'Ehhez a dokumentumhoz szervertagság szükséges.');
     }
     if (documentRule(interaction.guild, type).pingTarget) {
       return interaction.reply({
@@ -12847,6 +12830,14 @@ async function handleDocumentButton(interaction) {
     const target = interaction.guild.channels.cache.get(targetChannelId);
     if (!type || !target?.isTextBased()) return ephemeralError(interaction, 'A célcsatorna nem található.');
     const notificationRoleId = documentRule(interaction.guild, type).notificationRoleId;
+    const botMember = interaction.guild.members.me;
+    const requiredTargetPermissions = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks];
+    const notifyRole = notificationRoleId ? interaction.guild.roles.cache.get(notificationRoleId) : null;
+    if (notifyRole && !notifyRole.mentionable) requiredTargetPermissions.push(PermissionFlagsBits.MentionEveryone);
+    const missingTargetPermissions = missingDocumentPermissions(target, botMember, requiredTargetPermissions);
+    if (missingTargetPermissions.length) return ephemeralError(interaction, documentPermissionError(target, missingTargetPermissions));
+    const missingReviewPermissions = missingDocumentPermissions(interaction.channel, botMember, [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]);
+    if (missingReviewPermissions.length) return ephemeralError(interaction, documentPermissionError(interaction.channel, missingReviewPermissions));
     const mentions = documentMentions(targetUserId, notificationRoleId);
     await interaction.deferReply({ flags: EPHEMERAL });
     const approved = EmbedBuilder.from(interaction.message.embeds[0])
@@ -12882,6 +12873,8 @@ async function handleDocumentButton(interaction) {
     if (!canApprove(interaction.member)) {
       return ephemeralError(interaction, approvalDenialMessage(interaction.guild));
     }
+    const missingPermissions = missingDocumentPermissions(interaction.channel, interaction.guild.members.me, [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages]);
+    if (missingPermissions.length) return ephemeralError(interaction, documentPermissionError(interaction.channel, missingPermissions));
     const [, , , submitterId] = id.split(':');
     return interaction.showModal(rejectionModal(interaction.message.id, submitterId));
   }
@@ -12892,9 +12885,7 @@ async function handleDocumentSelect(interaction) {
   if (!type) return ephemeralError(interaction, 'Ismeretlen dokumentumtípus.');
   if (!canUseDocument(interaction.member, type)) {
     const rule = documentRule(interaction.guild, type);
-    return ephemeralError(interaction, rule.accessRoleIds.length
-      ? `Ezt a következő rangok bármelyike használhatja: **${documentAccessLabel(interaction.guild, type)}**.`
-      : 'Ehhez a dokumentumhoz még nincs használati rang beállítva az Owner Centerben.');
+    return ephemeralError(interaction, 'Ehhez a dokumentumhoz szervertagság szükséges.');
   }
   const targetUserId = interaction.values?.[0];
   if (!/^\d{16,22}$/.test(targetUserId || '')) return ephemeralError(interaction, 'Nem sikerült kiválasztani a személyt.');
@@ -12908,9 +12899,7 @@ async function handleDocumentModal(interaction) {
     if (!type) return ephemeralError(interaction, 'Ismeretlen dokumentumtípus.');
     if (!canUseDocument(interaction.member, type)) {
       const rule = documentRule(interaction.guild, type);
-      return ephemeralError(interaction, rule.accessRoleIds.length
-        ? `Ezt a következő rangok bármelyike használhatja: **${documentAccessLabel(interaction.guild, type)}**.`
-        : 'Ehhez a dokumentumhoz még nincs használati rang beállítva az Owner Centerben.');
+      return ephemeralError(interaction, 'Ehhez a dokumentumhoz szervertagság szükséges.');
     }
     const rule = documentRule(interaction.guild, type);
     const targetUserId = rule.pingTarget && /^\d{16,22}$/.test(selectedUserId || '') ? selectedUserId : null;
@@ -12946,6 +12935,8 @@ async function handleDocumentModal(interaction) {
     if (!canApprove(interaction.member)) {
       return ephemeralError(interaction, approvalDenialMessage(interaction.guild));
     }
+    const missingPermissions = missingDocumentPermissions(interaction.channel, interaction.guild.members.me, [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages]);
+    if (missingPermissions.length) return ephemeralError(interaction, documentPermissionError(interaction.channel, missingPermissions));
     await interaction.deferReply({ flags: EPHEMERAL });
     const [, messageId, submitterId] = interaction.customId.split(':');
     const reason = interaction.fields.getTextInputValue('reject_reason').trim();
@@ -12978,7 +12969,6 @@ module.exports = {
   documentPanel,
   documentRule,
   documentMentions,
-  documentAccessLabel,
   canUseDocument,
   targetPicker,
   approvalControls,
@@ -15702,7 +15692,13 @@ async function handleInteraction(interaction) {
       guildId: interaction.guildId,
       userId: interaction.user?.id
     });
-    await ephemeralError(interaction, error.status?error.message:'Váratlan hiba történt. Ellenőrizd a bot jogosultságait, majd próbáld újra.').catch(() => null);
+    const discordErrorCode = Number(error?.code ?? error?.rawError?.code);
+    const userMessage = discordErrorCode === 50013
+      ? 'A Nexának nincs meg egy szükséges Discord-jogosultsága ehhez a művelethez. Ellenőrizd a bot csatornajogosultságait.'
+      : error.status
+        ? error.message
+        : 'Váratlan hiba történt. Próbáld újra; ha ismétlődik, küldd el a hiba időpontját a szerver adminjának.';
+    await ephemeralError(interaction, userMessage).catch(() => null);
   }
 }
 

@@ -1197,7 +1197,13 @@ async function handleInteraction(interaction) {
       guildId: interaction.guildId,
       userId: interaction.user?.id
     });
-    await ephemeralError(interaction, error.status?error.message:'Váratlan hiba történt. Ellenőrizd a bot jogosultságait, majd próbáld újra.').catch(() => null);
+    const discordErrorCode = Number(error?.code ?? error?.rawError?.code);
+    const userMessage = discordErrorCode === 50013
+      ? 'A Nexának nincs meg egy szükséges Discord-jogosultsága ehhez a művelethez. Ellenőrizd a bot csatornajogosultságait.'
+      : error.status
+        ? error.message
+        : 'Váratlan hiba történt. Próbáld újra; ha ismétlődik, küldd el a hiba időpontját a szerver adminjának.';
+    await ephemeralError(interaction, userMessage).catch(() => null);
   }
 }
 

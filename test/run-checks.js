@@ -17,6 +17,10 @@ const expectedBundle = read('bundle-header.txt')
   + order.map((name) => '"' + name + '": function(module, exports, require) {\n' + read(name).replace(/\n+$/, '') + '\n\n}').join(',\n')
   + read('bundle-footer.txt');
 assert.equal(read('index.js'), expectedBundle, 'index.js is stale; run python3 bundle.py');
+new vm.Script(read('live-status.js'), { filename: 'live-status.js' });
+const liveStatus = read('live-status.js');
+assert.ok(!liveStatus.includes(".setName('belv-jogok')") && !liveStatus.includes('handleBelvPermissionsCommand'), 'BELV rank-permission command implementation is removed');
+assert.ok(liveStatus.includes('removeBelvPermissionsCommand'), 'the previously registered BELV permission command is removed from Discord');
 
 const roster = require('../src/belv-roster-rules.js');
 assert.equal(roster.classifyBelvRole({ id: '123456789012345678', name: 'Főigazgató BV-01', position: 10 }).rank, 'Főigazgató');
@@ -47,9 +51,36 @@ assert.ok(belv.includes("client.on('guildMemberAdd'"), 'new members trigger rost
 assert.ok(belv.includes("client.on('guildMemberRemove'"), 'departed members trigger roster reconciliation');
 assert.ok(!belv.includes('if (!bot.permissions.has(PermissionFlagsBits.ManageNicknames)) fail'), 'nickname permission must not block roster publishing');
 const docs = read('src/documents.js');
+assert.ok(docs.includes('return Boolean(member);'), 'document forms are available to every server member');
+assert.ok(docs.includes('missingDocumentPermissions(target, botMember, requiredTargetPermissions)'), 'document approval checks destination-channel permissions before publishing');
+const dashboard = read('src/dashboard.js');
+assert.ok(!dashboard.includes('doc_default_roles') && !dashboard.includes('doc_manager_roles') && !dashboard.includes('doc_roles_') && !dashboard.includes('access_role_ids'), 'Owner Center no longer configures document access roles');
+assert.ok(dashboard.includes('defaultAccessRoleIds: [], managerRoleIds: []'), 'saving document settings clears old global access-role restrictions');
 const approval = docs.slice(docs.indexOf('function canApprove(member)'), docs.indexOf('\nfunction approvalDenialMessage'));
 assert.ok(approval.includes('isConfiguredRoleHolder(member, belvApprovalRoleId(member.guild))'), 'BELV approval uses the configured exact role ID');
+assert.ok(docs.includes('function belvApprovalRoleId(guild)'), 'BELV approval role ID resolver is defined');
+
+const previousApprovalRoleId = process.env.BELV_APPROVAL_ROLE_ID;
+delete process.env.BELV_APPROVAL_ROLE_ID;
+try {
+  const documentModule = require('../src/documents.js');
+  const approvalRole = { id: '123456789012345678', name: 'BELVÉDELMI VEZETŐSÉG' };
+  const approver = {
+    guild: { id: '1517509643734221030', roles: { cache: [approvalRole] } },
+    roles: { cache: new Map([[approvalRole.id, approvalRole]]) }
+  };
+  const nonApprover = {
+    guild: { id: '1517509643734221030', roles: { cache: [approvalRole] } },
+    roles: { cache: new Map() }
+  };
+  assert.equal(documentModule.canApprove(approver), true, 'the BELV leadership role can approve');
+  assert.equal(documentModule.canApprove(nonApprover), false, 'members without the BELV leadership role cannot approve');
+} finally {
+  if (previousApprovalRoleId === undefined) delete process.env.BELV_APPROVAL_ROLE_ID;
+  else process.env.BELV_APPROVAL_ROLE_ID = previousApprovalRoleId;
+}
 assert.ok(!/if \([^\n]+BELV_APPROVAL_GUILD_ID[^\n]+\) return[\s\S]{0,150}Administrator/.test(approval), 'BELV approval must not fall back to admin');
+assert.ok(read('src/interactions.js').includes('discordErrorCode === 50013'), 'missing Discord permissions receive a specific interaction error');
 const shifts = read('src/shifts.js');
 assert.ok(shifts.includes('WHERE guild_id=$1 AND user_id=$2 AND ended_at IS NOT NULL ORDER BY ended_at DESC,id DESC LIMIT 1'), 'targeted service correction selects that member latest closed shift');
 assert.ok(shifts.includes('String(row.user_id)!==String(targetUserId)'), 'targeted shift correction verifies row owner');
