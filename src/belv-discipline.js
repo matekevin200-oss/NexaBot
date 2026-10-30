@@ -21,35 +21,35 @@ const CHANNELS = Object.freeze([
   { key: 'archive', name: 'lezárt-fegyelmi-ügyek', aliases: ['archívum'] }
 ]);
 const FORM_TYPES = Object.freeze([
-  { key: 'custom_belv_bejelent', title: 'Fegyelmi bejelentés', emoji: '📨', channel: 'intake', fields: [
+  { key: 'custom_belv_bej', title: 'Fegyelmi bejelentés', emoji: '📨', channel: 'intake', fields: [
     { label: 'Érintett személy, rang', placeholder: 'Név és beosztás' },
     { label: 'Esemény időpontja', placeholder: 'ÉÉÉÉ.HH.NN. ÓÓ:PP' },
     { label: 'Bejelentés tárgya', placeholder: 'Rövid, tényszerű megnevezés' },
     { label: 'Tényállás és szabály', placeholder: 'Mi történt, mely szabály érintett?', style: 'paragraph' },
     { label: 'Bizonyíték vagy tanú', placeholder: 'Hivatkozás vagy elérhetőség', required: false }
   ] },
-  { key: 'custom_belv_vizsg', title: 'Vizsgálati jelentés', emoji: '🔎', channel: 'open', fields: [
+  { key: 'custom_belv_viz', title: 'Vizsgálati jelentés', emoji: '🔎', channel: 'open', fields: [
     { label: 'Ügyszám', placeholder: 'RP-ÉÉÉÉHHNN-ÓÓPP' },
     { label: 'Vizsgáló és érintett', placeholder: 'Név, rang, jelvényszám' },
     { label: 'Vizsgálati lépések', placeholder: 'Elvégzett lépések', style: 'paragraph' },
     { label: 'Megállapítások és bizonyítékok', placeholder: 'Tények, hivatkozások', style: 'paragraph' },
     { label: 'Javaslat', placeholder: 'További intézkedés vagy lezárás', style: 'paragraph' }
   ] },
-  { key: 'custom_belv_hataroz', title: 'Fegyelmi határozat', emoji: '⚖️', channel: 'decisions', fields: [
+  { key: 'custom_belv_hat', title: 'Fegyelmi határozat', emoji: '⚖️', channel: 'decisions', fields: [
     { label: 'Ügyszám és érintett', placeholder: 'Ügyszám, név, rang' },
     { label: 'Elbírált tényállás', placeholder: 'Rövid összefoglaló', style: 'paragraph' },
     { label: 'Hivatkozott szabály', placeholder: 'Pontos fejezet és pont' },
     { label: 'Döntés vagy javaslat', placeholder: 'Indoklással', style: 'paragraph' },
     { label: 'Felülvizsgálat határideje', placeholder: 'ÉÉÉÉ.HH.NN.' }
   ] },
-  { key: 'custom_belv_felulviz', title: 'Fegyelmi felülvizsgálati kérelem', emoji: '🔁', channel: 'appeals', fields: [
+  { key: 'custom_belv_fel', title: 'Fegyelmi felülvizsgálati kérelem', emoji: '🔁', channel: 'appeals', fields: [
     { label: 'Ügyszám és kérelmező', placeholder: 'Ügyszám, név, rang' },
     { label: 'Megtámadott döntés', placeholder: 'Döntés dátuma és tárgya' },
     { label: 'Kérelem indoka', placeholder: 'Részletes indoklás', style: 'paragraph' },
     { label: 'Új bizonyíték', placeholder: 'Leírás vagy hivatkozás', required: false, style: 'paragraph' },
     { label: 'Kért felülvizsgálat', placeholder: 'Mit kér a kérelmező?', style: 'paragraph' }
   ] },
-  { key: 'custom_belv_lezaras', title: 'Fegyelmi ügy lezárása', emoji: '📁', channel: 'archive', fields: [
+  { key: 'custom_belv_lez', title: 'Fegyelmi ügy lezárása', emoji: '📁', channel: 'archive', fields: [
     { label: 'Ügyszám és érintett', placeholder: 'Ügyszám, név, rang' },
     { label: 'Lezárás dátuma', placeholder: 'ÉÉÉÉ.HH.NN.' },
     { label: 'Végleges eredmény', placeholder: 'A jóváhagyott döntés röviden', style: 'paragraph' },
@@ -110,7 +110,7 @@ async function configureForms(guild, channels) {
   const customTypes = (old.documents?.customTypes || []).filter((x) => !FORM_TYPES.some((item) => item.key === x.key));
   const nextTypes = FORM_TYPES.map((type) => ({
     ...type, approval: true, caseNumber: true, pingTarget: false, active: true,
-    channelId: channels.get(type.channel).id,
+    channelId: channels.get(type.channel === 'intake' ? 'review' : type.channel).id,
     fields: type.fields.map((field) => ({ ...field }))
   }));
   await setGuildConfig(guild.id, { ...old, documents: { ...old.documents, customTypes: [...customTypes, ...nextTypes] } });
@@ -146,7 +146,7 @@ async function provision(interaction, install) {
   const created = [], resolved = new Map(plan.channels);
   for (const spec of missing) {
     const permissionOverwrites = spec.public
-      ? [{ id: guild.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory] }, ...base.slice(1)]
+      ? [{ id: guild.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory], deny: [PermissionFlagsBits.SendMessages] }, ...base.slice(1)]
       : base;
     const channel = await guild.channels.create({
       name: spec.name, type: ChannelType.GuildText, parent: category.id,
