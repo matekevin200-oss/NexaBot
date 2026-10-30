@@ -58,6 +58,27 @@ assert.ok(!dashboard.includes('doc_default_roles') && !dashboard.includes('doc_m
 assert.ok(dashboard.includes('defaultAccessRoleIds: [], managerRoleIds: []'), 'saving document settings clears old global access-role restrictions');
 const approval = docs.slice(docs.indexOf('function canApprove(member)'), docs.indexOf('\nfunction approvalDenialMessage'));
 assert.ok(approval.includes('isConfiguredRoleHolder(member, belvApprovalRoleId(member.guild))'), 'BELV approval uses the configured exact role ID');
+assert.ok(docs.includes('function belvApprovalRoleId(guild)'), 'BELV approval role ID resolver is defined');
+
+const previousApprovalRoleId = process.env.BELV_APPROVAL_ROLE_ID;
+delete process.env.BELV_APPROVAL_ROLE_ID;
+try {
+  const documentModule = require('../src/documents.js');
+  const approvalRole = { id: '123456789012345678', name: 'BELVÉDELMI VEZETŐSÉG' };
+  const approver = {
+    guild: { id: '1517509643734221030', roles: { cache: [approvalRole] } },
+    roles: { cache: new Map([[approvalRole.id, approvalRole]]) }
+  };
+  const nonApprover = {
+    guild: { id: '1517509643734221030', roles: { cache: [approvalRole] } },
+    roles: { cache: new Map() }
+  };
+  assert.equal(documentModule.canApprove(approver), true, 'the BELV leadership role can approve');
+  assert.equal(documentModule.canApprove(nonApprover), false, 'members without the BELV leadership role cannot approve');
+} finally {
+  if (previousApprovalRoleId === undefined) delete process.env.BELV_APPROVAL_ROLE_ID;
+  else process.env.BELV_APPROVAL_ROLE_ID = previousApprovalRoleId;
+}
 assert.ok(!/if \([^\n]+BELV_APPROVAL_GUILD_ID[^\n]+\) return[\s\S]{0,150}Administrator/.test(approval), 'BELV approval must not fall back to admin');
 assert.ok(read('src/interactions.js').includes('discordErrorCode === 50013'), 'missing Discord permissions receive a specific interaction error');
 const shifts = read('src/shifts.js');
