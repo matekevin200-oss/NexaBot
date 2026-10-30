@@ -924,9 +924,11 @@ async function syncMdtGuildCommand(guild) {
   const allowed = await belvGuildId();
   const commands = await guild.commands.fetch(), existing = [...commands.values()].find((command) => command.name === 'mdt');
   const rosterCommand = [...commands.values()].find((command) => command.name === 'allomany');
+  const disciplineCommand = [...commands.values()].find((command) => command.name === 'belv-rendszer');
   if (!findFaction(guild.id)) {
     if (existing) await existing.delete();
     if (rosterCommand) await rosterCommand.delete();
+    if (disciplineCommand) await disciplineCommand.delete();
     return;
   }
   const settings = await getSettings(guild.id);
@@ -938,6 +940,12 @@ async function syncMdtGuildCommand(guild) {
     if (rosterCommand) await rosterCommand.edit(rosterPayload); else await guild.commands.create(rosterPayload);
   } else if (rosterCommand) {
     await rosterCommand.delete();
+  }
+  if (guild.id === BELV_GUILD_ID) {
+    const payload = require('./belv-discipline').buildCommand().toJSON();
+    if (disciplineCommand) await disciplineCommand.edit(payload); else await guild.commands.create(payload);
+  } else if (disciplineCommand) {
+    await disciplineCommand.delete();
   }
 }
 async function syncMdtGuildCommands(client) {
