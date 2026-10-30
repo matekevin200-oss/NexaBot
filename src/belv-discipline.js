@@ -190,6 +190,7 @@ async function ensureSchema() {
     'status TEXT NOT NULL DEFAULT \'pending_review\', review_channel_id TEXT, review_message_id TEXT, decision_by TEXT, decision_at TIMESTAMPTZ,',
     'created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),',
     'UNIQUE(guild_id, case_number), UNIQUE(guild_id, interaction_id));',
+    'ALTER TABLE nexabot_belv_cases ADD COLUMN IF NOT EXISTS linked_case_number TEXT;',
     'CREATE TABLE IF NOT EXISTS nexabot_belv_case_audit (',
     'id BIGSERIAL PRIMARY KEY, guild_id TEXT NOT NULL, case_number TEXT NOT NULL, actor_id TEXT NOT NULL,',
     'action TEXT NOT NULL, details JSONB NOT NULL DEFAULT \'{}\'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());',
