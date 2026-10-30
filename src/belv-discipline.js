@@ -18,7 +18,10 @@ const CHANNELS = Object.freeze([
   { key: 'review', name: 'vezetőségi-elbírálás', aliases: ['ügyiratok'] },
   { key: 'decisions', name: 'fegyelmi-határozatok', aliases: ['határozatok'] },
   { key: 'appeals', name: 'fegyelmi-felülvizsgálatok' },
-  { key: 'archive', name: 'lezárt-fegyelmi-ügyek', aliases: ['archívum'] }
+  { key: 'archive', name: 'lezárt-fegyelmi-ügyek', aliases: ['archívum'] },
+  { key: 'internal', name: 'belső-vizsgálatok', optional: true },
+  { key: 'reports', name: 'vizsgálati-jelentések', optional: true },
+  { key: 'minutes', name: 'jegyzőkönyv', optional: true }
 ]);
 const FORM_TYPES = Object.freeze([
   { key: 'custom_belv_bej', title: 'Fegyelmi bejelentés', emoji: '📨', channel: 'intake', fields: [
@@ -28,7 +31,7 @@ const FORM_TYPES = Object.freeze([
     { label: 'Tényállás és szabály', placeholder: 'Mi történt, mely szabály érintett?', style: 'paragraph' },
     { label: 'Bizonyíték vagy tanú', placeholder: 'Hivatkozás vagy elérhetőség', required: false }
   ] },
-  { key: 'custom_belv_viz', title: 'Vizsgálati jelentés', emoji: '🔎', channel: 'open', fields: [
+  { key: 'custom_belv_viz', title: 'Vizsgálati jelentés', emoji: '🔎', channel: 'reports', fields: [
     { label: 'Ügyszám', placeholder: 'RP-ÉÉÉÉHHNN-ÓÓPP' },
     { label: 'Vizsgáló és érintett', placeholder: 'Név, rang, jelvényszám' },
     { label: 'Vizsgálati lépések', placeholder: 'Elvégzett lépések', style: 'paragraph' },
@@ -55,6 +58,13 @@ const FORM_TYPES = Object.freeze([
     { label: 'Végleges eredmény', placeholder: 'A jóváhagyott döntés röviden', style: 'paragraph' },
     { label: 'Döntéshozó', placeholder: 'Név és rang' },
     { label: 'Kapcsolódó irat vagy bizonyíték', placeholder: 'Hivatkozás', required: false }
+  ] },
+  { key: 'custom_belv_jegyz', title: 'Meghallgatási jegyzőkönyv', emoji: '🗣️', channel: 'minutes', pingTarget: true, fields: [
+    { label: 'Ügyszám', placeholder: 'Az eredeti fegyelmi ügy száma' },
+    { label: 'Meghallgatott személy', placeholder: 'Név, frakció, szolgálati azonosító' },
+    { label: 'Nyilatkozat', placeholder: 'A személy saját beszámolója', style: 'paragraph' },
+    { label: 'Bizonyítékok és tanúk', placeholder: 'Hivatkozások, tanúk', required: false, style: 'paragraph' },
+    { label: 'További nyilatkozat', placeholder: 'Enyhítő körülmények, észrevételek', required: false, style: 'paragraph' }
   ] }
 ]);
 
@@ -110,7 +120,7 @@ async function configureForms(guild, channels) {
   const customTypes = (old.documents?.customTypes || []).filter((x) => !FORM_TYPES.some((item) => item.key === x.key));
   const nextTypes = FORM_TYPES.map((type) => ({
     ...type, approval: true, caseNumber: true, pingTarget: false, active: true,
-    channelId: channels.get(type.channel === 'intake' ? 'review' : type.channel).id,
+    channelId: (channels.get(type.channel === 'intake' ? 'review' : type.channel)?.id || channels.get('open')?.id),
     fields: type.fields.map((field) => ({ ...field }))
   }));
   await setGuildConfig(guild.id, { ...old, documents: { ...old.documents, customTypes: [...customTypes, ...nextTypes] } });
@@ -196,7 +206,7 @@ async function provision(interaction, install) {
   const plan = resolvePlan(guild);
   const failures = checkExisting(guild, role, plan);
   if (failures.length) throw new Error(failures.join('\n') + '\nMeglévő jogosultságot nem módosítottam.');
-  const missing = CHANNELS.filter((s) => !plan.channels.get(s.key));
+  const missing = CHANNELS.filter((s) => !s.optional && !plan.channels.get(s.key));
   if (!install) return { created: [], reused: CHANNELS.filter((s) => plan.channels.get(s.key)).map((s) => plan.channels.get(s.key).name), missing: missing.map((s) => s.name), categoryMissing: !plan.category };
 
   await ensureSchema();
@@ -220,15 +230,15 @@ async function provision(interaction, install) {
   const byKey = new Map(types.map((type) => [type.key, type]));
   const panels = [];
   for (const form of FORM_TYPES) {
-    const channel = resolved.get(form.channel);
+    const channel = resolved.get(form.channel) || resolved.get('internal') || resolved.get('open');
     await publishPanel(channel, me.id, byKey.get(form.key), guild);
     panels.push(channel.name);
   }
   await recordAudit('belv_discipline_provision', {
     guildId: guild.id, actorId: interaction.user.id,
-    metadata: { created, reused: [...resolved.values()].filter((c) => !created.includes(c.name)).map((c) => c.name), panels }
+    metadata: { created, reused: [...resolved.values()].filter((c) => c && !created.includes(c.name)).map((c) => c.name), panels }
   }).catch(() => {});
-  return { created, reused: [...resolved.values()].filter((c) => !created.includes(c.name)).map((c) => c.name), panels, category: category.name };
+  return { created, reused: [...resolved.values()].filter((c) => c && !created.includes(c.name)).map((c) => c.name), panels, category: category.name };
 }
 async function handleCommand(interaction) {
   if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
