@@ -102,7 +102,7 @@ async function upsertReference(channel, botId, key, title, description) {
   if (existing) await existing.edit({ embeds: [embed] });
   else await channel.send({ embeds: [embed] });
 }
-async function publishReferences(channels, botId) {
+async async function publishReferences(channels, botId) {
   const rules = [
     'Ügyút: bejelentés → előzetes ellenőrzés → vizsgálat → meghallgatás → jelentés → vezetőségi döntés → határozat → legfeljebb 72 órán belüli felülvizsgálati kérelem → lezárás.',
     'Állapotok: BEJELENTVE, ELŐZETES ELLENŐRZÉS, VIZSGÁLAT ALATT, MEGHALLGATÁSRA VÁR, JELENTÉS ELKÉSZÜLT, VEZETŐSÉGI ELBÍRÁLÁS, HATÁROZAT KIADVA, FELÜLVIZSGÁLAT ALATT, LEZÁRVA vagy MEGSZÜNTETVE.',
