@@ -720,6 +720,7 @@ async function handleDocumentButton(interaction) {
     const [, key, targetChannelId, submitterId, selectedUserId] = id.split(':');
     const targetUserId = /^\d{16,22}$/.test(selectedUserId || '') ? selectedUserId : null;
     const type = findDocumentType(key, interaction.guild);
+    if (type?.custom && String(type.key).startsWith('custom_belv_') && String(submitterId) === String(interaction.user.id)) return ephemeralError(interaction, 'Saját fegyelmi ügyedben nem hagyhatsz jóvá döntést.');
     const target = interaction.guild.channels.cache.get(targetChannelId);
     if (!type || !target?.isTextBased()) return ephemeralError(interaction, 'A célcsatorna nem található.');
     const notificationRoleId = documentRule(interaction.guild, type).notificationRoleId;
@@ -733,6 +734,11 @@ async function handleDocumentButton(interaction) {
     if (missingReviewPermissions.length) return ephemeralError(interaction, documentPermissionError(interaction.channel, missingReviewPermissions));
     const mentions = documentMentions(targetUserId, notificationRoleId);
     await interaction.deferReply({ flags: EPHEMERAL });
+    const belvCaseNumber = interaction.message.embeds[0]?.fields?.find((field) => field.name === 'Ügyszám')?.value || null;
+    if (type?.custom && String(type.key).startsWith('custom_belv_')) {
+      const claimed = await require('./belv-discipline').claimCaseDecision(interaction.guildId, belvCaseNumber, interaction.user.id);
+      if (!claimed) return interaction.editReply('❌ Ezt az ügyet már elbírálták, vagy egy másik döntéshozó éppen kezeli.');
+    }
     const approved = EmbedBuilder.from(interaction.message.embeds[0])
       .setTitle(`✅ Jóváhagyva • ${type.title}`)
       .setColor(COLORS.success);
@@ -759,6 +765,7 @@ async function handleDocumentButton(interaction) {
     const submitter = await interaction.client.users.fetch(submitterId).catch(() => null);
     await submitter?.send(`✅ A **${type.title}** dokumentumodat jóváhagyták a **${interaction.guild.name}** szerveren.`).catch(() => null);
     await sendLog(interaction.guild, baseEmbed('✅ Dokumentum jóváhagyva', `${type.title} • ${interaction.user.tag}`, COLORS.success));
+    if (type?.custom && String(type.key).startsWith('custom_belv_')) await require('./belv-discipline').setCaseStatus(interaction.guildId, belvCaseNumber, interaction.user.id, 'approved');
     return interaction.editReply(`✅ A dokumentum jóváhagyva és közzétéve itt: ${target}`);
   }
 
@@ -844,9 +851,16 @@ async function handleDocumentModal(interaction) {
     if (missingPermissions.length) return ephemeralError(interaction, documentPermissionError(interaction.channel, missingPermissions));
     await interaction.deferReply({ flags: EPHEMERAL });
     const [, messageId, submitterId] = interaction.customId.split(':');
+    if (interaction.guildId === BELV_APPROVAL_GUILD_ID && String(submitterId) === String(interaction.user.id)) return interaction.editReply('❌ Saját fegyelmi ügyedet nem utasíthatod el.');
     const reason = interaction.fields.getTextInputValue('reject_reason').trim();
     const pending = await interaction.channel.messages.fetch(messageId).catch(() => null);
     if (!pending?.embeds?.length) return interaction.editReply('❌ A jóváhagyásra váró dokumentum nem található.');
+    const belvCaseNumber = pending.embeds[0]?.fields?.find((field) => field.name === 'Ügyszám')?.value || null;
+    const typeKey = pending.embeds[0]?.footer?.text?.split('•').at(-1)?.trim();
+    if (String(typeKey || '').startsWith('custom_belv_')) {
+      const claimed = await require('./belv-discipline').claimCaseDecision(interaction.guildId, belvCaseNumber, interaction.user.id);
+      if (!claimed) return interaction.editReply('❌ Ezt az ügyet már elbírálták, vagy egy másik döntéshozó éppen kezeli.');
+    }
     const rejected = EmbedBuilder.from(pending.embeds[0]).setTitle('❌ Elutasított dokumentum').setColor(COLORS.danger);
     rejected.setFields(
       ...rejected.data.fields.filter((field) => field.name !== 'Állapot'),
@@ -854,6 +868,7 @@ async function handleDocumentModal(interaction) {
       { name: 'Elutasítás indoka', value: reason }
     );
     await pending.edit({ embeds: [rejected], components: [] });
+    if (String(typeKey || '').startsWith('custom_belv_')) await require('./belv-discipline').setCaseStatus(interaction.guildId, belvCaseNumber, interaction.user.id, 'rejected', { reason });
     const submitter = await interaction.client.users.fetch(submitterId).catch(() => null);
     const dmSent = await submitter?.send(
       `❌ A dokumentumodat elutasították a **${interaction.guild.name}** szerveren.\n**Indok:** ${reason}`
