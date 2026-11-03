@@ -773,27 +773,37 @@ async function handleDocumentButton(interaction) {
       ...approved.data.fields.filter((field) => field.name !== 'Állapot'),
       { name: 'Állapot', value: `✅ Jóváhagyta: ${interaction.user}` }
     );
-    if (target.id === interaction.channelId) {
-      await interaction.message.edit({ embeds: [approved], components: [] });
-      if (mentions.content) {
-        await target.send({
-          content: `${mentions.content} • Jóváhagyták a következő dokumentumot: **${type.title}**.`,
-          allowedMentions: mentions.allowedMentions
-        });
-      }
-    } else {
-      await target.send({
+    if (type?.custom && String(type.key).startsWith('custom_bomo_')) {
+      const published = await target.send({
         content: mentions.content,
         embeds: [approved],
         allowedMentions: mentions.allowedMentions
       });
+      await require('./bomo').attachSubmission(interaction.guildId, belvCaseNumber, published, false);
+      await require('./bomo').setCaseStatus(interaction.guildId, belvCaseNumber, interaction.user.id, 'approved');
       await interaction.message.edit({ embeds: [approved], components: [] });
+    } else {
+      if (target.id === interaction.channelId) {
+        await interaction.message.edit({ embeds: [approved], components: [] });
+        if (mentions.content) {
+          await target.send({
+            content: `${mentions.content} • Jóváhagyták a következő dokumentumot: **${type.title}**.`,
+            allowedMentions: mentions.allowedMentions
+          });
+        }
+      } else {
+        await target.send({
+          content: mentions.content,
+          embeds: [approved],
+          allowedMentions: mentions.allowedMentions
+        });
+        await interaction.message.edit({ embeds: [approved], components: [] });
+      }
+      if (type?.custom && String(type.key).startsWith('custom_belv_')) await require('./belv-discipline').setCaseStatus(interaction.guildId, belvCaseNumber, interaction.user.id, 'approved');
     }
     const submitter = await interaction.client.users.fetch(submitterId).catch(() => null);
     await submitter?.send(`✅ A **${type.title}** dokumentumodat jóváhagyták a **${interaction.guild.name}** szerveren.`).catch(() => null);
     await sendLog(interaction.guild, baseEmbed('✅ Dokumentum jóváhagyva', `${type.title} • ${interaction.user.tag}`, COLORS.success));
-    if (type?.custom && String(type.key).startsWith('custom_bomo_')) await require('./bomo').setCaseStatus(interaction.guildId, belvCaseNumber, interaction.user.id, 'approved');
-    else if (type?.custom && String(type.key).startsWith('custom_belv_')) await require('./belv-discipline').setCaseStatus(interaction.guildId, belvCaseNumber, interaction.user.id, 'approved');
     return interaction.editReply(`✅ A dokumentum jóváhagyva és közzétéve itt: ${target}`);
   }
 
