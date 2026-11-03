@@ -116,6 +116,8 @@ assert.ok(!/applicationCommands\.create|client\.application\.commands/.test(bomo
 assert.ok(bomo.includes("status === 'completed'") && bomo.includes("SETUP_COMMAND"), 'BOMO setup is persistent and removes its guild command after completion');
 assert.ok(bomo.includes('isPersistentStore()') && bomo.includes('nexabot_bomo_cases'), 'BOMO requires persistent database storage for setup and cases');
 assert.ok(bomo.includes('BOMO-') && bomo.includes('prepareSubmission'), 'BOMO forms assign persistent case numbers');
+assert.ok(bomo.includes("key: 'custom_bomo_service_log'") && bomo.includes("channel: 'service_log'"), 'BOMO service log has a button-based fillable form');
+assert.ok(bomo.includes("typeKey === 'custom_bomo_service_log'"), 'BOMO service log form is role-gated to active staff');
 assert.ok(bomo.includes('function canSubmit') && bomo.includes('function canApprove'), 'BOMO form submission and approval are role-gated server-side');
 assert.ok(bomo.includes('[...(member.roles?.cache?.values?.() || [])].some((role) => isChiefRole(role))'), 'BELV chief role has full BOMO supervision');
 assert.ok(bomoDocs.includes('type.approvalChannelId') && bomoDocs.includes('? (configuredReview?.isTextBased?.() ? configuredReview : null)'), 'BOMO approvals cannot silently fall back to another channel');
