@@ -272,26 +272,16 @@ function buildCommand() {
 
 async function ensureSchema() {
   if (!isPersistentStore()) fail(503, 'A BOMO egyszeri telepítéséhez és ügyadatainak mentéséhez tartós PostgreSQL-adatbázis szükséges.');
-  await dbQuery([
-    'CREATE TABLE IF NOT EXISTS nexabot_bomo_installations (',
-    'guild_id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT \'installing\', installed_by TEXT,',
-    'category_id TEXT, installed_at TIMESTAMPTZ, last_error TEXT, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());',
-    'ALTER TABLE nexabot_bomo_installations ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0;',
-    'CREATE TABLE IF NOT EXISTS nexabot_bomo_cases (',
-    'id BIGSERIAL PRIMARY KEY, guild_id TEXT NOT NULL, case_number TEXT NOT NULL, form_key TEXT NOT NULL,',
-    'interaction_id TEXT NOT NULL, submitter_id TEXT NOT NULL, target_user_id TEXT, answers JSONB NOT NULL DEFAULT \'{}\'::jsonb,',
-    'status TEXT NOT NULL DEFAULT \'pending_review\', review_channel_id TEXT, review_message_id TEXT,',
-    'published_channel_id TEXT, published_message_id TEXT, decision_by TEXT, decision_at TIMESTAMPTZ,',
-    'created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),',
-    'UNIQUE(guild_id,case_number), UNIQUE(guild_id,interaction_id));',
-    'CREATE TABLE IF NOT EXISTS nexabot_bomo_case_audit (',
-    'id BIGSERIAL PRIMARY KEY, guild_id TEXT NOT NULL, case_number TEXT NOT NULL, actor_id TEXT NOT NULL,',
-    'action TEXT NOT NULL, details JSONB NOT NULL DEFAULT \'{}\'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());',
+  const statements = [
+    'CREATE TABLE IF NOT EXISTS nexabot_bomo_installations (guild_id TEXT PRIMARY KEY,status TEXT NOT NULL DEFAULT \'installing\',installed_by TEXT,category_id TEXT,installed_at TIMESTAMPTZ,last_error TEXT,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())',
+    'ALTER TABLE nexabot_bomo_installations ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0',
+    'CREATE TABLE IF NOT EXISTS nexabot_bomo_cases (id BIGSERIAL PRIMARY KEY,guild_id TEXT NOT NULL,case_number TEXT NOT NULL,form_key TEXT NOT NULL,interaction_id TEXT NOT NULL,submitter_id TEXT NOT NULL,target_user_id TEXT,answers JSONB NOT NULL DEFAULT \'{}\'::jsonb,status TEXT NOT NULL DEFAULT \'pending_review\',review_channel_id TEXT,review_message_id TEXT,published_channel_id TEXT,published_message_id TEXT,decision_by TEXT,decision_at TIMESTAMPTZ,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),UNIQUE(guild_id,case_number),UNIQUE(guild_id,interaction_id))',
+    'CREATE TABLE IF NOT EXISTS nexabot_bomo_case_audit (id BIGSERIAL PRIMARY KEY,guild_id TEXT NOT NULL,case_number TEXT NOT NULL,actor_id TEXT NOT NULL,action TEXT NOT NULL,details JSONB NOT NULL DEFAULT \'{}\'::jsonb,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())',
     'INSERT INTO nexabot_schema_migrations(version,name) VALUES(27,\'bomo_discord_one_time_setup\') ON CONFLICT(version) DO NOTHING',
     'INSERT INTO nexabot_schema_migrations(version,name) VALUES(28,\'bomo_owner_only_five_attempts\') ON CONFLICT(version) DO NOTHING'
-  ].join('\n'));
+  ];
+  for (const statement of statements) await dbQuery(statement);
 }
-
 async function installationStatus(guildId) {
   await ensureSchema();
   const result = await dbQuery('SELECT status FROM nexabot_bomo_installations WHERE guild_id=$1 LIMIT 1', [guildId]);
