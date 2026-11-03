@@ -51,6 +51,7 @@ const VOICE_CHANNELS = Object.freeze([
   { key: 'ops_radio', name: '🔒┃operatív-rádió', audience: 'covert', type: 'voice' }
 ]);
 const ALL_CHANNELS = Object.freeze([...TEXT_CHANNELS, ...VOICE_CHANNELS]);
+const REUSE_EXISTING_CHANNEL_KEYS = new Set(['service_log', 'investigations']);
 const FORM_SPECS = Object.freeze([
   {
     key: 'custom_bomo_operation',
@@ -356,12 +357,12 @@ function plannedResources(guild) {
     if (matches.length > 1) conflicts.push(spec.name + ': több azonos nevű csatorna létezik.');
     else if (matches.length === 1) {
       const existing = matches[0];
-      if (!categoryId || existing.parentId !== categoryId) conflicts.push(spec.name + ': már létezik a BOMO-kategórián kívül; a meglévő csatornát nem mozgatom és nem módosítom.');
-      else {
-        const expected = spec.type === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText;
-        if (existing.type !== expected) conflicts.push(spec.name + ': a meglévő csatorna típusa nem egyezik a telepítővel.');
-        else channelMap.set(spec.key, existing);
-      }
+      const expected = spec.type === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText;
+      if (existing.type !== expected) conflicts.push(spec.name + ': a meglévő csatorna típusa nem egyezik a telepítővel.');
+      else if (existing.parentId !== categoryId) {
+        if (REUSE_EXISTING_CHANNEL_KEYS.has(spec.key)) channelMap.set(spec.key, existing);
+        else conflicts.push(spec.name + ': már létezik a BOMO-kategórián kívül; a meglévő csatornát nem mozgatom és nem módosítom.');
+      } else channelMap.set(spec.key, existing);
     } else channelMap.set(spec.key, null);
   }
   if (category) {
@@ -450,6 +451,14 @@ async function ensureTextChannel(guild, channel, category, botMember, roles, chi
     reason: 'BOMO Discord rendszer egyszeri telepítése'
   });
   else {
+    if (REUSE_EXISTING_CHANNEL_KEYS.has(spec.key) && current.parentId !== category.id) {
+      await current.permissionOverwrites.set(overwrites, 'A meglévő BELV-csatorna BOMO-hozzáférésének biztonságos beállítása');
+      current = await current.setParent(category.id, {
+        lockPermissions: false,
+        reason: 'A meglévő BELV-csatorna újrahasznosítása a BOMO-ban, duplikáció nélkül'
+      });
+      return current;
+    }
     const known = [...ROLE_SPECS.map((role) => roles.get(role.key).id), ...chiefRoles.map((role) => role.id)];
     const foreign = inspectForeignOverwrites(current, known, botMember.id);
     if (foreign.length) fail(409, '#' + current.name + ': más szerepkör láthatja a privát BOMO-csatornát; a beállítást nem módosítottam.');
