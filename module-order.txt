@@ -101,3 +101,4 @@ src/staff-workflow.js
 src/next-marketplace.js
 src/next-ticket.js
 src/belv-discipline.js
+src/bomo.js
