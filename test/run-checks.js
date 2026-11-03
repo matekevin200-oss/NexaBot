@@ -117,6 +117,8 @@ assert.ok(bomo.includes("status === 'completed'") && bomo.includes("SETUP_COMMAN
 assert.ok(bomo.includes('isPersistentStore()') && bomo.includes('nexabot_bomo_cases'), 'BOMO requires persistent database storage for setup and cases');
 assert.ok(bomo.includes('BOMO-') && bomo.includes('prepareSubmission'), 'BOMO forms assign persistent case numbers');
 assert.ok(bomo.includes('function canSubmit') && bomo.includes('function canApprove'), 'BOMO form submission and approval are role-gated server-side');
+assert.ok(bomo.includes('[...(member.roles?.cache?.values?.() || [])].some((role) => isChiefRole(role))'), 'BELV chief role has full BOMO supervision');
+assert.ok(bomoDocs.includes('type.approvalChannelId') && bomoDocs.includes('? (configuredReview?.isTextBased?.() ? configuredReview : null)'), 'BOMO approvals cannot silently fall back to another channel');
 assert.ok(bomo.includes('type: \'voice\''), 'BOMO voice channels are verified as voice channels');
 assert.ok(bomo.includes('szerveren belüli RP-eseményekre'), 'BOMO documents are restricted to in-server RP events');
 assert.ok(bomoDocs.includes("require('./bomo').canSubmit(member, type.key)"), 'BOMO document submissions are checked server-side');
