@@ -105,4 +105,26 @@ assert.ok(economy.includes("IF op='debit' AND"), 'debit requires sufficient targ
 assert.ok(economy.includes('user_id=target'), 'debit updates the selected target account');
 assert.ok(read('src/economy-discord.js').includes('eco.apply(i.guild,i.user.id,i.id,b)'), 'Discord command uses its unique interaction ID for idempotency');
 
+
+const bomo = read('src/bomo.js');
+const bomoDocs = read('src/documents.js');
+const bomoMdt = read('src/belv-mdt.js');
+assert.ok(order.includes('src/bomo.js'), 'BOMO Discord module is included in the runtime bundle');
+assert.ok(bomo.includes("const BELV_GUILD_ID = '1517509643734221030'"), 'BOMO setup is pinned to the BELV guild');
+assert.ok(bomo.includes('guild.commands.create(payload)'), 'BOMO setup command is registered as a guild command');
+assert.ok(!/applicationCommands\.create|client\.application\.commands/.test(bomo), 'BOMO setup is not registered globally');
+assert.ok(bomo.includes("status === 'completed'") && bomo.includes("SETUP_COMMAND"), 'BOMO setup is persistent and removes its guild command after completion');
+assert.ok(bomo.includes('isPersistentStore()') && bomo.includes('nexabot_bomo_cases'), 'BOMO requires persistent database storage for setup and cases');
+assert.ok(bomo.includes('BOMO-') && bomo.includes('prepareSubmission'), 'BOMO forms assign persistent case numbers');
+assert.ok(bomo.includes('function canSubmit') && bomo.includes('function canApprove'), 'BOMO form submission and approval are role-gated server-side');
+assert.ok(bomo.includes('[...(member.roles?.cache?.values?.() || [])].some((role) => isChiefRole(role))'), 'BELV chief role has full BOMO supervision');
+assert.ok(bomoDocs.includes('type.approvalChannelId') && bomoDocs.includes('? (configuredReview?.isTextBased?.() ? configuredReview : null)'), 'BOMO approvals cannot silently fall back to another channel');
+assert.ok(bomo.includes('type: \'voice\''), 'BOMO voice channels are verified as voice channels');
+assert.ok(bomo.includes('szerveren belüli RP-eseményekre'), 'BOMO documents are restricted to in-server RP events');
+assert.ok(bomoDocs.includes("require('./bomo').canSubmit(member, type.key)"), 'BOMO document submissions are checked server-side');
+assert.ok(bomoDocs.includes("require('./bomo').claimCaseDecision"), 'BOMO approvals are persisted and single-decision');
+assert.ok(bomoMdt.includes("require('./bomo').syncSetupCommand(guild)"), 'BOMO command sync runs only in the target BELV guild');
+assert.ok(read('src/interactions.js').includes("commandName === 'bomo-setup'"), 'BOMO setup interactions are routed');
+assert.ok(!read('src/bomo.js').includes('web-'), 'BOMO setup does not add a website route');
+
 console.log('NEXA checks passed: ' + order.length + ' source modules, reproducible bundle, BELV permissions, mentions, shifts, and economy invariants.');

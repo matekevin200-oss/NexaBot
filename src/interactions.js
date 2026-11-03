@@ -281,6 +281,7 @@ async function handleCommand(interaction) {
   if (interaction.commandName === 'mdt') return handleMdtCommand(interaction);
   if (interaction.commandName === 'allomany') return require('./belv-mdt').handleBelvRosterCommand(interaction);
   if (interaction.commandName === 'belv-rendszer') return require('./belv-discipline').handleCommand(interaction);
+  if (interaction.commandName === 'bomo-setup') return require('./bomo').handleCommand(interaction);
   if (interaction.commandName === 'ticket') return handleTicketCommand(interaction);
   if (interaction.commandName === 'feladat') return require('./staff-workflow').handleCommand(interaction);
   if (interaction.commandName === 'cia') {
