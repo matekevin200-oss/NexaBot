@@ -116,6 +116,22 @@ const FORM_SPECS = Object.freeze([
       { id: 'results', label: 'Eredmények', placeholder: 'RP-események eredménye és hivatkozások', required: true, style: 'paragraph', maxLength: 1000 },
       { id: 'conclusion', label: 'Záró megállapítások', placeholder: 'Tanulságok és további teendők', required: true, style: 'paragraph', maxLength: 800 }
     ]
+  },
+  {
+    key: 'custom_bomo_service_log',
+    title: 'Szolgálati naplóbejegyzés',
+    emoji: '🕒',
+    channel: 'service_log',
+    approvalChannel: null,
+    approval: false,
+    access: 'staff',
+    fields: [
+      { id: 'service_period', label: 'Szolgálati idő', placeholder: 'Kezdés, befejezés és RP-idő', required: true, style: 'short', maxLength: 160 },
+      { id: 'service_task', label: 'Feladat', placeholder: 'A kijelölt szolgálati feladat', required: true, style: 'short', maxLength: 180 },
+      { id: 'service_activity', label: 'Tevékenység', placeholder: 'A szolgálat alatt végzett munka', required: true, style: 'paragraph', maxLength: 900 },
+      { id: 'service_result', label: 'Eredmény', placeholder: 'Eredmény vagy intézkedés', required: true, style: 'paragraph', maxLength: 900 },
+      { id: 'service_case', label: 'Ügyazonosító / megjegyzés', placeholder: 'BOMO-azonosító vagy rövid megjegyzés', required: false, style: 'short', maxLength: 160 }
+    ]
   }
 ]);
 const CONTENT = Object.freeze({
@@ -697,6 +713,7 @@ function canSubmit(member, typeKey) {
   if ([...(member.roles?.cache?.values?.() || [])].some((role) => isChiefRole(role))) return true;
   const has = (key) => roleNames.includes(normalizeName(ROLE_SPECS.find((spec) => spec.key === key)?.name));
   if (typeKey === 'custom_bomo_investigation') return ['commander', 'deputy', 'lead_ops'].some(has);
+  if (typeKey === 'custom_bomo_service_log') return ['commander', 'deputy', 'lead_ops', 'officer', 'undercover'].some(has);
   if (typeKey === 'custom_bomo_operation' || typeKey === 'custom_bomo_observation') return ['commander', 'deputy', 'lead_ops', 'officer', 'undercover'].some(has);
   if (typeKey === 'custom_bomo_report') return ['commander', 'deputy', 'lead_ops', 'officer', 'undercover'].some(has);
   return isMember(member);
