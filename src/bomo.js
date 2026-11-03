@@ -15,6 +15,7 @@ const { recordAudit, recordError } = require('./telemetry');
 const BELV_GUILD_ID = '1517509643734221030';
 const CATEGORY_NAME = '🕵️┃BOMO • OPERATÍV OSZTÁLY';
 const SETUP_COMMAND = 'bomo-setup';
+const MAX_INSTALL_ATTEMPTS = 5;
 const LEADERSHIP_ROLE_NAMES = Object.freeze([
   'BOMO Parancsnok',
   'BOMO Parancsnokhelyettes',
@@ -275,6 +276,7 @@ async function ensureSchema() {
     'CREATE TABLE IF NOT EXISTS nexabot_bomo_installations (',
     'guild_id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT \'installing\', installed_by TEXT,',
     'category_id TEXT, installed_at TIMESTAMPTZ, last_error TEXT, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());',
+    'ALTER TABLE nexabot_bomo_installations ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0;',
     'CREATE TABLE IF NOT EXISTS nexabot_bomo_cases (',
     'id BIGSERIAL PRIMARY KEY, guild_id TEXT NOT NULL, case_number TEXT NOT NULL, form_key TEXT NOT NULL,',
     'interaction_id TEXT NOT NULL, submitter_id TEXT NOT NULL, target_user_id TEXT, answers JSONB NOT NULL DEFAULT \'{}\'::jsonb,',
@@ -285,7 +287,8 @@ async function ensureSchema() {
     'CREATE TABLE IF NOT EXISTS nexabot_bomo_case_audit (',
     'id BIGSERIAL PRIMARY KEY, guild_id TEXT NOT NULL, case_number TEXT NOT NULL, actor_id TEXT NOT NULL,',
     'action TEXT NOT NULL, details JSONB NOT NULL DEFAULT \'{}\'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());',
-    'INSERT INTO nexabot_schema_migrations(version,name) VALUES(27,\'bomo_discord_one_time_setup\') ON CONFLICT(version) DO NOTHING'
+    'INSERT INTO nexabot_schema_migrations(version,name) VALUES(27,\'bomo_discord_one_time_setup\') ON CONFLICT(version) DO NOTHING',
+    'INSERT INTO nexabot_schema_migrations(version,name) VALUES(28,\'bomo_owner_only_five_attempts\') ON CONFLICT(version) DO NOTHING'
   ].join('\n'));
 }
 
@@ -617,18 +620,23 @@ async function verifyProvision(guild, category, roles, channels, chiefRoles, for
 async function provision(interaction) {
   const guild = interaction.guild;
   if (!guild || guild.id !== BELV_GUILD_ID) fail(403, 'A BOMO telepítő csak a BELV Discord-szerverén használható.');
-  const member = interaction.member;
-  const allowed = member?.id === guild.ownerId || member?.permissions?.has(PermissionFlagsBits.Administrator);
-  if (!allowed) fail(403, 'A BOMO rendszert csak a szerver tulajdonosa vagy rendszergazdája telepítheti.');
+  if (String(interaction.user?.id || '') !== String(guild.ownerId)) fail(403, 'A BOMO telepítőparancsot kizárólag a BELV Discord-szerver tulajdonosa használhatja.');
   if (locks.has(guild.id)) fail(409, 'A BOMO telepítése már folyamatban van; várd meg a befejezést.');
   locks.add(guild.id);
   try {
     await ensureSchema();
-    const state = await dbQuery('SELECT status FROM nexabot_bomo_installations WHERE guild_id=$1 LIMIT 1', [guild.id]);
+    const state = await dbQuery('SELECT status,attempt_count FROM nexabot_bomo_installations WHERE guild_id=$1 LIMIT 1', [guild.id]);
     if (state.rows[0]?.status === 'completed') {
       const removed = await removeGuildSetupCommand(guild);
       return { already: true, removed };
     }
+    const attempts = Number(state.rows[0]?.attempt_count || 0);
+    if (attempts >= MAX_INSTALL_ATTEMPTS) fail(429, 'A BOMO telepítési parancs elérte az 5 próbálkozásos korlátot.');
+    const attempt = await dbQuery(
+      'INSERT INTO nexabot_bomo_installations(guild_id,status,installed_by,attempt_count,last_error,updated_at) VALUES($1,\'installing\',$2,1,NULL,NOW()) ON CONFLICT(guild_id) DO UPDATE SET status=\'installing\',installed_by=EXCLUDED.installed_by,attempt_count=nexabot_bomo_installations.attempt_count+1,last_error=NULL,updated_at=NOW() WHERE nexabot_bomo_installations.status<>\'completed\' AND nexabot_bomo_installations.attempt_count < $3 RETURNING attempt_count',
+      [guild.id, interaction.user.id, MAX_INSTALL_ATTEMPTS]
+    );
+    if (!attempt?.rowCount) fail(429, 'A BOMO telepítési parancs elérte az 5 próbálkozásos korlátot.');
     const botMember = guild.members.me || await guild.members.fetchMe();
     assertBotSetupPermissions(guild, botMember);
     await guild.roles.fetch();
@@ -637,8 +645,8 @@ async function provision(interaction) {
     if (!foundChiefRoles.length) fail(409, 'Nem találtam felismerhető BELV Főigazgató rangot. Ellenőrizd a rang nevét vagy a BELV_RANK_ROLE_IDS beállítást; semmit nem telepítettem.');
     const plan = plannedResources(guild);
     await dbQuery(
-      'INSERT INTO nexabot_bomo_installations(guild_id,status,installed_by,category_id,last_error,updated_at) VALUES($1,\'installing\',$2,$3,NULL,NOW()) ON CONFLICT(guild_id) DO UPDATE SET status=\'installing\',installed_by=EXCLUDED.installed_by,last_error=NULL,updated_at=NOW()',
-      [guild.id, interaction.user.id, plan.category?.id || null]
+      'UPDATE nexabot_bomo_installations SET category_id=$2,updated_at=NOW() WHERE guild_id=$1 AND status<>\'completed\'',
+      [guild.id, plan.category?.id || null]
     );
     const roles = await ensureRoles(guild);
     const allKnownRoles = [...ROLE_SPECS.map((spec) => roles.get(spec.key).id), ...foundChiefRoles.map((role) => role.id)];
@@ -676,6 +684,11 @@ async function provision(interaction) {
 }
 
 async function handleCommand(interaction) {
+  if (!interaction.guild || String(interaction.user?.id || '') !== String(interaction.guild.ownerId)) {
+    const message = '❌ A /bomo-setup parancsot kizárólag a BELV Discord-szerver tulajdonosa használhatja.';
+    if (!interaction.deferred && !interaction.replied) return interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
+    return interaction.editReply(message);
+  }
   if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   try {
     const status = await installationStatus(interaction.guildId);
