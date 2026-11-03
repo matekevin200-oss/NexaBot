@@ -114,6 +114,7 @@ assert.ok(bomo.includes("const BELV_GUILD_ID = '1517509643734221030'"), 'BOMO se
 assert.ok(bomo.includes('const MAX_INSTALL_ATTEMPTS = 5'), 'BOMO setup has a five-attempt limit');
 assert.ok(bomo.includes('interaction.user?.id || \'\') !== String(interaction.guild.ownerId)'), 'BOMO setup is restricted to the guild owner');
 assert.ok(bomo.includes('ALTER TABLE nexabot_bomo_installations ADD COLUMN IF NOT EXISTS attempt_count'), 'attempt counts persist across restarts');
+assert.ok(bomo.includes('for (const statement of statements) await dbQuery(statement)'), 'BOMO schema migrations run as retryable single statements');
 assert.ok(bomo.includes('guild.commands.create(payload)'), 'BOMO setup command is registered as a guild command');
 assert.ok(!/applicationCommands\.create|client\.application\.commands/.test(bomo), 'BOMO setup is not registered globally');
 assert.ok(bomo.includes("status === 'completed'") && bomo.includes("SETUP_COMMAND"), 'BOMO setup is persistent and removes its guild command after completion');
