@@ -389,7 +389,7 @@ function assertBotSetupPermissions(guild, botMember) {
     PermissionFlagsBits.EmbedLinks,
     PermissionFlagsBits.ReadMessageHistory
   ];
-  const permissions = guild.members.me?.permissions;
+  const permissions = botMember.permissions;
   const missing = needed.filter((permission) => !permissions?.has(permission));
   if (missing.length) fail(403, 'A telepítéshez a Nexának ezek a szerverjogok kellenek: ' + missing.map((permission) => permission === PermissionFlagsBits.ManageChannels ? 'Csatornák kezelése' : permission === PermissionFlagsBits.ManageRoles ? 'Szerepkörök kezelése' : 'Discord-csatorna használata').join(', ') + '.');
 }
@@ -685,6 +685,7 @@ function isMember(member) {
 function canSubmit(member, typeKey) {
   if (!member || !String(typeKey || '').startsWith('custom_bomo_')) return false;
   const roleNames = member.roles?.cache ? [...member.roles.cache.values()].map((role) => normalizeName(role.name)) : [];
+  if ([...(member.roles?.cache?.values?.() || [])].some((role) => isChiefRole(role))) return true;
   const has = (key) => roleNames.includes(normalizeName(ROLE_SPECS.find((spec) => spec.key === key)?.name));
   if (typeKey === 'custom_bomo_investigation') return ['commander', 'deputy', 'lead_ops'].some(has);
   if (typeKey === 'custom_bomo_operation' || typeKey === 'custom_bomo_observation') return ['commander', 'deputy', 'lead_ops', 'officer', 'undercover'].some(has);
