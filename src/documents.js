@@ -861,7 +861,9 @@ async function handleDocumentModal(interaction) {
         ? interaction.guild.channels.cache.find((channel) => normalizeName(channel.name) === normalizeName('vezetőségi-elbírálás'))
         : null;
       const configuredReview = type.approvalChannelId ? interaction.guild.channels.cache.get(type.approvalChannelId) : null;
-      const reviewChannel = configuredReview?.isTextBased?.() ? configuredReview : dedicatedReview || findDocumentChannel(interaction.guild, reviewType);
+      const reviewChannel = type.approvalChannelId
+        ? (configuredReview?.isTextBased?.() ? configuredReview : null)
+        : dedicatedReview || findDocumentChannel(interaction.guild, reviewType);
       if (!reviewChannel) {
         return interaction.editReply('❌ A meglévő **ügyiratok** jóváhagyási csatornát nem találom. Új csatornát nem hoztam létre.');
       }
