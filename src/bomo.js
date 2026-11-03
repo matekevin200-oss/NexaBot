@@ -708,7 +708,7 @@ async function createCaseNumber(interaction) {
     year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
     hourCycle: 'h23'
   }).formatToParts(new Date()).reduce((result, part) => ({ ...result, [part.type]: part.value }), {});
-  return 'BOMO-' + parts.year + parts.month + parts.day + '-' + parts.hour + parts.minute + '-' + String(interaction.id).slice(-6);
+  return 'BOMO-' + parts.year + parts.month + parts.day + '-' + parts.hour + parts.minute + '-' + String(interaction.id).slice(-12);
 }
 
 async function prepareSubmission(interaction, type, targetUserId = null) {
@@ -746,6 +746,15 @@ async function claimCaseDecision(guildId, caseNumber, actorId) {
   await auditCase(guildId, caseNumber, actorId, 'decision_started', {});
   return true;
 }
+async function releaseCaseDecision(guildId, caseNumber, actorId, details = {}) {
+  const result = await dbQuery(
+    "UPDATE nexabot_bomo_cases SET status='pending_review',decision_by=NULL,decision_at=NULL,updated_at=NOW() WHERE guild_id=$1 AND case_number=$2 AND status='decision_processing' AND decision_by=$3 RETURNING case_number",
+    [guildId, caseNumber, actorId]
+  );
+  if (result?.rowCount) await auditCase(guildId, caseNumber, actorId, 'decision_released', details);
+  return Boolean(result?.rowCount);
+}
+
 async function setCaseStatus(guildId, caseNumber, actorId, status, details = {}) {
   const result = await dbQuery(
     "UPDATE nexabot_bomo_cases SET status=$4,decision_by=$3,decision_at=NOW(),updated_at=NOW() WHERE guild_id=$1 AND case_number=$2 AND status='decision_processing' RETURNING case_number",
@@ -770,5 +779,6 @@ module.exports = {
   prepareSubmission,
   attachSubmission,
   claimCaseDecision,
+  releaseCaseDecision,
   setCaseStatus
 };
