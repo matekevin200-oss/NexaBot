@@ -34,11 +34,10 @@ const TEXT_CHANNELS = Object.freeze([
   { key: 'rules', name: '📜┃bomo-szabályzat', audience: 'all', writers: 'leadership', content: 'rules' },
   { key: 'roster', name: '👥┃bomo-állomány', audience: 'all', writers: 'leadership', content: 'roster' },
   { key: 'chat', name: '💬┃bomo-beszélgetés', audience: 'all', writers: 'all', content: 'chat' },
-  { key: 'service_log', name: '🕒┃szolgálati-napló', audience: 'staff', writers: 'staff', content: 'service_log' },
   { key: 'orders', name: '📋┃műveleti-utasítások', audience: 'staff', writers: 'leadership', content: 'orders' },
   { key: 'undercover_ops', name: '🕵️┃fedett-műveletek', audience: 'covert', writers: 'covert', content: 'undercover_ops' },
   { key: 'surveillance', name: '👁️┃megfigyelési-jelentések', audience: 'covert', writers: 'covert', content: 'surveillance' },
-  { key: 'investigations', name: '🔎┃belső-vizsgálatok', audience: 'leadership', writers: 'leadership', content: 'investigations' },
+  { key: 'investigations', name: '🔎┃bomo-belső-vizsgálatok', audience: 'leadership', writers: 'leadership', content: 'investigations' },
   { key: 'case_files', name: '📁┃bomo-ügyiratok', audience: 'leadership', writers: 'leadership', content: 'case_files' },
   { key: 'evidence', name: '📸┃bizonyítékok', audience: 'covert', writers: 'covert', content: 'evidence' },
   { key: 'operation_reports', name: '📑┃műveleti-jelentések', audience: 'staff', writers: 'staff', content: 'operation_reports' },
@@ -52,7 +51,7 @@ const VOICE_CHANNELS = Object.freeze([
   { key: 'ops_radio', name: '🔒┃operatív-rádió', audience: 'covert', type: 'voice' }
 ]);
 const ALL_CHANNELS = Object.freeze([...TEXT_CHANNELS, ...VOICE_CHANNELS]);
-const REUSE_EXISTING_CHANNEL_KEYS = new Set(['service_log', 'investigations']);
+const REUSE_EXISTING_CHANNEL_KEYS = new Set();
 const FORM_SPECS = Object.freeze([
   {
     key: 'custom_bomo_operation',
@@ -118,22 +117,7 @@ const FORM_SPECS = Object.freeze([
       { id: 'conclusion', label: 'Záró megállapítások', placeholder: 'Tanulságok és további teendők', required: true, style: 'paragraph', maxLength: 800 }
     ]
   },
-  {
-    key: 'custom_bomo_service_log',
-    title: 'Szolgálati naplóbejegyzés',
-    emoji: '🕒',
-    channel: 'service_log',
-    approvalChannel: null,
-    approval: false,
-    access: 'staff',
-    fields: [
-      { id: 'service_period', label: 'Szolgálati idő', placeholder: 'Kezdés, befejezés és RP-idő', required: true, style: 'short', maxLength: 160 },
-      { id: 'service_task', label: 'Feladat', placeholder: 'A kijelölt szolgálati feladat', required: true, style: 'short', maxLength: 180 },
-      { id: 'service_activity', label: 'Tevékenység', placeholder: 'A szolgálat alatt végzett munka', required: true, style: 'paragraph', maxLength: 900 },
-      { id: 'service_result', label: 'Eredmény', placeholder: 'Eredmény vagy intézkedés', required: true, style: 'paragraph', maxLength: 900 },
-      { id: 'service_case', label: 'Ügyazonosító / megjegyzés', placeholder: 'BOMO-azonosító vagy rövid megjegyzés', required: false, style: 'short', maxLength: 160 }
-    ]
-  }
+
 ]);
 const CONTENT = Object.freeze({
   announcement: {
@@ -171,16 +155,6 @@ const CONTENT = Object.freeze({
     title: 'BOMO belső kommunikáció',
     description: 'A csatorna a BOMO feladatainak egyeztetésére szolgál. Ügyiratot, bizonyítékot és fedett műveleti részletet a kijelölt privát csatornában ossz meg.',
     fields: [['Kommunikáció', 'Maradj tárgyszerű, jelöld a felelőst és a határidőt. A szerveres RP-n kívüli adatot ne ossz meg.']]
-  },
-  service_log: {
-    title: 'Szolgálati napló sablon',
-    description: 'A szolgálati idő és a BOMO-feladatok szerveres RP-nyilvántartása.',
-    fields: [
-      ['Tag', 'Discord-tag és BOMO-rang'],
-      ['Szolgálat', 'Kezdés • befejezés • RP-idő'],
-      ['Tevékenység', 'Feladat • ügyazonosító • eredmény'],
-      ['Megjegyzés', 'Csak szükséges, szerveres RP-adat']
-    ]
   },
   orders: {
     title: 'Műveleti utasítás sablon',
@@ -716,7 +690,6 @@ function canSubmit(member, typeKey) {
   if ([...(member.roles?.cache?.values?.() || [])].some((role) => isChiefRole(role))) return true;
   const has = (key) => roleNames.includes(normalizeName(ROLE_SPECS.find((spec) => spec.key === key)?.name));
   if (typeKey === 'custom_bomo_investigation') return ['commander', 'deputy', 'lead_ops'].some(has);
-  if (typeKey === 'custom_bomo_service_log') return ['commander', 'deputy', 'lead_ops', 'officer', 'undercover'].some(has);
   if (typeKey === 'custom_bomo_operation' || typeKey === 'custom_bomo_observation') return ['commander', 'deputy', 'lead_ops', 'officer', 'undercover'].some(has);
   if (typeKey === 'custom_bomo_report') return ['commander', 'deputy', 'lead_ops', 'officer', 'undercover'].some(has);
   return isMember(member);
