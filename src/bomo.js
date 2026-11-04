@@ -51,7 +51,6 @@ const VOICE_CHANNELS = Object.freeze([
   { key: 'ops_radio', name: '🔒┃operatív-rádió', audience: 'covert', type: 'voice' }
 ]);
 const ALL_CHANNELS = Object.freeze([...TEXT_CHANNELS, ...VOICE_CHANNELS]);
-const REUSE_EXISTING_CHANNEL_KEYS = new Set();
 const FORM_SPECS = Object.freeze([
   {
     key: 'custom_bomo_operation',
@@ -343,17 +342,10 @@ function plannedResources(guild, recordedCategoryId = null) {
       const existing = matches[0];
       const expected = spec.type === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText;
       if (existing.type !== expected) conflicts.push(spec.name + ': a meglévő csatorna típusa nem egyezik a telepítővel.');
-      else if (existing.parentId !== categoryId) {
-        if (REUSE_EXISTING_CHANNEL_KEYS.has(spec.key)) channelMap.set(spec.key, existing);
-        else conflicts.push(spec.name + ': már létezik a BOMO-kategórián kívül; a meglévő csatornát nem mozgatom és nem módosítom.');
+      else if (!category || existing.parentId !== categoryId) {
+        conflicts.push(spec.name + ': már létezik a BOMO-kategórián kívül; a meglévő csatornát nem mozgatom és nem módosítom.');
       } else channelMap.set(spec.key, existing);
     } else channelMap.set(spec.key, null);
-  }
-  if (category) {
-    const expectedNames = new Set(ALL_CHANNELS.map((item) => normalizeName(item.name)));
-    const unmanaged = [...guild.channels.cache.values()].filter((channel) =>
-      channel.parentId === category.id && !expectedNames.has(normalizeName(channel.name)));
-  
   }
   if (conflicts.length) fail(409, conflicts.join('\n') + '\nSemmit nem módosítottam.');
   return { category, channels: channelMap };
