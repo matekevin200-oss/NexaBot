@@ -37,7 +37,7 @@ const TEXT_CHANNELS = Object.freeze([
   { key: 'orders', name: '📋┃műveleti-utasítások', audience: 'staff', writers: 'leadership', content: 'orders' },
   { key: 'undercover_ops', name: '🕵️┃fedett-műveletek', audience: 'covert', writers: 'covert', content: 'undercover_ops' },
   { key: 'surveillance', name: '👁️┃megfigyelési-jelentések', audience: 'covert', writers: 'covert', content: 'surveillance' },
-  { key: 'investigations', name: '🔎┃bomo-belső-vizsgálatok', audience: 'leadership', writers: 'leadership', content: 'investigations' },
+  { key: 'investigations', name: '🔎┃belső-vizsgálatok', audience: 'leadership', writers: 'leadership', content: 'investigations' },
   { key: 'case_files', name: '📁┃bomo-ügyiratok', audience: 'leadership', writers: 'leadership', content: 'case_files' },
   { key: 'evidence', name: '📸┃bizonyítékok', audience: 'covert', writers: 'covert', content: 'evidence' },
   { key: 'operation_reports', name: '📑┃műveleti-jelentések', audience: 'staff', writers: 'staff', content: 'operation_reports' },
@@ -326,12 +326,12 @@ function permissionOverwrite(guild, botMember, roles, chiefRoles, audience = nul
   return overwrites;
 }
 
-function plannedResources(guild) {
+function plannedResources(guild, recordedCategoryId = null) {
   const categories = [...guild.channels.cache.values()].filter((channel) =>
     channel.type === ChannelType.GuildCategory && normalizeName(channel.name) === normalizeName(CATEGORY_NAME));
   if (categories.length > 1) fail(409, 'Több azonos BOMO-kategóriát találtam. Semmit nem módosítottam.');
   const category = categories[0] || null;
-  if (category) fail(409, 'A BOMO-kategória már létezik; a meglévő kategóriát és csatornáit nem módosítom.');
+  if (category && category.id !== recordedCategoryId) fail(409, 'A BOMO-kategóriát nem a korábbi telepítési kísérlet hozta létre; a meglévő kategóriát és csatornáit nem módosítom.');
   const categoryId = category?.id || null;
   const channelMap = new Map();
   const conflicts = [];
@@ -353,7 +353,7 @@ function plannedResources(guild) {
     const expectedNames = new Set(ALL_CHANNELS.map((item) => normalizeName(item.name)));
     const unmanaged = [...guild.channels.cache.values()].filter((channel) =>
       channel.parentId === category.id && !expectedNames.has(normalizeName(channel.name)));
-    if (unmanaged.length) conflicts.push('A BOMO-kategóriában meglévő, a telepítőhöz nem tartozó csatornákat találtam: ' + unmanaged.map((item) => '#' + item.name).join(', ') + '.');
+  
   }
   if (conflicts.length) fail(409, conflicts.join('\n') + '\nSemmit nem módosítottam.');
   return { category, channels: channelMap };
@@ -403,92 +403,40 @@ async function ensureRoles(guild) {
 }
 
 async function ensureCategory(guild, existing, botMember, roles, chiefRoles) {
+  if (existing) return existing;
   const overwrites = permissionOverwrite(guild, botMember, roles, chiefRoles, ROLE_SPECS.map((role) => roles.get(role.key).id), ROLE_SPECS.map((role) => roles.get(role.key).id));
-  if (!existing) return guild.channels.create({
+  return guild.channels.create({
     name: CATEGORY_NAME,
     type: ChannelType.GuildCategory,
     permissionOverwrites: overwrites,
     reason: 'BOMO Discord rendszer egyszeri telepítése'
   });
-  const known = [...ROLE_SPECS.map((role) => roles.get(role.key).id), ...chiefRoles.map((role) => role.id)];
-  const foreign = inspectForeignOverwrites(existing, known, botMember.id);
-  if (foreign.length) fail(409, 'A meglévő BOMO-kategórián más szerepkörök is láthatóságot kapnak. A biztonság kedvéért nem írtam át a jogosultságokat.');
-  await existing.permissionOverwrites.edit(guild.roles.everyone.id, { ViewChannel: false });
-  for (const spec of ROLE_SPECS) {
-    const roleId = roles.get(spec.key).id;
-    await existing.permissionOverwrites.edit(roleId, { ViewChannel: true });
-  }
-  for (const role of chiefRoles) await existing.permissionOverwrites.edit(role.id, { ViewChannel: true });
-  await existing.permissionOverwrites.edit(botMember.id, { ViewChannel: true, ManageChannels: true, ManageRoles: true, SendMessages: true, EmbedLinks: true, ReadMessageHistory: true, ManageMessages: true });
-  return existing;
 }
 
 async function ensureTextChannel(guild, channel, category, botMember, roles, chiefRoles, spec) {
+  if (channel) return channel;
   const access = buildAccess(roles, chiefRoles, spec);
   const overwrites = permissionOverwrite(guild, botMember, roles, chiefRoles, access.audience, access.writers);
-  let current = channel;
-  if (!current) current = await guild.channels.create({
+  return guild.channels.create({
     name: spec.name,
     type: ChannelType.GuildText,
     parent: category.id,
     permissionOverwrites: overwrites,
     reason: 'BOMO Discord rendszer egyszeri telepítése'
   });
-  else {
-    if (REUSE_EXISTING_CHANNEL_KEYS.has(spec.key) && current.parentId !== category.id) {
-      await current.permissionOverwrites.set(overwrites, 'A meglévő BELV-csatorna BOMO-hozzáférésének biztonságos beállítása');
-      current = await current.setParent(category.id, {
-        lockPermissions: false,
-        reason: 'A meglévő BELV-csatorna újrahasznosítása a BOMO-ban, duplikáció nélkül'
-      });
-      return current;
-    }
-    const known = [...ROLE_SPECS.map((role) => roles.get(role.key).id), ...chiefRoles.map((role) => role.id)];
-    const foreign = inspectForeignOverwrites(current, known, botMember.id);
-    if (foreign.length) fail(409, '#' + current.name + ': más szerepkör láthatja a privát BOMO-csatornát; a beállítást nem módosítottam.');
-    await current.permissionOverwrites.edit(guild.roles.everyone.id, { ViewChannel: false });
-    for (const roleSpec of ROLE_SPECS) {
-      const roleId = roles.get(roleSpec.key).id;
-      const allowed = access.audience.includes(roleId);
-      const canWrite = access.writers.includes(roleId);
-      await current.permissionOverwrites.edit(roleId, allowed
-        ? { ViewChannel: true, ReadMessageHistory: true, SendMessages: canWrite, EmbedLinks: canWrite, AttachFiles: canWrite, AddReactions: canWrite }
-        : { ViewChannel: false, SendMessages: false, AttachFiles: false });
-    }
-    for (const role of chiefRoles) {
-      await current.permissionOverwrites.edit(role.id, { ViewChannel: true, ReadMessageHistory: true, SendMessages: true, EmbedLinks: true, AttachFiles: true, AddReactions: true });
-    }
-    await current.permissionOverwrites.edit(botMember.id, { ViewChannel: true, ReadMessageHistory: true, SendMessages: true, EmbedLinks: true, AttachFiles: true, ManageMessages: true });
-  }
-  return current;
 }
 
 async function ensureVoiceChannel(guild, channel, category, botMember, roles, chiefRoles, spec) {
+  if (channel) return channel;
   const access = buildAccess(roles, chiefRoles, { ...spec, writers: spec.audience });
   const overwrites = permissionOverwrite(guild, botMember, roles, chiefRoles, access.audience, access.writers, true);
-  let current = channel;
-  if (!current) current = await guild.channels.create({
+  return guild.channels.create({
     name: spec.name,
     type: ChannelType.GuildVoice,
     parent: category.id,
     permissionOverwrites: overwrites,
     reason: 'BOMO Discord rendszer egyszeri telepítése'
   });
-  else {
-    const known = [...ROLE_SPECS.map((role) => roles.get(role.key).id), ...chiefRoles.map((role) => role.id)];
-    const foreign = inspectForeignOverwrites(current, known, botMember.id);
-    if (foreign.length) fail(409, '#' + current.name + ': más szerepkör láthatja a privát BOMO-csatornát; a beállítást nem módosítottam.');
-    await current.permissionOverwrites.edit(guild.roles.everyone.id, { ViewChannel: false });
-    for (const roleSpec of ROLE_SPECS) {
-      const roleId = roles.get(roleSpec.key).id;
-      await current.permissionOverwrites.edit(roleId, access.audience.includes(roleId)
-        ? { ViewChannel: true, Connect: true, Speak: true }
-        : { ViewChannel: false, Connect: false, Speak: false });
-    }
-    for (const role of chiefRoles) await current.permissionOverwrites.edit(role.id, { ViewChannel: true, Connect: true, Speak: true });
-    await current.permissionOverwrites.edit(botMember.id, { ViewChannel: true, Connect: true, Speak: true, ManageChannels: true });
-  }
-  return current;
 }
 
 function embedFor(key) {
@@ -592,7 +540,7 @@ async function provision(interaction) {
   locks.add(guild.id);
   try {
     await ensureSchema();
-    const state = await dbQuery('SELECT status,attempt_count FROM nexabot_bomo_installations WHERE guild_id=$1 LIMIT 1', [guild.id]);
+    const state = await dbQuery('SELECT status,attempt_count,category_id FROM nexabot_bomo_installations WHERE guild_id=$1 LIMIT 1', [guild.id]);
     if (state.rows[0]?.status === 'completed') {
       const removed = await removeGuildSetupCommand(guild);
       return { already: true, removed };
@@ -610,7 +558,7 @@ async function provision(interaction) {
     await guild.channels.fetch();
     const foundChiefRoles = [...guild.roles.cache.values()].filter((role) => isChiefRole(role));
     if (!foundChiefRoles.length) fail(409, 'Nem találtam felismerhető BELV Főigazgató rangot. Ellenőrizd a rang nevét vagy a BELV_RANK_ROLE_IDS beállítást; semmit nem telepítettem.');
-    const plan = plannedResources(guild);
+    const plan = plannedResources(guild, state.rows[0]?.category_id || null);
     await dbQuery(
       'UPDATE nexabot_bomo_installations SET category_id=$2,updated_at=NOW() WHERE guild_id=$1 AND status<>\'completed\'',
       [guild.id, plan.category?.id || null]
