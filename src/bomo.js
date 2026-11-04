@@ -34,10 +34,10 @@ const TEXT_CHANNELS = Object.freeze([
   { key: 'rules', name: '📜┃bomo-szabályzat', audience: 'all', writers: 'leadership', content: 'rules' },
   { key: 'roster', name: '👥┃bomo-állomány', audience: 'all', writers: 'leadership', content: 'roster' },
   { key: 'chat', name: '💬┃bomo-beszélgetés', audience: 'all', writers: 'all', content: 'chat' },
-  { key: 'orders', name: '📋┃műveleti-utasítások', audience: 'staff', writers: 'leadership', content: 'orders' },
+  { key: 'orders', name: '📋┃műveleti-utasítások', audience: 'staff', writers: 'leadership' },
   { key: 'undercover_ops', name: '🕵️┃fedett-műveletek', audience: 'covert', writers: 'covert', content: 'undercover_ops' },
   { key: 'surveillance', name: '👁️┃megfigyelési-jelentések', audience: 'covert', writers: 'covert', content: 'surveillance' },
-  { key: 'investigations', name: '🔎┃belső-vizsgálatok', audience: 'leadership', writers: 'leadership', content: 'investigations' },
+  { key: 'investigations', name: '🔎┃bomo-belső-vizsgálatok', audience: 'leadership', writers: 'leadership', content: 'investigations' },
   { key: 'case_files', name: '📁┃bomo-ügyiratok', audience: 'leadership', writers: 'leadership', content: 'case_files' },
   { key: 'evidence', name: '📸┃bizonyítékok', audience: 'covert', writers: 'covert', content: 'evidence' },
   { key: 'operation_reports', name: '📑┃műveleti-jelentések', audience: 'staff', writers: 'staff', content: 'operation_reports' },
@@ -116,6 +116,22 @@ const FORM_SPECS = Object.freeze([
       { id: 'conclusion', label: 'Záró megállapítások', placeholder: 'Tanulságok és további teendők', required: true, style: 'paragraph', maxLength: 800 }
     ]
   },
+  {
+    key: 'custom_bomo_order',
+    title: 'Műveleti utasítás kiadása',
+    emoji: '📋',
+    channel: 'orders',
+    approvalChannel: null,
+    approval: false,
+    access: 'leadership',
+    fields: [
+      { id: 'order_id_purpose', label: 'Azonosító és cél', placeholder: 'BOMO-ügyszám és a feladat célja', required: true, style: 'short', maxLength: 180 },
+      { id: 'responsibles', label: 'Felelősök', placeholder: 'Kijelölt vezető és végrehajtók', required: true, style: 'short', maxLength: 300 },
+      { id: 'time_location', label: 'Idő és helyszín', placeholder: 'RP-időpont és szerveres helyszín', required: true, style: 'short', maxLength: 180 },
+      { id: 'authorized_steps', label: 'Engedélyezett lépések', placeholder: 'A végrehajtandó műveleti lépések', required: true, style: 'paragraph', maxLength: 1000 },
+      { id: 'limits_deadline', label: 'Megszakítási feltétel és jelentési határidő', placeholder: 'Mikor kell leállni, és mikorra készüljön jelentés?', required: true, style: 'paragraph', maxLength: 800 }
+    ]
+  },
 
 ]);
 const CONTENT = Object.freeze({
@@ -154,16 +170,6 @@ const CONTENT = Object.freeze({
     title: 'BOMO belső kommunikáció',
     description: 'A csatorna a BOMO feladatainak egyeztetésére szolgál. Ügyiratot, bizonyítékot és fedett műveleti részletet a kijelölt privát csatornában ossz meg.',
     fields: [['Kommunikáció', 'Maradj tárgyszerű, jelöld a felelőst és a határidőt. A szerveres RP-n kívüli adatot ne ossz meg.']]
-  },
-  orders: {
-    title: 'Műveleti utasítás sablon',
-    description: 'Vezetői feladatkiosztás; művelet csak az előírt jóváhagyások után indulhat.',
-    fields: [
-      ['Azonosító és cél', 'BOMO-ügyazonosító • feladat célja'],
-      ['Felelősök', 'Kijelölt vezető • végrehajtók'],
-      ['Idő és helyszín', 'RP-időpont • szerveres helyszín'],
-      ['Korlátok', 'Engedélyezett lépések • megszakítási feltétel • jelentési határidő']
-    ]
   },
   undercover_ops: {
     title: 'Fedett műveletek',
@@ -491,7 +497,11 @@ async function publishPanels(guild, forms) {
     if (!channel || !channel.isTextBased?.()) fail(404, 'A BOMO-űrlap célcsatornája nem található: ' + type.title);
     const messages = await channel.messages.fetch({ limit: 100 });
     const footer = FORM_PANEL_PREFIX + type.key;
-    const previous = messages.find((message) => message.author.id === guild.client.user.id && message.embeds[0]?.footer?.text === footer);
+    const previousPanel = messages.find((message) => message.author.id === guild.client.user.id && message.embeds[0]?.footer?.text === footer);
+    const previousTemplate = type.key === 'custom_bomo_order'
+      ? messages.find((message) => message.author.id === guild.client.user.id && message.embeds[0]?.footer?.text === MARKER_PREFIX + 'orders')
+      : null;
+    const previous = previousPanel || previousTemplate;
     const panel = documentPanel(type, guild);
     const embed = panel.embeds?.[0];
     if (embed) embed.setFooter({ text: footer });
@@ -570,7 +580,7 @@ async function provision(interaction) {
       const channel = await ensureVoiceChannel(guild, plan.channels.get(spec.key), category, botMember, roles, foundChiefRoles, spec);
       channels.set(spec.key, channel);
     }
-    for (const spec of TEXT_CHANNELS) await publishReference(channels.get(spec.key), spec.content, botMember.id);
+    for (const spec of TEXT_CHANNELS) if (spec.content) await publishReference(channels.get(spec.key), spec.content, botMember.id);
     const forms = await configureForms(guild, channels);
     const panels = await publishPanels(guild, forms);
     await verifyProvision(guild, category, roles, channels, foundChiefRoles, forms, panels, botMember);
@@ -632,7 +642,7 @@ function canSubmit(member, typeKey) {
   const roleNames = member.roles?.cache ? [...member.roles.cache.values()].map((role) => normalizeName(role.name)) : [];
   if ([...(member.roles?.cache?.values?.() || [])].some((role) => isChiefRole(role))) return true;
   const has = (key) => roleNames.includes(normalizeName(ROLE_SPECS.find((spec) => spec.key === key)?.name));
-  if (typeKey === 'custom_bomo_investigation') return ['commander', 'deputy', 'lead_ops'].some(has);
+  if (typeKey === 'custom_bomo_investigation' || typeKey === 'custom_bomo_order') return ['commander', 'deputy', 'lead_ops'].some(has);
   if (typeKey === 'custom_bomo_operation' || typeKey === 'custom_bomo_observation') return ['commander', 'deputy', 'lead_ops', 'officer', 'undercover'].some(has);
   if (typeKey === 'custom_bomo_report') return ['commander', 'deputy', 'lead_ops', 'officer', 'undercover'].some(has);
   return isMember(member);
