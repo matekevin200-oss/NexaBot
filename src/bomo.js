@@ -34,11 +34,10 @@ const TEXT_CHANNELS = Object.freeze([
   { key: 'rules', name: '📜┃bomo-szabályzat', audience: 'all', writers: 'leadership', content: 'rules' },
   { key: 'roster', name: '👥┃bomo-állomány', audience: 'all', writers: 'leadership', content: 'roster' },
   { key: 'chat', name: '💬┃bomo-beszélgetés', audience: 'all', writers: 'all', content: 'chat' },
-  { key: 'service_log', name: '🕒┃szolgálati-napló', audience: 'staff', writers: 'staff', content: 'service_log' },
   { key: 'orders', name: '📋┃műveleti-utasítások', audience: 'staff', writers: 'leadership', content: 'orders' },
   { key: 'undercover_ops', name: '🕵️┃fedett-műveletek', audience: 'covert', writers: 'covert', content: 'undercover_ops' },
   { key: 'surveillance', name: '👁️┃megfigyelési-jelentések', audience: 'covert', writers: 'covert', content: 'surveillance' },
-  { key: 'investigations', name: '🔎┃belső-vizsgálatok', audience: 'leadership', writers: 'leadership', content: 'investigations' },
+  { key: 'investigations', name: '🔎┃bomo-belső-vizsgálatok', audience: 'leadership', writers: 'leadership', content: 'investigations' },
   { key: 'case_files', name: '📁┃bomo-ügyiratok', audience: 'leadership', writers: 'leadership', content: 'case_files' },
   { key: 'evidence', name: '📸┃bizonyítékok', audience: 'covert', writers: 'covert', content: 'evidence' },
   { key: 'operation_reports', name: '📑┃műveleti-jelentések', audience: 'staff', writers: 'staff', content: 'operation_reports' },
@@ -52,7 +51,7 @@ const VOICE_CHANNELS = Object.freeze([
   { key: 'ops_radio', name: '🔒┃operatív-rádió', audience: 'covert', type: 'voice' }
 ]);
 const ALL_CHANNELS = Object.freeze([...TEXT_CHANNELS, ...VOICE_CHANNELS]);
-const REUSE_EXISTING_CHANNEL_KEYS = new Set(['service_log', 'investigations']);
+const REUSE_EXISTING_CHANNEL_KEYS = new Set();
 const FORM_SPECS = Object.freeze([
   {
     key: 'custom_bomo_operation',
@@ -118,22 +117,7 @@ const FORM_SPECS = Object.freeze([
       { id: 'conclusion', label: 'Záró megállapítások', placeholder: 'Tanulságok és további teendők', required: true, style: 'paragraph', maxLength: 800 }
     ]
   },
-  {
-    key: 'custom_bomo_service_log',
-    title: 'Szolgálati naplóbejegyzés',
-    emoji: '🕒',
-    channel: 'service_log',
-    approvalChannel: null,
-    approval: false,
-    access: 'staff',
-    fields: [
-      { id: 'service_period', label: 'Szolgálati idő', placeholder: 'Kezdés, befejezés és RP-idő', required: true, style: 'short', maxLength: 160 },
-      { id: 'service_task', label: 'Feladat', placeholder: 'A kijelölt szolgálati feladat', required: true, style: 'short', maxLength: 180 },
-      { id: 'service_activity', label: 'Tevékenység', placeholder: 'A szolgálat alatt végzett munka', required: true, style: 'paragraph', maxLength: 900 },
-      { id: 'service_result', label: 'Eredmény', placeholder: 'Eredmény vagy intézkedés', required: true, style: 'paragraph', maxLength: 900 },
-      { id: 'service_case', label: 'Ügyazonosító / megjegyzés', placeholder: 'BOMO-azonosító vagy rövid megjegyzés', required: false, style: 'short', maxLength: 160 }
-    ]
-  }
+
 ]);
 const CONTENT = Object.freeze({
   announcement: {
@@ -171,16 +155,6 @@ const CONTENT = Object.freeze({
     title: 'BOMO belső kommunikáció',
     description: 'A csatorna a BOMO feladatainak egyeztetésére szolgál. Ügyiratot, bizonyítékot és fedett műveleti részletet a kijelölt privát csatornában ossz meg.',
     fields: [['Kommunikáció', 'Maradj tárgyszerű, jelöld a felelőst és a határidőt. A szerveres RP-n kívüli adatot ne ossz meg.']]
-  },
-  service_log: {
-    title: 'Szolgálati napló sablon',
-    description: 'A szolgálati idő és a BOMO-feladatok szerveres RP-nyilvántartása.',
-    fields: [
-      ['Tag', 'Discord-tag és BOMO-rang'],
-      ['Szolgálat', 'Kezdés • befejezés • RP-idő'],
-      ['Tevékenység', 'Feladat • ügyazonosító • eredmény'],
-      ['Megjegyzés', 'Csak szükséges, szerveres RP-adat']
-    ]
   },
   orders: {
     title: 'Műveleti utasítás sablon',
@@ -357,6 +331,7 @@ function plannedResources(guild) {
     channel.type === ChannelType.GuildCategory && normalizeName(channel.name) === normalizeName(CATEGORY_NAME));
   if (categories.length > 1) fail(409, 'Több azonos BOMO-kategóriát találtam. Semmit nem módosítottam.');
   const category = categories[0] || null;
+  if (category) fail(409, 'A BOMO-kategória már létezik; a meglévő kategóriát és csatornáit nem módosítom.');
   const categoryId = category?.id || null;
   const channelMap = new Map();
   const conflicts = [];
@@ -532,7 +507,7 @@ async function publishReference(channel, key, botId) {
   const messages = await channel.messages.fetch({ limit: 100 });
   const existing = messages.find((message) => message.author.id === botId && message.embeds[0]?.footer?.text === footer);
   const embed = embedFor(key);
-  if (existing) return existing.edit({ embeds: [embed] });
+  if (existing) return existing;
   return channel.send({ embeds: [embed] });
 }
 
@@ -555,13 +530,15 @@ async function configureForms(guild, channels) {
   const formKeys = new Set(FORM_SPECS.map((form) => form.key));
   const conflicts = customTypes.filter((type) => formKeys.has(type.key) && !String(type.key).startsWith('custom_bomo_'));
   if (conflicts.length) fail(409, 'Egy BOMO-űrlap kulcsa ütközik egy meglévő irattípussal.');
-  const unrelated = customTypes.filter((type) => !formKeys.has(type.key));
-  if (unrelated.length + FORM_SPECS.length > 25) fail(409, 'A NEXA 25 egyedi irattípusos korlátja miatt a BOMO-űrlapok nem férnek el. Meglévő iratot nem töröltem.');
-  const forms = buildForms(channels);
-  await setGuildConfig(guild.id, {
-    ...existing,
-    documents: { ...existing.documents, customTypes: [...unrelated, ...forms] }
-  });
+  const existingKeys = new Set(customTypes.map((type) => type.key));
+  const missingForms = buildForms(channels).filter((form) => !existingKeys.has(form.key));
+  if (customTypes.length + missingForms.length > 25) fail(409, 'A NEXA 25 egyedi irattípusos korlátja miatt a BOMO-űrlapok nem férnek el. Meglévő iratot nem töröltem.');
+  if (missingForms.length) {
+    await setGuildConfig(guild.id, {
+      ...existing,
+      documents: { ...existing.documents, customTypes: [...customTypes, ...missingForms] }
+    });
+  }
   const installed = customDocumentTypes(guild).filter((type) => formKeys.has(type.key));
   if (installed.length !== FORM_SPECS.length) fail(500, 'A BOMO-űrlapok adatbázisba mentése nem ellenőrizhető.');
   return installed;
@@ -578,7 +555,7 @@ async function publishPanels(guild, forms) {
     const panel = documentPanel(type, guild);
     const embed = panel.embeds?.[0];
     if (embed) embed.setFooter({ text: footer });
-    const sent = previous ? await previous.edit(panel) : await channel.send(panel);
+    const sent = previous || await channel.send(panel);
     panelByKey.set(type.key, { channelId: channel.id, messageId: sent.id });
   }
   return panelByKey;
@@ -716,7 +693,6 @@ function canSubmit(member, typeKey) {
   if ([...(member.roles?.cache?.values?.() || [])].some((role) => isChiefRole(role))) return true;
   const has = (key) => roleNames.includes(normalizeName(ROLE_SPECS.find((spec) => spec.key === key)?.name));
   if (typeKey === 'custom_bomo_investigation') return ['commander', 'deputy', 'lead_ops'].some(has);
-  if (typeKey === 'custom_bomo_service_log') return ['commander', 'deputy', 'lead_ops', 'officer', 'undercover'].some(has);
   if (typeKey === 'custom_bomo_operation' || typeKey === 'custom_bomo_observation') return ['commander', 'deputy', 'lead_ops', 'officer', 'undercover'].some(has);
   if (typeKey === 'custom_bomo_report') return ['commander', 'deputy', 'lead_ops', 'officer', 'undercover'].some(has);
   return isMember(member);
