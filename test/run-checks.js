@@ -120,14 +120,14 @@ assert.ok(!/applicationCommands\.create|client\.application\.commands/.test(bomo
 assert.ok(bomo.includes("status === 'completed'") && bomo.includes("SETUP_COMMAND"), 'BOMO setup is persistent and removes its guild command after completion');
 assert.ok(bomo.includes('isPersistentStore()') && bomo.includes('nexabot_bomo_cases'), 'BOMO requires persistent database storage for setup and cases');
 assert.ok(bomo.includes('BOMO-') && bomo.includes('prepareSubmission'), 'BOMO forms assign persistent case numbers');
-assert.ok(bomo.includes("key: 'custom_bomo_service_log'") && bomo.includes("channel: 'service_log'"), 'BOMO service log has a button-based fillable form');
-assert.ok(bomo.includes("typeKey === 'custom_bomo_service_log'"), 'BOMO service log form is role-gated to active staff');
+assert.ok(!/custom_bomo_service_log|service_log/.test(bomo), 'BOMO setup does not add or modify a separate service log channel or form');
+assert.ok(bomo.includes("key: 'custom_bomo_investigation'") && bomo.includes("name: '🔎┃bomo-belső-vizsgálatok'"), 'BOMO investigations use a separate channel and leave the existing BELV channel untouched');
 assert.ok(bomo.includes('function canSubmit') && bomo.includes('function canApprove'), 'BOMO form submission and approval are role-gated server-side');
 assert.ok(bomo.includes('[...(member.roles?.cache?.values?.() || [])].some((role) => isChiefRole(role))'), 'BELV chief role has full BOMO supervision');
 assert.ok(bomoDocs.includes('type.approvalChannelId') && bomoDocs.includes('? (configuredReview?.isTextBased?.() ? configuredReview : null)'), 'BOMO approvals cannot silently fall back to another channel');
 assert.ok(bomo.includes('type: \'voice\''), 'BOMO voice channels are verified as voice channels');
-assert.ok(bomo.includes("new Set(['service_log', 'investigations'])"), 'existing BELV service log and investigations channels are reused without duplicates');
-assert.ok(bomo.indexOf('await current.permissionOverwrites.set(overwrites') < bomo.indexOf('current = await current.setParent(category.id'), 'reused BELV channels are locked down before moving into the private BOMO category');
+assert.ok(bomo.includes('const REUSE_EXISTING_CHANNEL_KEYS = new Set()'), 'BOMO setup does not reuse, move, or reconfigure existing BELV channels');
+assert.ok(bomo.includes('a meglévő csatornát nem mozgatom és nem módosítom'), 'existing channel name collisions stop before changing server resources');
 assert.ok(bomo.includes('szerveren belüli RP-eseményekre'), 'BOMO documents are restricted to in-server RP events');
 assert.ok(bomoDocs.includes("require('./bomo').canSubmit(member, type.key)"), 'BOMO document submissions are checked server-side');
 assert.ok(bomoDocs.includes("require('./bomo').claimCaseDecision"), 'BOMO approvals are persisted and single-decision');
