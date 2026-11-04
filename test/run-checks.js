@@ -126,8 +126,8 @@ assert.ok(bomo.includes('function canSubmit') && bomo.includes('function canAppr
 assert.ok(bomo.includes('[...(member.roles?.cache?.values?.() || [])].some((role) => isChiefRole(role))'), 'BELV chief role has full BOMO supervision');
 assert.ok(bomoDocs.includes('type.approvalChannelId') && bomoDocs.includes('? (configuredReview?.isTextBased?.() ? configuredReview : null)'), 'BOMO approvals cannot silently fall back to another channel');
 assert.ok(bomo.includes('type: \'voice\''), 'BOMO voice channels are verified as voice channels');
-assert.ok(bomo.includes('const REUSE_EXISTING_CHANNEL_KEYS = new Set()'), 'BOMO setup does not reuse, move, or reconfigure existing BELV channels');
-assert.ok(bomo.includes('a meglévő csatornát nem mozgatom és nem módosítom'), 'existing channel name collisions stop before changing server resources');
+assert.ok(bomo.includes('const REUSE_EXISTING_CHANNEL_KEYS = new Set()') && bomo.includes('if (category) fail(409'), 'existing BELV resources are preserved; collisions stop safely');
+assert.ok(bomo.includes('if (existing) return existing;') && bomo.includes('const sent = previous || await channel.send(panel)'), 'existing reference and form messages are left unchanged');
 assert.ok(bomo.includes('szerveren belüli RP-eseményekre'), 'BOMO documents are restricted to in-server RP events');
 assert.ok(bomoDocs.includes("require('./bomo').canSubmit(member, type.key)"), 'BOMO document submissions are checked server-side');
 assert.ok(bomoDocs.includes("require('./bomo').claimCaseDecision"), 'BOMO approvals are persisted and single-decision');
