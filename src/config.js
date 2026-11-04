@@ -508,7 +508,7 @@ function sanitizeConfig(guildId, input = {}) {
           : Math.min(200, Math.max(10, Number.parseInt(field?.maxLength, 10) || 200)),
         style: field?.style === 'paragraph' ? 'paragraph' : 'short'
       })).filter((field) => field.label);
-      if (!/^custom_[a-z0-9_]{4,11}$/.test(key) || !fields.length) return null;
+      if (!/^custom_[a-z0-9_]{4,50}$/.test(key) || !fields.length) return null;
       return {
         key,
         title: String(item?.title || 'Egyedi dokumentum').trim().slice(0, 45) || 'Egyedi dokumentum',
