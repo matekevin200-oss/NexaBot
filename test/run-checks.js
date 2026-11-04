@@ -129,6 +129,7 @@ assert.ok(bomo.includes('[...(member.roles?.cache?.values?.() || [])].some((role
 assert.ok(bomoDocs.includes('type.approvalChannelId') && bomoDocs.includes('? (configuredReview?.isTextBased?.() ? configuredReview : null)'), 'BOMO approvals cannot silently fall back to another channel');
 assert.ok(bomo.includes('type: \'voice\''), 'BOMO voice channels are verified as voice channels');
 assert.ok(bomo.includes('category.id !== recordedCategoryId') && bomo.includes('SELECT status,attempt_count,category_id'), 'BOMO retries resume only their recorded category');
+assert.ok(bomo.includes('!category || existing.parentId !== categoryId'), 'same-name BELV channels outside a known BOMO category are never adopted');
 assert.ok(bomo.includes('if (channel) return channel;') && bomo.includes('if (existing) return existing;') && bomo.includes('const sent = previous || await channel.send(panel)'), 'existing channels, reference messages, and form panels are left unchanged');
 assert.ok(bomo.includes('szerveren belüli RP-eseményekre'), 'BOMO documents are restricted to in-server RP events');
 assert.ok(bomoDocs.includes("require('./bomo').canSubmit(member, type.key)"), 'BOMO document submissions are checked server-side');
