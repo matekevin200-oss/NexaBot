@@ -331,6 +331,7 @@ function plannedResources(guild) {
     channel.type === ChannelType.GuildCategory && normalizeName(channel.name) === normalizeName(CATEGORY_NAME));
   if (categories.length > 1) fail(409, 'Több azonos BOMO-kategóriát találtam. Semmit nem módosítottam.');
   const category = categories[0] || null;
+  if (category) fail(409, 'A BOMO-kategória már létezik; a meglévő kategóriát és csatornáit nem módosítom.');
   const categoryId = category?.id || null;
   const channelMap = new Map();
   const conflicts = [];
@@ -506,7 +507,7 @@ async function publishReference(channel, key, botId) {
   const messages = await channel.messages.fetch({ limit: 100 });
   const existing = messages.find((message) => message.author.id === botId && message.embeds[0]?.footer?.text === footer);
   const embed = embedFor(key);
-  if (existing) return existing.edit({ embeds: [embed] });
+  if (existing) return existing;
   return channel.send({ embeds: [embed] });
 }
 
@@ -529,13 +530,15 @@ async function configureForms(guild, channels) {
   const formKeys = new Set(FORM_SPECS.map((form) => form.key));
   const conflicts = customTypes.filter((type) => formKeys.has(type.key) && !String(type.key).startsWith('custom_bomo_'));
   if (conflicts.length) fail(409, 'Egy BOMO-űrlap kulcsa ütközik egy meglévő irattípussal.');
-  const unrelated = customTypes.filter((type) => !formKeys.has(type.key));
-  if (unrelated.length + FORM_SPECS.length > 25) fail(409, 'A NEXA 25 egyedi irattípusos korlátja miatt a BOMO-űrlapok nem férnek el. Meglévő iratot nem töröltem.');
-  const forms = buildForms(channels);
-  await setGuildConfig(guild.id, {
-    ...existing,
-    documents: { ...existing.documents, customTypes: [...unrelated, ...forms] }
-  });
+  const existingKeys = new Set(customTypes.map((type) => type.key));
+  const missingForms = buildForms(channels).filter((form) => !existingKeys.has(form.key));
+  if (customTypes.length + missingForms.length > 25) fail(409, 'A NEXA 25 egyedi irattípusos korlátja miatt a BOMO-űrlapok nem férnek el. Meglévő iratot nem töröltem.');
+  if (missingForms.length) {
+    await setGuildConfig(guild.id, {
+      ...existing,
+      documents: { ...existing.documents, customTypes: [...customTypes, ...missingForms] }
+    });
+  }
   const installed = customDocumentTypes(guild).filter((type) => formKeys.has(type.key));
   if (installed.length !== FORM_SPECS.length) fail(500, 'A BOMO-űrlapok adatbázisba mentése nem ellenőrizhető.');
   return installed;
@@ -552,7 +555,7 @@ async function publishPanels(guild, forms) {
     const panel = documentPanel(type, guild);
     const embed = panel.embeds?.[0];
     if (embed) embed.setFooter({ text: footer });
-    const sent = previous ? await previous.edit(panel) : await channel.send(panel);
+    const sent = previous || await channel.send(panel);
     panelByKey.set(type.key, { channelId: channel.id, messageId: sent.id });
   }
   return panelByKey;
