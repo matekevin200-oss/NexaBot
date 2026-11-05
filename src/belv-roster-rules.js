@@ -28,7 +28,7 @@ function configuredRankRoleMap(raw) {
 function rankForCode(code, roleId = null, roleName = '') {
   const value = Number(code);
   const definition = RANKS.find((item) => value >= item.min && value <= item.max);
-  return definition ? { ...definition, badge: 'BV-' + String(value).padStart(2,'0'), roleId, roleName, exactBadge: true } : null;
+  return definition ? { ...definition, badge: 'BVI-' + String(value).padStart(2,'0'), roleId, roleName, exactBadge: true } : null;
 }
 function classifyBelvRole(role, roleIdMap = {}) {
   if (!role) return null;
@@ -40,7 +40,7 @@ function classifyBelvRole(role, roleIdMap = {}) {
     if (min < 1 || max > 99 || max < min) return null;
     const definition = RANKS.find((item) => min >= item.min && min <= item.max);
     if (!definition) return null;
-    return { ...definition, min, max, badge: max === min ? 'BV-' + String(min).padStart(2,'0') : null, exactBadge: max === min, roleId: role.id, roleName: role.name || raw, position: Number(role.position || 0) };
+    return { ...definition, min, max, badge: max === min ? 'BVI-' + String(min).padStart(2,'0') : null, exactBadge: max === min, roleId: role.id, roleName: role.name || raw, position: Number(role.position || 0) };
   }
   const definition = [...RANKS].sort((a,b)=>b.key.length-a.key.length).find((item) =>
     name === item.key || name.startsWith(item.key + '-') || name.includes('-' + item.key + '-') || name.includes(item.key + '-bv')
