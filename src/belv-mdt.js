@@ -739,6 +739,22 @@ async function ensureBelvRosterBadgeTable() {
   }
   await belvRosterBadgeSchemaPromise;
 }
+async function fetchBelvRosterMembers(guild) {
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try { return await guild.members.fetch(); }
+    catch (error) {
+      lastError = error;
+      const rateLimited = Number(error?.status) === 429 || /rate.?limit/i.test(String(error?.message || ''));
+      if (!rateLimited || attempt === 2) break;
+      const retryMatch = String(error?.message || '').match(/retry after ([\\d.]+) seconds/i);
+      const retryAfter = Number(error?.retry_after ?? error?.retryAfter ?? error?.rawError?.retry_after ?? retryMatch?.[1]);
+      const delayMs = Math.min(30000, Math.max(6000, Number.isFinite(retryAfter) && retryAfter > 0 ? Math.ceil(retryAfter * 1000) + 250 : 8000));
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  throw Object.assign(new Error('A dinamikus BELV-állomány lekéréséhez a Discord szervertaglista-hozzáférés szükséges. ' + (lastError?.message || '')), { status: 403, cause: lastError });
+}
 async function syncBelvRosterUnlocked(guild, actorId, botUserId) {
   if (guild?.id !== BELV_GUILD_ID) fail(403, 'Az állományi frissítés kizárólag a Belvédelmi Igazgatóság szerverén futtatható.');
   await guild.channels.fetch();
@@ -770,9 +786,7 @@ async function syncBelvRosterUnlocked(guild, actorId, botUserId) {
   const rows = (await query('SELECT user_id,badge,rank_name,nick_rank,group_name,range_min,range_max,role_id FROM nexabot_belv_roster_badges WHERE guild_id=$1', [guild.id])).rows;
   const previousByUser = new Map(rows.map((row) => [String(row.user_id), row]));
   const roleMap = configuredRankRoleMap(process.env.BELV_RANK_ROLE_IDS);
-  const members = await guild.members.fetch().catch((error) => {
-    throw Object.assign(new Error('A dinamikus BELV-állomány lekéréséhez a Discord szervertaglista-hozzáférés szükséges. ' + (error?.message || '')), { status: 403 });
-  });
+  const members = await fetchBelvRosterMembers(guild);
   const ranked = [], rankByUser = new Map(), failed = [], updated = [], unchanged = [], skipped = [], inactive = [];
   for (const member of members.values()) {
     if (member.user?.bot) continue;
