@@ -696,7 +696,8 @@ function normalizedRosterChannel(value) {
 function belvNickname(member, entry, previous = null) {
   const current = String(member.nickname || member.user.globalName || member.user.username || 'Tag').trim();
   const oldBadge = previous ? 'BVI-' + String(previous.badge).padStart(2, '0') : null;
-  const identity = previous ? stripManagedNickname(current, previous.nick_rank, oldBadge) : current;
+  const legacyBadge = previous ? 'BV-' + String(previous.badge).padStart(2, '0') : null;
+  const identity = previous ? stripManagedNickname(stripManagedNickname(current, previous.nick_rank, legacyBadge), previous.nick_rank, oldBadge) : current;
   const suffix = ` | ${entry.nickRank} | ${entry.badge}`;
   const room = Math.max(1, 32 - Array.from(suffix).length);
   return `${Array.from(identity || member.user.username || 'Tag').slice(0, room).join('')}${suffix}`;
@@ -821,8 +822,9 @@ async function syncBelvRosterUnlocked(guild, actorId, botUserId) {
     inactive.push(member.id);
     if (!bot.permissions.has(PermissionFlagsBits.ManageNicknames) || member.id === guild.ownerId || bot.roles.highest.comparePositionTo(member.roles.highest) <= 0) continue;
     const oldBadge = 'BVI-' + String(previous.badge).padStart(2, '0');
+    const legacyBadge = 'BV-' + String(previous.badge).padStart(2, '0');
     const sourceName = member.nickname || member.user.globalName || member.user.username;
-    const cleaned = stripManagedNickname(sourceName, previous.nick_rank, oldBadge);
+    const cleaned = stripManagedNickname(stripManagedNickname(sourceName, previous.nick_rank, legacyBadge), previous.nick_rank, oldBadge);
     if (cleaned === String(sourceName || '').trim()) continue;
     try { await member.setNickname(cleaned.slice(0, 32), 'Belv rang megszűnt; a NEXA által kezelt rangrészt eltávolította'); }
     catch (error) { failed.push({ id: member.id, reason: error?.message || 'A korábbi BELV-névrészt nem sikerült eltávolítani' }); }
