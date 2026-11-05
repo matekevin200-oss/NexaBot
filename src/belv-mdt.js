@@ -13,26 +13,26 @@ const BELV_GUILD_ID = '1517509643734221030';
 const BELV_ROSTER_MARKER = 'NEXA_BELV_ROSTER_V1';
 const BELV_NICKNAME_EXEMPT_USER_IDS = new Set(['1221443482829193270']);
 const BELV_ROSTER = Object.freeze([
-  { id: '1221443482829193270', rank: 'Főigazgató', nickRank: 'Főigazgató', badge: 'BV-01', group: 'Felsővezetés' },
-  { id: '1256537413229084735', rank: 'Főigazgató-Helyettes', nickRank: 'Fő Igazgató-H.', badge: 'BV-02', group: 'Felsővezetés' },
-  { id: '1366460534966452345', rank: 'Igazgató', nickRank: 'Igazgató', badge: 'BV-03', group: 'Felsővezetés' },
-  { id: '1177622372589772871', rank: 'Igazgatóhelyettes', nickRank: 'Igazgató-H.', badge: 'BV-04', group: 'Felsővezetés' },
-  { id: '1411032720770863225', rank: 'Főosztályvezető', nickRank: 'Főoszt. vez.', badge: 'BV-10', group: 'Vezetői állomány' },
-  { id: '1074961156256567386', rank: 'Főosztályvezető', nickRank: 'Főoszt. vez.', badge: 'BV-11', group: 'Vezetői állomány' },
-  { id: '1278116261468835964', rank: 'Műveleti Vezető', nickRank: 'Műveleti vez.', badge: 'BV-15', group: 'Vezetői állomány' },
-  { id: '1479930076459176039', rank: 'Műveleti Vezető', nickRank: 'Műveleti vez.', badge: 'BV-16', group: 'Vezetői állomány' },
-  { id: '1334868399268040706', rank: 'Műveleti Vezető', nickRank: 'Műveleti vez.', badge: 'BV-17', group: 'Vezetői állomány' },
-  { id: '1027203605213749359', rank: 'Ellenőrzési Vezető', nickRank: 'Ellenőrzési V.', badge: 'BV-20', group: 'Vezetői állomány' },
-  { id: '415704440385830922', rank: 'Vezető Tiszt', nickRank: 'Vezető Tiszt', badge: 'BV-35', group: 'Hivatásos állomány' },
-  { id: '1012658793072570529', rank: 'Vezető Tiszt', nickRank: 'Vezető Tiszt', badge: 'BV-36', group: 'Hivatásos állomány' },
-  { id: '1182693366497021995', rank: 'Belvédelmi Tiszt', nickRank: 'Belv. Tiszt', badge: 'BV-40', group: 'Hivatásos állomány' },
-  { id: '1219659632503558237', rank: 'Vezető Ügynök', nickRank: 'Vezető Ügynök', badge: 'BV-50', group: 'Hivatásos állomány' },
-  { id: '1147202198627963010', rank: 'Vezető Ügynök', nickRank: 'Vezető Ügynök', badge: 'BV-51', group: 'Hivatásos állomány' },
-  { id: '1467747923294027790', rank: 'Különleges Ügynök', nickRank: 'Különl. Ügynök', badge: 'BV-60', group: 'Hivatásos állomány' },
-  { id: '1191824346486935563', rank: 'Különleges Ügynök', nickRank: 'Különl. Ügynök', badge: 'BV-61', group: 'Hivatásos állomány' },
-  { id: '1200432042505150602', rank: 'Belvédelmi Ügynök', nickRank: 'Belv. Ügynök', badge: 'BV-70', group: 'Hivatásos állomány' },
-  { id: '1563584488477302874', rank: 'Belvédelmi Ügynök', nickRank: 'Belv. Ügynök', badge: 'BV-71', group: 'Hivatásos állomány' },
-  { id: '1422651451418738731', rank: 'Belvédelmi Jelölt', nickRank: 'Belv. Jelölt', badge: 'BV-90', group: 'Képzési állomány' }
+  { id: '1221443482829193270', rank: 'Főigazgató', nickRank: 'Főigazgató', badge: 'BVI-01', group: 'Felsővezetés' },
+  { id: '1256537413229084735', rank: 'Főigazgató-Helyettes', nickRank: 'Fő Igazgató-H.', badge: 'BVI-02', group: 'Felsővezetés' },
+  { id: '1366460534966452345', rank: 'Igazgató', nickRank: 'Igazgató', badge: 'BVI-03', group: 'Felsővezetés' },
+  { id: '1177622372589772871', rank: 'Igazgatóhelyettes', nickRank: 'Igazgató-H.', badge: 'BVI-04', group: 'Felsővezetés' },
+  { id: '1411032720770863225', rank: 'Főosztályvezető', nickRank: 'Főoszt. vez.', badge: 'BVI-10', group: 'Vezetői állomány' },
+  { id: '1074961156256567386', rank: 'Főosztályvezető', nickRank: 'Főoszt. vez.', badge: 'BVI-11', group: 'Vezetői állomány' },
+  { id: '1278116261468835964', rank: 'Műveleti Vezető', nickRank: 'Műveleti vez.', badge: 'BVI-15', group: 'Vezetői állomány' },
+  { id: '1479930076459176039', rank: 'Műveleti Vezető', nickRank: 'Műveleti vez.', badge: 'BVI-16', group: 'Vezetői állomány' },
+  { id: '1334868399268040706', rank: 'Műveleti Vezető', nickRank: 'Műveleti vez.', badge: 'BVI-17', group: 'Vezetői állomány' },
+  { id: '1027203605213749359', rank: 'Ellenőrzési Vezető', nickRank: 'Ellenőrzési V.', badge: 'BVI-20', group: 'Vezetői állomány' },
+  { id: '415704440385830922', rank: 'Vezető Tiszt', nickRank: 'Vezető Tiszt', badge: 'BVI-35', group: 'Hivatásos állomány' },
+  { id: '1012658793072570529', rank: 'Vezető Tiszt', nickRank: 'Vezető Tiszt', badge: 'BVI-36', group: 'Hivatásos állomány' },
+  { id: '1182693366497021995', rank: 'Belvédelmi Tiszt', nickRank: 'Belv. Tiszt', badge: 'BVI-40', group: 'Hivatásos állomány' },
+  { id: '1219659632503558237', rank: 'Vezető Ügynök', nickRank: 'Vezető Ügynök', badge: 'BVI-50', group: 'Hivatásos állomány' },
+  { id: '1147202198627963010', rank: 'Vezető Ügynök', nickRank: 'Vezető Ügynök', badge: 'BVI-51', group: 'Hivatásos állomány' },
+  { id: '1467747923294027790', rank: 'Különleges Ügynök', nickRank: 'Különl. Ügynök', badge: 'BVI-60', group: 'Hivatásos állomány' },
+  { id: '1191824346486935563', rank: 'Különleges Ügynök', nickRank: 'Különl. Ügynök', badge: 'BVI-61', group: 'Hivatásos állomány' },
+  { id: '1200432042505150602', rank: 'Belvédelmi Ügynök', nickRank: 'Belv. Ügynök', badge: 'BVI-70', group: 'Hivatásos állomány' },
+  { id: '1563584488477302874', rank: 'Belvédelmi Ügynök', nickRank: 'Belv. Ügynök', badge: 'BVI-71', group: 'Hivatásos állomány' },
+  { id: '1422651451418738731', rank: 'Belvédelmi Jelölt', nickRank: 'Belv. Jelölt', badge: 'BVI-90', group: 'Képzési állomány' }
 ]);
 const CODE_MS = 10 * 60 * 1000;
 const SESSION_MS = 6 * 60 * 60 * 1000;
@@ -695,8 +695,9 @@ function normalizedRosterChannel(value) {
 }
 function belvNickname(member, entry, previous = null) {
   const current = String(member.nickname || member.user.globalName || member.user.username || 'Tag').trim();
-  const oldBadge = previous ? 'BV-' + String(previous.badge).padStart(2, '0') : null;
-  const identity = previous ? stripManagedNickname(current, previous.nick_rank, oldBadge) : current;
+  const oldBadge = previous ? 'BVI-' + String(previous.badge).padStart(2, '0') : null;
+  const legacyBadge = previous ? 'BV-' + String(previous.badge).padStart(2, '0') : null;
+  const identity = previous ? stripManagedNickname(stripManagedNickname(current, previous.nick_rank, legacyBadge), previous.nick_rank, oldBadge) : current;
   const suffix = ` | ${entry.nickRank} | ${entry.badge}`;
   const room = Math.max(1, 32 - Array.from(suffix).length);
   return `${Array.from(identity || member.user.username || 'Tag').slice(0, room).join('')}${suffix}`;
@@ -708,7 +709,7 @@ function belvRosterEmbed(roster = BELV_ROSTER) {
   const embed = new EmbedBuilder()
     .setColor(0x1f4968)
     .setTitle('🏛️ BELVÉDELMI IGAZGATÓSÁG')
-    .setDescription('**HIVATALOS JELVÉNYSZÁM- ÉS ÁLLOMÁNYI NYILVÁNTARTÁS**\nA lista csak a hivatalos BELV-rendfokozattal rendelkező tagokat mutatja. Ha valakiről lekerül az összes BELV-rangja, a bejegyzés automatikusan kikerül. Egy állománytaghoz egy aktív BV-azonosító tartozik. A Discord-becenév formátuma: `név | rang | BV-XX`.')
+    .setDescription('**HIVATALOS JELVÉNYSZÁM- ÉS ÁLLOMÁNYI NYILVÁNTARTÁS**\nA lista csak a hivatalos BELV-rendfokozattal rendelkező tagokat mutatja. Ha valakiről lekerül az összes BELV-rangja, a bejegyzés automatikusan kikerül. Egy állománytaghoz egy aktív BVI-azonosító tartozik. A Discord-becenév formátuma: `név | rang | BVI-XX`.')
     .setFooter({ text: BELV_ROSTER_MARKER });
   for (const group of ['Felsővezetés', 'Vezetői állomány', 'Ellenőrzési állomány', 'Hivatásos állomány', 'Képzési állomány']) {
     const members = roster.filter((entry) => entry.group === group);
@@ -719,8 +720,8 @@ function belvRosterEmbed(roster = BELV_ROSTER) {
     });
   }
   embed.addFields({
-    name: 'Hivatalos BV-tartományok',
-    value: 'Főigazgató **BV-01** · Főigazgató-helyettes **BV-02** · Igazgató **BV-03** · Igazgatóhelyettes **BV-04–09**\nFőosztályvezető **BV-10–14** · Műveleti vezető **BV-15–19** · Ellenőrzési vezető **BV-20–24** · Főellenőr **BV-25–34**\nVezető tiszt **BV-35–39** · Belvédelmi tiszt **BV-40–49** · Vezető ügynök **BV-50–59** · Különleges ügynök **BV-60–69** · Belvédelmi ügynök **BV-70–89** · Belvédelmi jelölt **BV-90–99**',
+    name: 'Hivatalos BVI-tartományok',
+    value: 'Főigazgató **BVI-01** · Főigazgató-helyettes **BVI-02** · Igazgató **BVI-03** · Igazgatóhelyettes **BVI-04–09**\nFőosztályvezető **BVI-10–14** · Műveleti vezető **BVI-15–19** · Ellenőrzési vezető **BVI-20–24** · Főellenőr **BVI-25–34**\nVezető tiszt **BVI-35–39** · Belvédelmi tiszt **BVI-40–49** · Vezető ügynök **BVI-50–59** · Különleges ügynök **BVI-60–69** · Belvédelmi ügynök **BVI-70–89** · Belvédelmi jelölt **BVI-90–99**',
     inline: false
   }).addFields({
     name: 'Szabály',
@@ -788,12 +789,12 @@ async function syncBelvRosterUnlocked(guild, actorId, botUserId) {
     if (previous && Number(previous.badge) >= rank.min && Number(previous.badge) <= rank.max && occupied.get(Number(previous.badge)) === String(member.id)) badgeNumber = Number(previous.badge);
     else {
       if (previous && occupied.get(Number(previous.badge)) === String(member.id)) occupied.delete(Number(previous.badge));
-      if (rank.exactBadge && !occupied.has(Number(rank.badge.slice(3))) && Number(rank.badge.slice(3)) >= rank.min && Number(rank.badge.slice(3)) <= rank.max) badgeNumber = Number(rank.badge.slice(3));
+      if (rank.exactBadge && !occupied.has(Number(rank.badge.slice(4))) && Number(rank.badge.slice(4)) >= rank.min && Number(rank.badge.slice(4)) <= rank.max) badgeNumber = Number(rank.badge.slice(4));
       if (badgeNumber == null) for (let candidate = rank.min; candidate <= rank.max; candidate += 1) if (!occupied.has(candidate)) { badgeNumber = candidate; break; }
     }
     if (badgeNumber == null) { failed.push({ id: member.id, reason: 'a jelenlegi rendfokozati tartományban nincs szabad jelvényszám' }); continue; }
     occupied.set(badgeNumber, String(member.id));
-    const badge = 'BV-' + String(badgeNumber).padStart(2, '0');
+    const badge = 'BVI-' + String(badgeNumber).padStart(2, '0');
     const entry = { id: member.id, rank: rank.rank, nickRank: rank.nickRank, badge, group: rank.group };
     activeEntries.push(entry);
     writes.push([guild.id, member.id, badgeNumber, rank.rank, rank.nickRank, rank.group, rank.min, rank.max, rank.roleId]);
@@ -820,9 +821,10 @@ async function syncBelvRosterUnlocked(guild, actorId, botUserId) {
     if (!previous) continue;
     inactive.push(member.id);
     if (!bot.permissions.has(PermissionFlagsBits.ManageNicknames) || member.id === guild.ownerId || bot.roles.highest.comparePositionTo(member.roles.highest) <= 0) continue;
-    const oldBadge = 'BV-' + String(previous.badge).padStart(2, '0');
+    const oldBadge = 'BVI-' + String(previous.badge).padStart(2, '0');
+    const legacyBadge = 'BV-' + String(previous.badge).padStart(2, '0');
     const sourceName = member.nickname || member.user.globalName || member.user.username;
-    const cleaned = stripManagedNickname(sourceName, previous.nick_rank, oldBadge);
+    const cleaned = stripManagedNickname(stripManagedNickname(sourceName, previous.nick_rank, legacyBadge), previous.nick_rank, oldBadge);
     if (cleaned === String(sourceName || '').trim()) continue;
     try { await member.setNickname(cleaned.slice(0, 32), 'Belv rang megszűnt; a NEXA által kezelt rangrészt eltávolította'); }
     catch (error) { failed.push({ id: member.id, reason: error?.message || 'A korábbi BELV-névrészt nem sikerült eltávolítani' }); }
@@ -902,7 +904,7 @@ function buildMdtCommand(guildId = null) {
 function buildBelvRosterCommand() {
   return new SlashCommandBuilder().setName('allomany').setDescription('Belv hivatalos állományi nyilvántartása és jelvényszámai.')
     .setDMPermission(false).setDefaultMemberPermissions(null)
-    .addSubcommand((sub) => sub.setName('frissites').setDescription('BV-jelvényszámok, becenevek és a Belv állományi nyilvántartás frissítése.'));
+    .addSubcommand((sub) => sub.setName('frissites').setDescription('BVI-jelvényszámok, becenevek és a Belv állományi nyilvántartás frissítése.'));
 }
 async function handleBelvRosterCommand(interaction) {
   if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
