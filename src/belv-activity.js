@@ -289,7 +289,7 @@ async function setup(interaction) {
   const ids = Object.fromEntries(Object.entries(channels).map(([key, channel]) => [key, channel.id]));
   await query('INSERT INTO nexabot_belv_activity_config(guild_id,category_id,channels) VALUES($1,$2,$3::jsonb) ON CONFLICT(guild_id) DO UPDATE SET category_id=EXCLUDED.category_id,channels=EXCLUDED.channels,updated_at=NOW()', [guild.id, category.id, JSON.stringify(ids)]);
   const me = botMember.id;
-  await upsertPanel(channels.service, me, 'service', '⏱️ BELV • Szolgálati idő', 'A szolgálat kizárólag RP-tevékenység idejére indítható. Egy taghoz egyszerre egy aktív szolgálat tartozhat.', [
+  await upsertPanel(channels.service, me, 'service', '⏱️ BELV • Szolgálati idő', 'A szolgálat kizárólag RP-tevékenység idejére indítható. Egy taghoz egyszerre egy aktív szolgálat tartozhat. Az itt írt BELV-aktivitási üzenetek bekerülnek a heti nyilvántartásba.', [
     new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('belv_activity:start').setLabel('🟢 Szolgálat megkezdése').setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId('belv_activity:stop').setLabel('🔴 Szolgálat befejezése').setStyle(ButtonStyle.Danger),
@@ -309,7 +309,7 @@ async function getRosterIds(guild, weekStart) {
   const roster = await query('SELECT user_id FROM nexabot_belv_roster_badges WHERE guild_id=$1 AND active=TRUE', [guild.id]).catch(() => null);
   for (const row of roster?.rows || []) ids.add(String(row.user_id));
   const rows = await query(
-    'SELECT user_id FROM nexabot_belv_activity_shifts WHERE guild_id=$1 AND started_at < $2 AND COALESCE(ended_at,NOW()) >= $3 UNION SELECT user_id FROM nexabot_belv_activity_reports WHERE guild_id=$1 AND week_start=$4 UNION SELECT user_id FROM nexabot_belv_activity_exemptions WHERE guild_id=$1 AND starts_on <= $5::date AND ends_on >= $6::date UNION SELECT user_id FROM nexabot_belv_activity_adjustments WHERE guild_id=$1 AND week_start=$4',
+    'SELECT user_id FROM nexabot_belv_activity_shifts WHERE guild_id=$1 AND started_at < $2 AND COALESCE(ended_at,NOW()) >= $3 UNION SELECT user_id FROM nexabot_belv_activity_reports WHERE guild_id=$1 AND week_start=$4 UNION SELECT user_id FROM nexabot_belv_activity_exemptions WHERE guild_id=$1 AND starts_on <= $5::date AND ends_on >= $6::date UNION SELECT user_id FROM nexabot_belv_activity_adjustments WHERE guild_id=$1 AND week_start=$4 UNION SELECT user_id FROM nexabot_belv_activity_messages WHERE guild_id=$1 AND week_start=$4',
     [guild.id, localMidnightUtc(addDays(weekStart, 7)), localMidnightUtc(weekStart), weekStart, addDays(weekStart, 6), weekStart]
   );
   for (const row of rows.rows) ids.add(String(row.user_id));
@@ -344,6 +344,8 @@ async function memberReport(guild, userId, weekStart) {
     '\n⏱️ Szolgálat: ' + duration(stats.serviceSeconds) +
     '\n📋 Jóváhagyott ellenőrzések/feladatok: ' + stats.taskCount + ' / ' + stats.requirements.task_count +
     '\n📝 Jóváhagyott heti jelentés: ' + (stats.reportCount ? '✅ igen' : stats.reportStatus === 'pending' ? '⏳ elbírálás alatt' : stats.reportStatus === 'changes_requested' ? '🔄 hiánypótlás' : stats.reportStatus === 'rejected' ? '❌ elutasítva' : '— nincs') +
+    '\n💬 Rögzített aktivitási üzenetek: ' + stats.messageCount +
+    (stats.latestActivity ? '\nLegutóbbi rögzített szöveg: „' + stats.latestActivity.replace(/\\s+/g, ' ').slice(0, 300) + '”' : '') +
     '\n' + statusLine(stats);
 }
 async function summaryEmbeds(guild, weekStart, kind) {
@@ -425,13 +427,16 @@ async function runScheduled(client) {
   if (local.weekday === 'Sun' && Number(local.hour) >= 20) await publishSnapshot(guild, currentStart, 'preview');
   if (local.weekday === 'Mon') {
     const previousStart = addDays(currentStart, -7);
-    const unsummarized = (await query('SELECT DISTINCT s.week_start::text AS week_start FROM (SELECT week_start FROM nexabot_belv_activity_reports WHERE guild_id=$1 UNION SELECT date_trunc(\'week\',started_at AT TIME ZONE \'Europe/Budapest\')::date AS week_start FROM nexabot_belv_activity_shifts WHERE guild_id=$1 UNION SELECT week_start FROM nexabot_belv_activity_adjustments WHERE guild_id=$1 UNION SELECT $2::date AS week_start) s LEFT JOIN nexabot_belv_activity_summaries a ON a.guild_id=$1 AND a.week_start=s.week_start AND a.kind=\'final\' AND a.message_id IS NOT NULL WHERE s.week_start < $2::date ORDER BY s.week_start LIMIT 10', [guild.id, currentStart])).rows;
+    const unsummarized = (await query('SELECT DISTINCT s.week_start::text AS week_start FROM (SELECT week_start FROM nexabot_belv_activity_reports WHERE guild_id=$1 UNION SELECT date_trunc(\'week\',started_at AT TIME ZONE \'Europe/Budapest\')::date AS week_start FROM nexabot_belv_activity_shifts WHERE guild_id=$1 UNION SELECT week_start FROM nexabot_belv_activity_adjustments WHERE guild_id=$1 UNION SELECT week_start FROM nexabot_belv_activity_messages WHERE guild_id=$1 UNION SELECT $2::date AS week_start) s LEFT JOIN nexabot_belv_activity_summaries a ON a.guild_id=$1 AND a.week_start=s.week_start AND a.kind=\'final\' AND a.message_id IS NOT NULL WHERE s.week_start < $2::date ORDER BY s.week_start LIMIT 10', [guild.id, currentStart])).rows;
     const candidates = new Set([previousStart, ...unsummarized.map((row) => String(row.week_start))]);
     for (const weekStart of [...candidates].sort()) await publishSnapshot(guild, weekStart, 'final');
   }
 }
-async function trackActivityMessage(message) {
+async function trackActivityMessage(input) {
+  let message = input;
+  if (message?.partial) message = await message.fetch().catch(() => null);
   if (!message || message.guildId !== BELV_GUILD_ID || message.author?.bot) return false;
+  await ensureSchema();
   const config = await getConfig(message.guildId);
   const channelId = String(message.channelId || message.channel?.id || '');
   if (!config || ![config.channels?.service, config.channels?.reports].some((id) => String(id || '') === channelId)) return false;
@@ -439,7 +444,10 @@ async function trackActivityMessage(message) {
   if (!(await isRosterMember(member))) return false;
   const attachmentUrls = [...(message.attachments?.values?.() || [])].map((attachment) => attachment.url).filter(Boolean);
   const body = [String(message.content || '').trim(), ...attachmentUrls].filter(Boolean).join('\n').slice(0, 2000);
-  if (!body) return false;
+  if (!body) {
+    await query('DELETE FROM nexabot_belv_activity_messages WHERE guild_id=$1 AND message_id=$2', [BELV_GUILD_ID, String(message.id)]);
+    return false;
+  }
   const createdAt = new Date(message.createdTimestamp || Date.now());
   await query(
     'INSERT INTO nexabot_belv_activity_messages(guild_id,message_id,user_id,channel_id,week_start,content,created_at) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(guild_id,message_id) DO UPDATE SET channel_id=EXCLUDED.channel_id,week_start=EXCLUDED.week_start,content=EXCLUDED.content,updated_at=NOW()',
