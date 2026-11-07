@@ -142,4 +142,22 @@ assert.ok(bomoMdt.includes("require('./bomo').syncSetupCommand(guild)"), 'BOMO c
 assert.ok(read('src/interactions.js').includes("commandName === 'bomo-setup'"), 'BOMO setup interactions are routed');
 assert.ok(!read('src/bomo.js').includes('web-'), 'BOMO setup does not add a website route');
 
+const activity = read('src/belv-activity.js');
+assert.ok(order.includes('src/belv-activity.js'), 'BELV weekly activity module is included in the runtime bundle');
+assert.ok(activity.includes("const BELV_GUILD_ID = '1517509643734221030'"), 'weekly activity is pinned to the BELV guild');
+assert.ok(activity.includes("const TIMEZONE = 'Europe/Budapest'"), 'weekly activity uses the Budapest timezone');
+assert.ok(activity.includes('CREATE UNIQUE INDEX IF NOT EXISTS nexabot_belv_activity_one_open_shift'), 'only one active service shift per BELV member is allowed');
+assert.ok(activity.includes("status=\\'approved\\'") && activity.includes('inspection_count') && activity.includes('SUM(GREATEST(inspection_count,CASE WHEN BTRIM(tasks)'), 'only approved weekly reports and tasks count toward activity');
+assert.ok(activity.includes("recordAudit('belv_activity_correction'") && activity.includes('aktivitas-korrekcio'), 'leader corrections and activity changes are audited');
+assert.ok(activity.includes('weekly') && activity.includes('leadership') && activity.includes('reports') && activity.includes('service'), 'all activity features use the separate BELV activity channels');
+assert.ok(activity.includes("local.weekday === 'Sun' && Number(local.hour) >= 20") && activity.includes('Europe/Budapest') && activity.includes('publishSnapshot'), 'weekly preview and summary scheduler are installed');
+assert.ok(read('src/interactions.js').includes("startsWith('aktivitas-')") && read('src/interactions.js').includes("belv_activity:"), 'activity commands, buttons, and forms are routed');
+assert.ok(read('src/index.js').includes("require('./belv-activity').startJobs(readyClient)"), 'activity scheduler starts with the bot');
+assert.ok(read('src/belv-mdt.js').includes("require('./belv-activity').syncGuildCommands(guild)"), 'activity commands sync only through BELV guild setup');
+const activityModule = require('../src/belv-activity.js');
+assert.equal(activityModule.weekStartFor(new Date('2026-11-08T22:00:00Z')), '2026-11-02', 'Sunday evening in Budapest remains in the current week');
+assert.equal(activityModule.weekStartFor(new Date('2026-11-08T23:30:00Z')), '2026-11-09', 'Monday after Budapest midnight starts the next week');
+assert.equal(activityModule.weekStartFor(new Date('2026-11-04T12:00:00Z'), '2026-11-01'), '2026-10-26', 'requested weekly periods normalize to Monday');
+assert.ok(!activity.includes('dashboard') && !activity.includes('website') && !activity.includes('/api/'), 'BELV weekly activity does not add website endpoints');
+
 console.log('NEXA checks passed: ' + order.length + ' source modules, reproducible bundle, BELV permissions, mentions, shifts, and economy invariants.');

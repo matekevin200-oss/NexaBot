@@ -10,6 +10,7 @@ src/workflow-ui.js
 src/workflow-options.js
 src/belv-oral-exam.js
 src/belv-mdt.js
+src/belv-activity.js
 src/ticket-operations.js
 src/automod-policy.js
 src/platform-update.js

@@ -202,6 +202,7 @@ client.once(Events.ClientReady, async (readyClient) => {
     await retireLegacyCommands(readyClient);
     await syncMdtGuildCommands(readyClient);
     require('./belv-mdt').startBelvRosterMonitor(readyClient);
+    require('./belv-activity').startJobs(readyClient);
     for(const faction of FACTIONS){
       const guild=readyClient.guilds.cache.get(faction.guildId);if(!guild)continue;
       try{const settings=await getMdtSettings(faction.guildId);if(settings.enabled)await syncMdtDiscord(guild,getBotOwnerId());}

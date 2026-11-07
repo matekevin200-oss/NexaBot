@@ -282,6 +282,7 @@ async function handleCommand(interaction) {
   if (interaction.commandName === 'allomany') return require('./belv-mdt').handleBelvRosterCommand(interaction);
   if (interaction.commandName === 'belv-rendszer') return require('./belv-discipline').handleCommand(interaction);
   if (interaction.commandName === 'bomo-setup') return require('./bomo').handleCommand(interaction);
+  if (interaction.commandName.startsWith('aktivitas-')) return require('./belv-activity').handleCommand(interaction);
   if (interaction.commandName === 'ticket') return handleTicketCommand(interaction);
   if (interaction.commandName === 'feladat') return require('./staff-workflow').handleCommand(interaction);
   if (interaction.commandName === 'cia') {
@@ -1179,6 +1180,7 @@ async function handleInteraction(interaction) {
     if(interaction.isButton()&&['platform_mod_pause','platform_mod_resume'].includes(interaction.customId))return require('./platform-moderation').panel(interaction);
     if (interaction.isButton() && String(interaction.customId || '').startsWith('support_moderation_')) return await handleSupportModerationButton(interaction);
     if ((interaction.isButton() || interaction.isModalSubmit()) && String(interaction.customId || '').startsWith('websupport_')) return await handleDiscordSupportInteraction(interaction);
+    if (interaction.isButton() && String(interaction.customId || '').startsWith('belv_activity:')) return await require('./belv-activity').handleButton(interaction);
     if (interaction.isButton() && String(interaction.customId || '').startsWith('belv_oral:')) return await require('./belv-oral-exam').handleButton(interaction);
     if (interaction.isButton() && String(interaction.customId || '').startsWith('nexa_task:')) return await require('./staff-workflow').handleButton(interaction);
     if (interaction.isUserSelectMenu() && String(interaction.customId || '').startsWith('belv_oral:')) return await require('./belv-oral-exam').handleUserSelect(interaction);
@@ -1189,6 +1191,7 @@ async function handleInteraction(interaction) {
     if (interaction.isUserSelectMenu() || interaction.isRoleSelectMenu() || interaction.isStringSelectMenu()) {
       return await handleSelectMenu(interaction);
     }
+    if (interaction.isModalSubmit() && String(interaction.customId || '').startsWith('belv_activity:')) return await require('./belv-activity').handleModal(interaction);
     if (interaction.isModalSubmit() && String(interaction.customId || '').startsWith('belv_oral_score:')) return await require('./belv-oral-exam').handleModal(interaction);
     if (interaction.isModalSubmit() && String(interaction.customId || '').startsWith('mdt_review:')) return await handleMdtReviewModal(interaction);
     if (interaction.isModalSubmit()) return await handleModal(interaction);
