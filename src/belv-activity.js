@@ -193,6 +193,7 @@ async function resolvePlan(guild, botMember) {
   const categories = [...guild.channels.cache.values()].filter((channel) => channel.type === ChannelType.GuildCategory && normalize(channel.name) === normalize(CATEGORY_NAME));
   if (categories.length > 1) fail(409, 'Több BELV aktivitási kategória van; semmit nem módosítottam.');
   const category = categories[0] || null;
+  if (category && category.permissionsFor(guild.roles.everyone)?.has(PermissionFlagsBits.ViewChannel)) fail(403, 'A BELV aktivitási kategória jelenleg látható @everyone számára. Biztonságból nem módosítottam.');
   const channelMap = {};
   const conflicts = [];
   for (const spec of CHANNELS) {
@@ -235,7 +236,8 @@ async function upsertPanel(channel, botId, key, title, description, rows) {
   const embed = new EmbedBuilder().setColor(0x2e8b57).setTitle(title).setDescription(description).setFooter({ text: footer });
   const messages = await channel.messages.fetch({ limit: 50 });
   const previous = messages.find((message) => message.author?.id === botId && message.embeds[0]?.footer?.text === footer);
-  const payload = { embeds: [embed], components: rows };
+  const payload = { embeds: [embed] };
+  if (rows?.length) payload.components = rows;
   if (previous) return previous.edit(payload);
   return channel.send(payload);
 }
@@ -401,7 +403,7 @@ async function runScheduled(client) {
   if (local.weekday === 'Sun' && Number(local.hour) >= 20) await publishSnapshot(guild, currentStart, 'preview');
   if (local.weekday === 'Mon') {
     const previousStart = addDays(currentStart, -7);
-    const unsummarized = (await query('SELECT DISTINCT s.week_start::text AS week_start FROM (SELECT week_start FROM nexabot_belv_activity_reports WHERE guild_id=$1 UNION SELECT $2::date AS week_start) s LEFT JOIN nexabot_belv_activity_summaries a ON a.guild_id=$1 AND a.week_start=s.week_start AND a.kind=\'final\' AND a.message_id IS NOT NULL WHERE s.week_start < $2::date ORDER BY s.week_start LIMIT 10', [guild.id, currentStart])).rows;
+    const unsummarized = (await query('SELECT DISTINCT s.week_start::text AS week_start FROM (SELECT week_start FROM nexabot_belv_activity_reports WHERE guild_id=$1 UNION SELECT date_trunc(\'week\',started_at AT TIME ZONE \'Europe/Budapest\')::date AS week_start FROM nexabot_belv_activity_shifts WHERE guild_id=$1 UNION SELECT week_start FROM nexabot_belv_activity_adjustments WHERE guild_id=$1 UNION SELECT $2::date AS week_start) s LEFT JOIN nexabot_belv_activity_summaries a ON a.guild_id=$1 AND a.week_start=s.week_start AND a.kind=\'final\' AND a.message_id IS NOT NULL WHERE s.week_start < $2::date ORDER BY s.week_start LIMIT 10', [guild.id, currentStart])).rows;
     const candidates = new Set([previousStart, ...unsummarized.map((row) => String(row.week_start))]);
     for (const weekStart of [...candidates].sort()) await publishSnapshot(guild, weekStart, 'final');
   }
