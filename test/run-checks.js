@@ -154,6 +154,13 @@ assert.ok(activity.includes("local.weekday === 'Sun' && Number(local.hour) >= 20
 assert.ok(read('src/interactions.js').includes("startsWith('aktivitas-')") && read('src/interactions.js').includes("belv_activity:"), 'activity commands, buttons, and forms are routed');
 assert.ok(read('src/index.js').includes("require('./belv-activity').startJobs(readyClient)"), 'activity scheduler starts with the bot');
 assert.ok(read('src/belv-mdt.js').includes("require('./belv-activity').syncGuildCommands(guild)"), 'activity commands sync only through BELV guild setup');
+assert.ok(activity.includes('nexabot_belv_activity_messages'), 'BELV activity messages are stored persistently');
+assert.ok(activity.includes("client.on('messageCreate'") && activity.includes("client.on('messageUpdate'") && activity.includes("client.on('messageDelete'"), 'message capture handles new, edited, and deleted activity posts');
+assert.ok(activity.includes('[config.channels?.service, config.channels?.reports]'), 'message capture is limited to the dedicated activity channels');
+assert.ok(activity.includes('message.guildId !== BELV_GUILD_ID') && activity.includes('message.author?.bot'), 'message capture excludes other guilds and bots');
+assert.ok(activity.includes('latest_activity') && activity.includes('messageCount'), 'weekly summaries include tracked activity and recent text');
+assert.ok(activity.includes("['service', 'reports'].includes(spec.key)") && activity.includes('SendMessages: true'), 'BELV activity channels allow roster members to submit tracked messages');
+assert.ok(activity.includes('DELETE FROM nexabot_belv_activity_messages'), 'deleted or cleared messages are removed from the weekly record');
 const activityModule = require('../src/belv-activity.js');
 assert.equal(activityModule.weekStartFor(new Date('2026-11-08T22:00:00Z')), '2026-11-02', 'Sunday evening in Budapest remains in the current week');
 assert.equal(activityModule.weekStartFor(new Date('2026-11-08T23:30:00Z')), '2026-11-09', 'Monday after Budapest midnight starts the next week');
