@@ -42,7 +42,9 @@ async function ensureSchema() {
         'CREATE TABLE IF NOT EXISTS nexabot_belv_activity_shifts (id BIGSERIAL PRIMARY KEY, guild_id TEXT NOT NULL, user_id TEXT NOT NULL, started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), ended_at TIMESTAMPTZ, elapsed_seconds INTEGER, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())',
         'CREATE UNIQUE INDEX IF NOT EXISTS nexabot_belv_activity_one_open_shift ON nexabot_belv_activity_shifts(guild_id,user_id) WHERE ended_at IS NULL',
         'CREATE INDEX IF NOT EXISTS nexabot_belv_activity_shifts_week ON nexabot_belv_activity_shifts(guild_id,started_at)',
-        'CREATE TABLE IF NOT EXISTS nexabot_belv_activity_reports (id BIGSERIAL PRIMARY KEY, guild_id TEXT NOT NULL, user_id TEXT NOT NULL, week_start DATE NOT NULL, stated_period TEXT NOT NULL, tasks TEXT NOT NULL, inspection_count INTEGER NOT NULL DEFAULT 0, evidence TEXT NOT NULL DEFAULT \'\', notes TEXT NOT NULL DEFAULT \'\', status TEXT NOT NULL DEFAULT \'pending\', review_reason TEXT, reviewed_by TEXT, reviewed_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(guild_id,user_id,week_start))',
+        'CREATE TABLE IF NOT EXISTS nexabot_belv_activity_reports (id BIGSERIAL PRIMARY KEY, guild_id TEXT NOT NULL, user_id TEXT NOT NULL, week_start DATE NOT NULL, stated_period TEXT NOT NULL, tasks TEXT NOT NULL, inspection_count INTEGER NOT NULL DEFAULT 0, evidence TEXT NOT NULL DEFAULT \'\', notes TEXT NOT NULL DEFAULT \'\', status TEXT NOT NULL DEFAULT \'pending\', review_reason TEXT, reviewed_by TEXT, reviewed_at TIMESTAMPTZ, report_message_id TEXT, report_channel_id TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(guild_id,user_id,week_start))',
+        'ALTER TABLE nexabot_belv_activity_reports ADD COLUMN IF NOT EXISTS report_message_id TEXT',
+        'ALTER TABLE nexabot_belv_activity_reports ADD COLUMN IF NOT EXISTS report_channel_id TEXT',
         'CREATE INDEX IF NOT EXISTS nexabot_belv_activity_reports_week ON nexabot_belv_activity_reports(guild_id,week_start,status)',
         'CREATE TABLE IF NOT EXISTS nexabot_belv_activity_exemptions (id BIGSERIAL PRIMARY KEY, guild_id TEXT NOT NULL, user_id TEXT NOT NULL, starts_on DATE NOT NULL, ends_on DATE NOT NULL, reason TEXT NOT NULL, approved_by TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), CHECK(ends_on >= starts_on))',
         'CREATE INDEX IF NOT EXISTS nexabot_belv_activity_exemptions_week ON nexabot_belv_activity_exemptions(guild_id,user_id,starts_on,ends_on)',
@@ -86,7 +88,8 @@ function weekStartFor(date = new Date(), requested = null) {
   if (requested && !dateOnly(requested)) fail(400, 'A hét kezdete YYYY-MM-DD formátumú dátum legyen.');
   return mondayOf(selected);
 }
-function dateLabel(iso) { return String(iso).replace(/-/g, '.') + '.'; }
+function dateLabel(iso) { return String(iso).slice(0, 10).replace(/-/g, '.') + '.'; }
+function databaseDate(value) { return value instanceof Date ? value.toISOString().slice(0, 10) : String(value || '').slice(0, 10); }
 function localMidnightUtc(iso) {
   const [year, month, day] = String(iso).split('-').map(Number);
   const target = Date.UTC(year, month - 1, day, 0, 0, 0);
@@ -110,7 +113,7 @@ function isLeader(member) {
 function hasRank(member) { return Boolean(rankForMember(member, ROLE_MAP())); }
 async function isRosterMember(member) {
   if (!member || member.user?.bot) return false;
-  if (hasRank(member) || isLeader(member)) return true;
+  if (hasRank(member)) return true;
   const result = await query('SELECT 1 FROM nexabot_belv_roster_badges WHERE guild_id=$1 AND user_id=$2 AND active=TRUE LIMIT 1', [BELV_GUILD_ID, member.id]).catch(() => null);
   return Boolean(result?.rowCount);
 }
@@ -461,14 +464,14 @@ async function submitReport(interaction) {
   const notes = interaction.fields.getTextInputValue('notes').trim();
   if (!/^\d{1,3}$/.test(countText) || Number(countText) > 100) fail(400, 'Az ellenőrzések száma 0–100 közötti egész szám legyen.');
   const weekStart = weekStartFor();
+  const channel = await getChannel(interaction.guild, 'leadership');
+  if (!channel) fail(503, 'Az aktivitásvezetőségi csatorna hiányzik; a jelentést nem tudom elbírálásra küldeni.');
   const saved = await query(
     'INSERT INTO nexabot_belv_activity_reports(guild_id,user_id,week_start,stated_period,tasks,inspection_count,evidence,notes,status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,\'pending\') ON CONFLICT(guild_id,user_id,week_start) DO UPDATE SET stated_period=EXCLUDED.stated_period,tasks=EXCLUDED.tasks,inspection_count=EXCLUDED.inspection_count,evidence=EXCLUDED.evidence,notes=EXCLUDED.notes,status=\'pending\',review_reason=NULL,reviewed_by=NULL,reviewed_at=NULL,updated_at=NOW() WHERE nexabot_belv_activity_reports.status IN (\'changes_requested\',\'rejected\') RETURNING id',
     [BELV_GUILD_ID, member.id, weekStart, period, tasks, Number(countText), evidence, notes]
   );
   if (!saved.rowCount) fail(409, 'Erre a hétre már van függő vagy jóváhagyott jelentésed.');
   const id = saved.rows[0].id;
-  const channel = await getChannel(interaction.guild, 'leadership');
-  if (!channel) fail(503, 'Az aktivitásvezetőségi csatorna hiányzik; jelentést nem tudtam elbírálásra továbbítani.');
   const embed = new EmbedBuilder().setColor(0x2e8b57).setTitle('📝 BELV heti aktivitási jelentés #' + id)
     .setDescription('**Beküldő:** <@' + member.id + '>\n**Hét:** ' + dateLabel(weekStart) + ' – ' + dateLabel(addDays(weekStart, 6)))
     .addFields(
@@ -500,7 +503,7 @@ async function decideReport(interaction, reportId, status, reason = null) {
       await message.edit({ embeds: [updated], components: [] });
     }
   }
-  await refreshBoard(interaction.guild, String(report.week_start).slice(0, 10));
+  await refreshBoard(interaction.guild, databaseDate(report.week_start));
   return status === 'approved' ? '✅ A jelentést jóváhagytad; az ellenőrzések beleszámítanak a hétbe.' :
     status === 'rejected' ? '❌ A jelentést elutasítottad.' : '🔄 Hiánypótlást kértél.';
 }
@@ -579,14 +582,18 @@ async function handleCommand(interaction) {
 async function handleButton(interaction) {
   const id = String(interaction.customId || '');
   if (!id.startsWith('belv_activity:')) return false;
+  const action = id.split(':');
   try {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     await requireGuild(interaction);
-    const action = id.split(':');
     if (action[1] === 'report') {
       await requireRoster(interaction);
       return interaction.showModal(reportModal());
     }
+    if (action[1] === 'reject' || action[1] === 'changes') {
+      await requireLeader(interaction);
+      return interaction.showModal(decisionModal(action[2], action[1] === 'reject' ? 'rejected' : 'changes_requested'));
+    }
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     if (action[1] === 'start') return interaction.editReply(await startShift(interaction));
     if (action[1] === 'stop') return interaction.editReply(await stopShift(interaction));
     if (action[1] === 'stats') {
@@ -597,10 +604,6 @@ async function handleButton(interaction) {
       return interaction.editReply({ embeds: [embed] });
     }
     if (action[1] === 'approve') return interaction.editReply(await decideReport(interaction, action[2], 'approved'));
-    if (action[1] === 'reject' || action[1] === 'changes') {
-      await requireLeader(interaction);
-      return interaction.showModal(decisionModal(action[2], action[1] === 'reject' ? 'rejected' : 'changes_requested'));
-    }
     return interaction.editReply('❌ Ismeretlen BELV aktivitási gomb.');
   } catch (error) {
     if (!error.status) await recordError(error, { command: 'belv_activity_button', guildId: interaction.guildId, userId: interaction.user?.id }).catch(() => null);
