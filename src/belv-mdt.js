@@ -942,6 +942,10 @@ async function syncMdtGuildCommand(guild) {
     try { await require('./bomo').syncSetupCommand(guild); }
     catch (error) { await require('./telemetry').recordError(error, { module: 'bomo_setup_sync', guildId: guild.id }).catch(() => null); }
   }
+  if (guild.id === BELV_GUILD_ID) {
+    try { await require('./belv-activity').syncGuildCommands(guild); }
+    catch (error) { await require('./telemetry').recordError(error, { module: 'belv_activity_command_sync', guildId: guild.id }).catch(() => null); }
+  }
   const allowed = await belvGuildId();
   const commands = await guild.commands.fetch(), existing = [...commands.values()].find((command) => command.name === 'mdt');
   const rosterCommand = [...commands.values()].find((command) => command.name === 'allomany');
