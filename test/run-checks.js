@@ -147,10 +147,10 @@ assert.ok(order.includes('src/belv-activity.js'), 'BELV weekly activity module i
 assert.ok(activity.includes("const BELV_GUILD_ID = '1517509643734221030'"), 'weekly activity is pinned to the BELV guild');
 assert.ok(activity.includes("const TIMEZONE = 'Europe/Budapest'"), 'weekly activity uses the Budapest timezone');
 assert.ok(activity.includes('CREATE UNIQUE INDEX IF NOT EXISTS nexabot_belv_activity_one_open_shift'), 'only one active service shift per BELV member is allowed');
-assert.ok(activity.includes("status='approved'") && activity.includes('inspection_count'), 'only approved weekly reports and tasks count toward activity');
-assert.ok(activity.includes('nexabot_belv_activity_audit') && activity.includes('aktivitas-korrekcio'), 'leader corrections and activity changes are audited');
+assert.ok(activity.includes("status=\\'approved\\'") && activity.includes('inspection_count'), 'only approved weekly reports and tasks count toward activity');
+assert.ok(activity.includes("recordAudit('belv_activity_correction'") && activity.includes('aktivitas-korrekcio'), 'leader corrections and activity changes are audited');
 assert.ok(activity.includes('weekly') && activity.includes('leadership') && activity.includes('reports') && activity.includes('service'), 'all activity features use the separate BELV activity channels');
-assert.ok(activity.includes('20:00') && activity.includes('Europe/Budapest') && activity.includes('publishSnapshot'), 'weekly preview and summary scheduler are installed');
+assert.ok(activity.includes("local.weekday === 'Sun' && Number(local.hour) >= 20") && activity.includes('Europe/Budapest') && activity.includes('publishSnapshot'), 'weekly preview and summary scheduler are installed');
 assert.ok(read('src/interactions.js').includes("startsWith('aktivitas-')") && read('src/interactions.js').includes("belv_activity:"), 'activity commands, buttons, and forms are routed');
 assert.ok(read('src/index.js').includes("require('./belv-activity').startJobs(readyClient)"), 'activity scheduler starts with the bot');
 assert.ok(read('src/belv-mdt.js').includes("require('./belv-activity').syncGuildCommands(guild)"), 'activity commands sync only through BELV guild setup');
