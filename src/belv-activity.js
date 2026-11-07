@@ -46,6 +46,8 @@ async function ensureSchema() {
         'ALTER TABLE nexabot_belv_activity_reports ADD COLUMN IF NOT EXISTS report_message_id TEXT',
         'ALTER TABLE nexabot_belv_activity_reports ADD COLUMN IF NOT EXISTS report_channel_id TEXT',
         'CREATE INDEX IF NOT EXISTS nexabot_belv_activity_reports_week ON nexabot_belv_activity_reports(guild_id,week_start,status)',
+        'CREATE TABLE IF NOT EXISTS nexabot_belv_activity_messages (guild_id TEXT NOT NULL, message_id TEXT NOT NULL, user_id TEXT NOT NULL, channel_id TEXT NOT NULL, week_start DATE NOT NULL, content TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY(guild_id,message_id))',
+        'CREATE INDEX IF NOT EXISTS nexabot_belv_activity_messages_week ON nexabot_belv_activity_messages(guild_id,week_start,user_id,created_at)',
         'CREATE TABLE IF NOT EXISTS nexabot_belv_activity_exemptions (id BIGSERIAL PRIMARY KEY, guild_id TEXT NOT NULL, user_id TEXT NOT NULL, starts_on DATE NOT NULL, ends_on DATE NOT NULL, reason TEXT NOT NULL, approved_by TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), CHECK(ends_on >= starts_on))',
         'CREATE INDEX IF NOT EXISTS nexabot_belv_activity_exemptions_week ON nexabot_belv_activity_exemptions(guild_id,user_id,starts_on,ends_on)',
         'CREATE TABLE IF NOT EXISTS nexabot_belv_activity_requirements (guild_id TEXT PRIMARY KEY, service_seconds INTEGER NOT NULL DEFAULT 10800, task_count INTEGER NOT NULL DEFAULT 2, report_count INTEGER NOT NULL DEFAULT 1, updated_by TEXT, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())',
@@ -207,7 +209,7 @@ async function resolvePlan(guild, botMember) {
   if (!botMember.permissions.has(PermissionFlagsBits.ManageChannels)) fail(403, 'A Nexának hiányzik a Csatornák kezelése jogosultsága.');
   return { category, channelMap };
 }
-function rolePermissionOverwrites(guild, botMember, leadershipOnly = false) {
+function rolePermissionOverwrites(guild, botMember, leadershipOnly = false, allowMemberMessages = false) {
   const rankRoles = [...guild.roles.cache.values()].filter((role) => classifyBelvRole(role, ROLE_MAP()));
   const leaderRoles = [...guild.roles.cache.values()].filter((role) => LEADER_NAMES.has(normalize(role.name)));
   const rankIds = new Set(rankRoles.map((role) => role.id));
@@ -215,8 +217,11 @@ function rolePermissionOverwrites(guild, botMember, leadershipOnly = false) {
   const overwrites = [{ id: guild.id, deny: [PermissionFlagsBits.ViewChannel] }];
   for (const role of rankRoles) overwrites.push({
     id: role.id,
-    allow: leadershipOnly ? [] : [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
-    deny: leadershipOnly ? [PermissionFlagsBits.ViewChannel] : [PermissionFlagsBits.SendMessages]
+    allow: leadershipOnly ? [] : [
+      PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory,
+      ...(allowMemberMessages ? [PermissionFlagsBits.SendMessages] : [])
+    ],
+    deny: leadershipOnly ? [PermissionFlagsBits.ViewChannel] : allowMemberMessages ? [] : [PermissionFlagsBits.SendMessages]
   });
   for (const role of leaderRoles) overwrites.push({
     id: role.id,
@@ -258,8 +263,23 @@ async function setup(interaction) {
   });
   const channels = { ...plan.channelMap };
   for (const spec of CHANNELS) {
-    if (channels[spec.key]) continue;
-    const overwrites = spec.key === 'leadership' ? rolePermissionOverwrites(guild, botMember, true) : defaultOverwrites;
+    const allowMemberMessages = ['service', 'reports'].includes(spec.key);
+    const rankRoles = allowMemberMessages
+      ? [...guild.roles.cache.values()].filter((role) => classifyBelvRole(role, ROLE_MAP()))
+      : [];
+    if (channels[spec.key]) {
+      if (allowMemberMessages) {
+        for (const role of rankRoles) await channels[spec.key].permissionOverwrites.edit(role.id, {
+          SendMessages: true
+        }, { reason: 'BELV aktivitási üzenetek heti összesítése' });
+      }
+      continue;
+    }
+    const overwrites = spec.key === 'leadership'
+      ? rolePermissionOverwrites(guild, botMember, true)
+      : allowMemberMessages
+        ? rolePermissionOverwrites(guild, botMember, false, true)
+        : defaultOverwrites;
     channels[spec.key] = await guild.channels.create({
       name: spec.name, type: ChannelType.GuildText, parent: category.id,
       topic: 'NEXA BELV • heti aktivitási rendszer • ' + spec.key,
@@ -276,7 +296,7 @@ async function setup(interaction) {
       new ButtonBuilder().setCustomId('belv_activity:stats').setLabel('📊 Saját aktivitásom').setStyle(ButtonStyle.Secondary)
     )
   ]);
-  await upsertPanel(channels.reports, me, 'reports', '📝 BELV • Heti aktivitási jelentés', 'A gombbal a jelenlegi Europe/Budapest szerinti héthez adhatsz be jelentést. A beküldés a vezetőségi csatornára kerül elbírálásra; csak a jóváhagyott ellenőrzések számítanak.', [
+  await upsertPanel(channels.reports, me, 'reports', '📝 BELV • Heti aktivitási jelentés', 'A gombbal a jelenlegi Europe/Budapest szerinti héthez adhatsz be jelentést. A beküldés a vezetőségi csatornára kerül elbírálásra; csak a jóváhagyott feladatok számítanak. Az aktivitási kategória szolgálati és jelentési csatornáiban írt üzenetek bekerülnek a heti nyilvántartásba.', [
     new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('belv_activity:report').setLabel('📝 Heti jelentés beküldése').setStyle(ButtonStyle.Primary))
   ]);
   await upsertPanel(channels.leadership, me, 'leadership', '🔒 BELV • Aktivitásvezetőség', 'Itt jelennek meg a heti jelentések elbírálásra. Csak a BELV vezetői rangok, a szervertulajdonos és a NEXA owner láthatja.');
@@ -299,7 +319,7 @@ async function statsFor(guildId, userId, weekStart) {
   const startAt = localMidnightUtc(weekStart), endAt = localMidnightUtc(addDays(weekStart, 7));
   const values = [guildId, String(userId), weekStart, startAt, endAt, addDays(weekStart, 6)];
   const row = (await query(
-    'SELECT COALESCE((SELECT SUM(GREATEST(0,EXTRACT(EPOCH FROM (LEAST(COALESCE(ended_at,NOW()),$5::timestamptz)-GREATEST(started_at,$4::timestamptz))))) FROM nexabot_belv_activity_shifts WHERE guild_id=$1 AND user_id=$2 AND started_at<$5 AND COALESCE(ended_at,NOW())>$4),0)::int AS service_seconds, COALESCE((SELECT SUM(GREATEST(inspection_count,CASE WHEN BTRIM(tasks)<>\'\' THEN 1 ELSE 0 END)) FROM nexabot_belv_activity_reports WHERE guild_id=$1 AND user_id=$2 AND week_start=$3 AND status=\'approved\'),0)::int AS task_count, COUNT(*) FILTER (WHERE status=\'approved\')::int AS report_count, (array_agg(status ORDER BY updated_at DESC))[1] AS report_status FROM nexabot_belv_activity_reports WHERE guild_id=$1 AND user_id=$2 AND week_start=$3',
+    'SELECT COALESCE((SELECT SUM(GREATEST(0,EXTRACT(EPOCH FROM (LEAST(COALESCE(ended_at,NOW()),$5::timestamptz)-GREATEST(started_at,$4::timestamptz))))) FROM nexabot_belv_activity_shifts WHERE guild_id=$1 AND user_id=$2 AND started_at<$5 AND COALESCE(ended_at,NOW())>$4),0)::int AS service_seconds, COALESCE((SELECT SUM(GREATEST(inspection_count,CASE WHEN BTRIM(tasks)<>\'\' THEN 1 ELSE 0 END)) FROM nexabot_belv_activity_reports WHERE guild_id=$1 AND user_id=$2 AND week_start=$3 AND status=\'approved\'),0)::int AS task_count, COUNT(*) FILTER (WHERE status=\'approved\')::int AS report_count, (array_agg(status ORDER BY updated_at DESC))[1] AS report_status, COALESCE((SELECT COUNT(*) FROM nexabot_belv_activity_messages WHERE guild_id=$1 AND user_id=$2 AND week_start=$3),0)::int AS message_count, (SELECT activity_text FROM (SELECT content AS activity_text,created_at FROM nexabot_belv_activity_messages WHERE guild_id=$1 AND user_id=$2 AND week_start=$3 UNION ALL SELECT tasks AS activity_text,updated_at AS created_at FROM nexabot_belv_activity_reports WHERE guild_id=$1 AND user_id=$2 AND week_start=$3 AND status=\'approved\') activity ORDER BY created_at DESC LIMIT 1) AS latest_activity FROM nexabot_belv_activity_reports WHERE guild_id=$1 AND user_id=$2 AND week_start=$3',
     values.slice(0, 5)
   )).rows[0] || {};
   const adjustments = (await query('SELECT COALESCE(SUM(service_seconds_delta),0)::int AS seconds, COALESCE(SUM(task_delta),0)::int AS tasks FROM nexabot_belv_activity_adjustments WHERE guild_id=$1 AND user_id=$2 AND week_start=$3', [guildId, String(userId), weekStart])).rows[0] || {};
@@ -311,7 +331,7 @@ async function statsFor(guildId, userId, weekStart) {
   const status = exemption ? '🟡 Igazolt távollét' :
     serviceSeconds >= Number(requirements.service_seconds) && taskCount >= Number(requirements.task_count) && reportCount >= Number(requirements.report_count)
       ? '✅ Aktív' : '❌ Nem teljesítette';
-  return { serviceSeconds, taskCount, reportCount, reportStatus: row.report_status || null, exemption, status, requirements };
+  return { serviceSeconds, taskCount, reportCount, reportStatus: row.report_status || null, messageCount: Number(row.message_count || 0), latestActivity: String(row.latest_activity || ''), exemption, status, requirements };
 }
 function duration(seconds) {
   const hours = Math.floor(seconds / 3600), minutes = Math.floor((seconds % 3600) / 60);
@@ -340,6 +360,8 @@ async function summaryEmbeds(guild, weekStart, kind) {
   const lines = entries.map((entry, index) =>
     (index + 1) + '. <@' + entry.userId + '> — ⏱️ ' + duration(entry.stats.serviceSeconds) +
     ' · 📋 ' + entry.stats.taskCount + ' · 📝 ' + (entry.stats.reportCount ? '✅' : entry.stats.reportStatus === 'pending' ? '⏳' : '—') +
+    ' · 💬 ' + entry.stats.messageCount +
+    (entry.stats.latestActivity ? ' · „' + entry.stats.latestActivity.replace(/\s+/g, ' ').slice(0, 100) + '”' : '') +
     ' · ' + entry.stats.status
   );
   const label = kind === 'final' ? 'VÉGLEGES HETI JELENTÉS' : kind === 'preview' ? 'VASÁRNAPI ELŐZETES' : 'AKTUÁLIS HETI ÁLLAPOT';
@@ -408,10 +430,43 @@ async function runScheduled(client) {
     for (const weekStart of [...candidates].sort()) await publishSnapshot(guild, weekStart, 'final');
   }
 }
+async function trackActivityMessage(message) {
+  if (!message || message.guildId !== BELV_GUILD_ID || message.author?.bot) return false;
+  const config = await getConfig(message.guildId);
+  const channelId = String(message.channelId || message.channel?.id || '');
+  if (!config || ![config.channels?.service, config.channels?.reports].some((id) => String(id || '') === channelId)) return false;
+  const member = await freshMember(message.guild, message.author.id);
+  if (!(await isRosterMember(member))) return false;
+  const attachmentUrls = [...(message.attachments?.values?.() || [])].map((attachment) => attachment.url).filter(Boolean);
+  const body = [String(message.content || '').trim(), ...attachmentUrls].filter(Boolean).join('\n').slice(0, 2000);
+  if (!body) return false;
+  const createdAt = new Date(message.createdTimestamp || Date.now());
+  await query(
+    'INSERT INTO nexabot_belv_activity_messages(guild_id,message_id,user_id,channel_id,week_start,content,created_at) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(guild_id,message_id) DO UPDATE SET channel_id=EXCLUDED.channel_id,week_start=EXCLUDED.week_start,content=EXCLUDED.content,updated_at=NOW()',
+    [BELV_GUILD_ID, String(message.id), String(message.author.id), channelId, weekStartFor(createdAt), body]
+  );
+  return true;
+}
+async function forgetActivityMessage(message) {
+  if (!message || message.guildId !== BELV_GUILD_ID || !message.id) return false;
+  await query('DELETE FROM nexabot_belv_activity_messages WHERE guild_id=$1 AND message_id=$2', [BELV_GUILD_ID, String(message.id)]);
+  return true;
+}
 function startJobs(client) {
   if (!client || jobs.has(client)) return false;
   jobs.add(client);
   const run = () => runScheduled(client).catch((error) => recordError(error, { command: 'belv_activity_scheduler', guildId: BELV_GUILD_ID }).catch(() => null));
+  const capture = (message) => trackActivityMessage(message).catch((error) => recordError(error, {
+    command: 'belv_activity_message_capture', guildId: BELV_GUILD_ID, userId: message?.author?.id
+  }).catch(() => null));
+  client.on('messageCreate', capture);
+  client.on('messageUpdate', (_before, after) => capture(after));
+  client.on('messageDelete', (message) => forgetActivityMessage(message).catch((error) => recordError(error, {
+    command: 'belv_activity_message_delete', guildId: BELV_GUILD_ID
+  }).catch(() => null)));
+  client.on('messageDeleteBulk', (messages) => Promise.all([...messages.values()].map((message) =>
+    forgetActivityMessage(message).catch((error) => recordError(error, { command: 'belv_activity_message_bulk_delete', guildId: BELV_GUILD_ID }).catch(() => null))
+  )));
   ensureSchema().then(run).catch((error) => recordError(error, { command: 'belv_activity_schema', guildId: BELV_GUILD_ID }).catch(() => null));
   const timer = setInterval(run, 60 * 1000);
   timer.unref?.();
