@@ -96,6 +96,10 @@ try {
 assert.ok(!/if \([^\n]+BELV_APPROVAL_GUILD_ID[^\n]+\) return[\s\S]{0,150}Administrator/.test(approval), 'BELV approval must not fall back to admin');
 assert.ok(read('src/interactions.js').includes('discordErrorCode === 50013'), 'missing Discord permissions receive a specific interaction error');
 const shifts = read('src/shifts.js');
+assert.ok(shifts.includes(".setName('reset')") && shifts.includes("setName('megerosites')"), 'shift reset is available through the shared server command');
+assert.ok(shifts.includes("!== 'TELJES RESET'") && shifts.includes('PermissionFlagsBits.ManageGuild'), 'full shift reset requires server management and exact confirmation');
+assert.ok(shifts.includes("subcommand !== 'reset' && !moduleEnabled"), 'server-wide reset remains usable when the shift module is disabled');
+assert.ok(shifts.includes('resetShiftData(interaction.guildId, null, interaction.user.id)'), 'full reset is scoped to the invoking server and audit-logged');
 assert.ok(shifts.includes('WHERE guild_id=$1 AND user_id=$2 AND ended_at IS NOT NULL ORDER BY ended_at DESC,id DESC LIMIT 1'), 'targeted service correction selects that member latest closed shift');
 assert.ok(shifts.includes('String(row.user_id)!==String(targetUserId)'), 'targeted shift correction verifies row owner');
 assert.ok(shifts.includes('Math.abs(minutes)>10080'), 'shift correction is bounded');

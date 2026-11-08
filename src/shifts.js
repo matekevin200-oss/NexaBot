@@ -60,6 +60,10 @@ function buildShiftCommand() {
       .addUserOption((option) => option.setName('tag').setDescription('Másik tag rekordjait Staff jogosultsággal.'))
       .addIntegerOption((option) => option.setName('darab').setDescription('Rekordok száma (1–20).').setMinValue(1).setMaxValue(20)))
     .addSubcommand((subcommand) => subcommand
+      .setName('reset')
+      .setDescription('Az adott szerver összes szolgálati rekordjának törlése.')
+      .addStringOption((option) => option.setName('megerosites').setDescription('Írd be pontosan: TELJES RESET').setRequired(true).setMaxLength(20)))
+    .addSubcommand((subcommand) => subcommand
       .setName('szabadsag')
       .setDescription('Szabadság- vagy távolléti kérelmet küld.')
       .addStringOption((option) => option.setName('kezdet').setDescription('Kezdőnap: ÉÉÉÉ-HH-NN').setRequired(true).setMaxLength(10))
@@ -616,10 +620,10 @@ async function handleShiftButton(interaction) {
 }
 
 async function handleShiftCommand(interaction) {
-  if (!moduleEnabled(interaction.guildId, 'shift')) {
+  const subcommand = interaction.options.getSubcommand();
+  if (subcommand !== 'reset' && !moduleEnabled(interaction.guildId, 'shift')) {
     return interaction.reply({ content: '❌ A szolgálatkezelő ezen a szerveren ki van kapcsolva.', flags: EPHEMERAL });
   }
-  const subcommand = interaction.options.getSubcommand();
   if(subcommand==='idomodositas'){
     if(!isStaff(interaction.member))return interaction.reply({content:'❌ A szolgálati idő módosításához Staff vagy Szerver kezelése jogosultság szükséges.',flags:EPHEMERAL});
     await interaction.deferReply({flags:EPHEMERAL});
@@ -629,6 +633,25 @@ async function handleShiftCommand(interaction) {
       await logShift(interaction.guild,'🛠️ Szolgálati idő korrigálva',`**Tag:** <@${result.userId}>\n**Rekord:** #${result.id}\n**Korrekció:** ${minutes>0?'+':''}${minutes} perc\n**Új aktív idő:** ${formatDuration(result.activeSeconds)}\n**Indok:** ${reason}\n**Végrehajtotta:** ${interaction.user}`,COLORS.warning);
       return interaction.editReply({content:`✅ <@${result.userId}> · a #${result.id} szolgálati rekordot ${minutes>0?'+':''}${minutes} perccel korrigáltam. Új aktív idő: **${formatDuration(result.activeSeconds)}**. Az indok bekerült az auditnaplóba.`,allowedMentions:{parse:[]}});
     }catch(error){return interaction.editReply({content:`❌ ${error.message}`,allowedMentions:{parse:[]}});}
+  }
+  if (subcommand === 'reset') {
+    if (!interaction.member.permissions.has(PermissionFlagsBits.ManageGuild)) {
+      return interaction.reply({ content: '❌ A teljes szolgálati resethez Szerver kezelése jogosultság szükséges.', flags: EPHEMERAL });
+    }
+    if (interaction.options.getString('megerosites', true).trim() !== 'TELJES RESET') {
+      return interaction.reply({ content: '❌ A reset nem történt meg. Megerősítéshez írd be pontosan: TELJES RESET.', flags: EPHEMERAL });
+    }
+    await interaction.deferReply({ flags: EPHEMERAL });
+    try {
+      const deleted = await resetShiftData(interaction.guildId, null, interaction.user.id);
+      const channel = configuredChannel(interaction.guild, 'shiftLogs');
+      if (channel?.isTextBased()) {
+        await logShift(interaction.guild, '🧹 Teljes szolgálati reset', '**Törölt szolgálati rekordok:** ' + deleted + '\n**Végrehajtotta:** <@' + interaction.user.id + '>', COLORS.warning).catch(() => null);
+      }
+      return interaction.editReply({ content: '✅ A szerver összes szolgálati rekordját töröltem (' + deleted + ' rekord). A művelet bekerült az auditnaplóba.' });
+    } catch (error) {
+      return interaction.editReply({ content: '❌ A szolgálati reset nem sikerült: ' + String(error.message || error).slice(0, 300) });
+    }
   }
   if (subcommand === 'panel') {
     if (!interaction.member.permissions.has(PermissionFlagsBits.ManageGuild)) {
