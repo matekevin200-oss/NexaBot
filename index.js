@@ -19931,10 +19931,10 @@ async function handleShiftButton(interaction) {
 }
 
 async function handleShiftCommand(interaction) {
-  if (!moduleEnabled(interaction.guildId, 'shift')) {
+  const subcommand = interaction.options.getSubcommand();
+  if (subcommand !== 'reset' && !moduleEnabled(interaction.guildId, 'shift')) {
     return interaction.reply({ content: '❌ A szolgálatkezelő ezen a szerveren ki van kapcsolva.', flags: EPHEMERAL });
   }
-  const subcommand = interaction.options.getSubcommand();
   if(subcommand==='idomodositas'){
     if(!isStaff(interaction.member))return interaction.reply({content:'❌ A szolgálati idő módosításához Staff vagy Szerver kezelése jogosultság szükséges.',flags:EPHEMERAL});
     await interaction.deferReply({flags:EPHEMERAL});
