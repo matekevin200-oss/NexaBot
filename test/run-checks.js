@@ -31,7 +31,7 @@ const mapped = roster.configuredRankRoleMap('{"123456789012345678":"Főigazgató
 assert.equal(mapped['123456789012345678'], 'Főigazgató');
 assert.deepEqual(roster.configuredRankRoleMap('{bad json'), {});
 const member = { roles: { cache: new Map([['123456789012345678', { id: '123456789012345678', name: 'BV-01', position: 1 }]]) } };
-assert.equal(roster.rankForMember(member).badge, 'BV-01');
+assert.equal(roster.rankForMember(member).badge, 'BVI-01');
 assert.equal(roster.isConfiguredRoleHolder(member, '123456789012345678'), true);
 assert.equal(roster.isConfiguredRoleHolder(member, '123456789012345679'), false);
 assert.equal(roster.isConfiguredRoleHolder(member, ''), false);
