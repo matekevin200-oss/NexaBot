@@ -31,7 +31,7 @@ const mapped = roster.configuredRankRoleMap('{"123456789012345678":"Főigazgató
 assert.equal(mapped['123456789012345678'], 'Főigazgató');
 assert.deepEqual(roster.configuredRankRoleMap('{bad json'), {});
 const member = { roles: { cache: new Map([['123456789012345678', { id: '123456789012345678', name: 'BV-01', position: 1 }]]) } };
-assert.equal(roster.rankForMember(member).badge, 'BV-01');
+assert.equal(roster.rankForMember(member).badge, 'BVI-01');
 assert.equal(roster.isConfiguredRoleHolder(member, '123456789012345678'), true);
 assert.equal(roster.isConfiguredRoleHolder(member, '123456789012345679'), false);
 assert.equal(roster.isConfiguredRoleHolder(member, ''), false);
@@ -64,7 +64,7 @@ assert.ok(discipline.includes('A megadott ügynek nincs jóváhagyott határozat
 const dashboard = read('src/dashboard.js');
 assert.ok(!dashboard.includes('doc_default_roles') && !dashboard.includes('doc_manager_roles') && !dashboard.includes('doc_roles_') && !dashboard.includes('access_role_ids'), 'Owner Center no longer configures document access roles');
 assert.ok(dashboard.includes('defaultAccessRoleIds: [], managerRoleIds: []'), 'saving document settings clears old global access-role restrictions');
-const approval = docs.slice(docs.indexOf('function canApprove(member)'), docs.indexOf('\nfunction approvalDenialMessage'));
+const approval = docs.slice(docs.indexOf('function canApprove(member, type = null)'), docs.indexOf('\nfunction approvalDenialMessage'));
 assert.ok(approval.includes('return isBelvDecisionMaker(member)'), 'BELV approval recognizes the configured role or senior BELV rank');
 assert.ok(docs.includes('function belvApprovalRoleId(guild)'), 'BELV approval role ID resolver is defined');
 
@@ -95,6 +95,19 @@ try {
 }
 assert.ok(!/if \([^\n]+BELV_APPROVAL_GUILD_ID[^\n]+\) return[\s\S]{0,150}Administrator/.test(approval), 'BELV approval must not fall back to admin');
 assert.ok(read('src/interactions.js').includes('discordErrorCode === 50013'), 'missing Discord permissions receive a specific interaction error');
+const telemetry = require('../src/telemetry.js');
+assert.equal(telemetry.redactLogText('DISCORD_TOKEN=abc.def.ghi'), 'DISCORD_TOKEN=[REDACTED]');
+assert.equal(telemetry.redactLogText('Authorization: Bearer secret-value'), 'Authorization: [REDACTED]');
+assert.equal(telemetry.redactLogText('token: value123'), 'token: [REDACTED]');
+const safeMeta = { token: 'value123', nested: 'api_key=private' };
+assert.deepEqual(telemetry.safeMetadata(safeMeta), { token: '[REDACTED]', nested: 'api_key=[REDACTED]' });
+const eventsSource = read('src/events.js');
+assert.ok(eventsSource.includes("recordAudit('bot_guild_joined'") && eventsSource.includes("recordAudit('bot_guild_left'"), 'guild join and leave are persisted');
+assert.ok(eventsSource.includes('actorId: null') && eventsSource.includes('actor and cause are unknown'), 'guild leave events never guess an actor');
+
+const ticketRecovery = read('src/ticket-recovery.js');
+assert.ok(ticketRecovery.includes('filter(c=>c&&(c.name===NAMES.ticketCategory'), 'ticket category recovery tolerates missing cache entries');
+
 const shifts = read('src/shifts.js');
 assert.ok(shifts.includes(".setName('reset')") && shifts.includes("setName('megerosites')"), 'shift reset is available through the shared server command');
 assert.ok(shifts.includes("!== 'TELJES RESET'") && shifts.includes('PermissionFlagsBits.ManageGuild'), 'full shift reset requires server management and exact confirmation');
