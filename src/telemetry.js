@@ -9,7 +9,7 @@ const memory = {
 };
 
 const SECRET_FIELD = /(?:token|secret|password|passwd|api[_-]?key|authorization|cookie)/i;
-const SECRET_ASSIGNMENT = /\b(?:token|access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|password|passwd|authorization|cookie)\b\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi;
+const SECRET_ASSIGNMENT = /([A-Za-z0-9_.-]*(?:token|secret|password|passwd|api[_-]?key|authorization|cookie)[A-Za-z0-9_.-]*\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi;
 const DISCORD_TOKEN = /(?:mfa\.)?[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{20,}/g;
 const BEARER_TOKEN = /\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi;
 
