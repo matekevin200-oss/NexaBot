@@ -105,6 +105,9 @@ const eventsSource = read('src/events.js');
 assert.ok(eventsSource.includes("recordAudit('bot_guild_joined'") && eventsSource.includes("recordAudit('bot_guild_left'"), 'guild join and leave are persisted');
 assert.ok(eventsSource.includes('actorId: null') && eventsSource.includes('actor and cause are unknown'), 'guild leave events never guess an actor');
 
+const ticketRecovery = read('src/ticket-recovery.js');
+assert.ok(ticketRecovery.includes('filter(c=>c&&(c.name===NAMES.ticketCategory'), 'ticket category recovery tolerates missing cache entries');
+
 const shifts = read('src/shifts.js');
 assert.ok(shifts.includes(".setName('reset')") && shifts.includes("setName('megerosites')"), 'shift reset is available through the shared server command');
 assert.ok(shifts.includes("!== 'TELJES RESET'") && shifts.includes('PermissionFlagsBits.ManageGuild'), 'full shift reset requires server management and exact confirmation');
