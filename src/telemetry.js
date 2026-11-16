@@ -8,8 +8,36 @@ const memory = {
   audit: []
 };
 
+const SECRET_FIELD = /(?:token|secret|password|passwd|api[_-]?key|authorization|cookie)/i;
+const SECRET_ASSIGNMENT = /\b(?:token|access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|password|passwd|authorization|cookie)\b\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi;
+const DISCORD_TOKEN = /(?:mfa\.)?[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{20,}/g;
+const BEARER_TOKEN = /\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi;
+
+function redactLogText(value) {
+  return String(value ?? '')
+    .replace(DISCORD_TOKEN, '[REDACTED_DISCORD_TOKEN]')
+    .replace(BEARER_TOKEN, 'Bearer [REDACTED]')
+    .replace(SECRET_ASSIGNMENT, (match) => {
+      const separator = match.match(/[:=]\s*/)?.[0] || '=';
+      const label = match.slice(0, match.indexOf(separator));
+      return label + separator + '[REDACTED]';
+    });
+}
+
 function clean(value, max = 1000) {
-  return String(value ?? '').slice(0, max);
+  return redactLogText(value).slice(0, max);
+}
+
+function safeMetadata(value, seen = new WeakSet()) {
+  if (typeof value === 'string') return redactLogText(value).slice(0, 4000);
+  if (!value || typeof value !== 'object') return value;
+  if (seen.has(value)) return '[Circular]';
+  seen.add(value);
+  if (Array.isArray(value)) return value.slice(0, 100).map((item) => safeMetadata(item, seen));
+  return Object.fromEntries(Object.entries(value).slice(0, 100).map(([key, item]) => [
+    clean(key, 100),
+    SECRET_FIELD.test(key) ? '[REDACTED]' : safeMetadata(item, seen)
+  ]));
 }
 
 function pushMemory(type, value) {
@@ -23,7 +51,7 @@ async function recordUsage(eventType, context = {}) {
     guildId: context.guildId ? clean(context.guildId, 22) : null,
     userId: context.userId ? clean(context.userId, 22) : null,
     name: context.name ? clean(context.name, 100) : null,
-    metadata: context.metadata && typeof context.metadata === 'object' ? context.metadata : {},
+    metadata: context.metadata && typeof context.metadata === 'object' ? safeMetadata(context.metadata) : {},
     createdAt: new Date()
   };
   pushMemory('usage', item);
@@ -187,6 +215,8 @@ module.exports = {
   recordUsage,
   recordAudit,
   recordError,
+  redactLogText,
+  safeMetadata,
   recentEvents,
   recentGuildEvents,
   usageSummary,
