@@ -1,5 +1,5 @@
 const { Events } = require('discord.js');
-const { recordError } = require('./telemetry');
+const { recordError, recordAudit } = require('./telemetry');
 const { NAMES, COLORS } = require('./constants');
 const { baseEmbed, sendLog } = require('./utils');
 const {
@@ -60,6 +60,17 @@ function registerEvents(client) {
   });
 
   listen(Events.GuildCreate, async (guild) => {
+    await recordAudit('bot_guild_joined', {
+      guildId: guild.id,
+      actorId: null,
+      metadata: {
+        guildName: guild.name,
+        ownerId: guild.ownerId || null,
+        memberCount: guild.memberCount || null,
+        shardId: guild.shardId ?? null,
+        attribution: 'Discord GuildCreate event; inviter is not reliably available'
+      }
+    });
     const { syncMdtGuildCommand } = require('./belv-mdt');
     await syncMdtGuildCommand(guild).catch(() => null);
     const owner = await guild.fetchOwner().catch(() => null);
@@ -72,6 +83,18 @@ function registerEvents(client) {
     if(primaryOwnerId){const primaryOwner=await guild.client.users.fetch(primaryOwnerId).catch(()=>null);await primaryOwner?.send(`NEXA Bot csatlakozott egy szerverhez / NEXA Bot joined a server\n**Szerver / Server:** ${guild.name}\n**Szerver ID:** ${guild.id}\n**Szervertulajdonos / Server owner:** ${owner?.user?.tag||'unknown'} (${guild.ownerId})\n**Taglétszám / Members:** ${guild.memberCount||'—'}\nBeállítások / Dashboard: ${dashboardUrl(guild.id)}\n\nA szerverhez való csatlakozást a szerver tulajdonosa hagyja jóvá / Server membership must be approved by that server’s owner.`).catch(()=>null);}
   });
 
+  listen(Events.GuildDelete, async (guild) => {
+    await recordAudit('bot_guild_left', {
+      guildId: guild.id,
+      actorId: null,
+      metadata: {
+        guildName: guild.name || null,
+        ownerId: guild.ownerId || null,
+        shardId: guild.shardId ?? null,
+        attribution: 'Discord GuildDelete event; actor and cause are unknown'
+      }
+    });
+  });
   listen(Events.GuildMemberRemove,member=>require('./platform-members').changed(member,true));
   listen(Events.GuildMemberRemove,member=>require('./platform-core').observed(member.guild.id,'leave',member.id+':'+(member.joinedTimestamp||Date.now())));
   listen(Events.GuildMemberRemove, async (member) => {
