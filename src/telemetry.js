@@ -9,19 +9,19 @@ const memory = {
 };
 
 const SECRET_FIELD = /(?:token|secret|password|passwd|api[_-]?key|authorization|cookie)/i;
-const SECRET_ASSIGNMENT = /([A-Za-z0-9_.-]*(?:token|secret|password|passwd|api[_-]?key|authorization|cookie)[A-Za-z0-9_.-]*\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi;
+const SECRET_ASSIGNMENT = /([A-Za-z0-9_.-]*(?:token|secret|password|passwd|api[_-]?key|authorization|cookie)[A-Za-z0-9_.-]*\s*[:=]\s*)(?:Bearer\s+)?(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi;
 const DISCORD_TOKEN = /(?:mfa\.)?[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{20,}/g;
 const BEARER_TOKEN = /\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi;
 
 function redactLogText(value) {
   return String(value ?? '')
     .replace(DISCORD_TOKEN, '[REDACTED_DISCORD_TOKEN]')
-    .replace(BEARER_TOKEN, 'Bearer [REDACTED]')
     .replace(SECRET_ASSIGNMENT, (match) => {
       const separator = match.match(/[:=]\s*/)?.[0] || '=';
       const label = match.slice(0, match.indexOf(separator));
       return label + separator + '[REDACTED]';
-    });
+    })
+    .replace(BEARER_TOKEN, 'Bearer [REDACTED]');
 }
 
 function clean(value, max = 1000) {
