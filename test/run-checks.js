@@ -64,7 +64,7 @@ assert.ok(discipline.includes('A megadott ügynek nincs jóváhagyott határozat
 const dashboard = read('src/dashboard.js');
 assert.ok(!dashboard.includes('doc_default_roles') && !dashboard.includes('doc_manager_roles') && !dashboard.includes('doc_roles_') && !dashboard.includes('access_role_ids'), 'Owner Center no longer configures document access roles');
 assert.ok(dashboard.includes('defaultAccessRoleIds: [], managerRoleIds: []'), 'saving document settings clears old global access-role restrictions');
-const approval = docs.slice(docs.indexOf('function canApprove(member)'), docs.indexOf('\nfunction approvalDenialMessage'));
+const approval = docs.slice(docs.indexOf('function canApprove(member, type = null)'), docs.indexOf('\nfunction approvalDenialMessage'));
 assert.ok(approval.includes('return isBelvDecisionMaker(member)'), 'BELV approval recognizes the configured role or senior BELV rank');
 assert.ok(docs.includes('function belvApprovalRoleId(guild)'), 'BELV approval role ID resolver is defined');
 
