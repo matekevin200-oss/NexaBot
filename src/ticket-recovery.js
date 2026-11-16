@@ -13,7 +13,7 @@ async function ensureCategoryUnlocked(guild,{preferredId=null,excludeId=null}={}
   const channels=await guild.channels.fetch(),config=getGuildConfig(guild.id);
   const valid=channel=>channel&&channel.type===ChannelType.GuildCategory&&channel.id!==excludeId&&[...channels.values()].filter(c=>c.parentId===channel.id).length<50;
   const candidates=[preferredId,config.channels.ticketCategory,config.tickets.fallbackCategoryId].filter(Boolean).map(id=>channels.get(id));
-  candidates.push(...[...channels.values()].filter(c=>c.name===NAMES.ticketCategory||c.name===TEMP_NAME||/TICKETS|TICKETEK/i.test(c.name)));
+  candidates.push(...[...channels.values()].filter(c=>c&&(c.name===NAMES.ticketCategory||c.name===TEMP_NAME||/TICKETS|TICKETEK/i.test(c.name))));
   const existing=candidates.find(valid);if(existing)return existing;
   const bot=guild.members.me||await guild.members.fetchMe();
   if(!bot.permissions.has(PermissionFlagsBits.ManageChannels))throw new Error('A ticketkategória pótlásához a botnak Csatornák kezelése jog kell.');
