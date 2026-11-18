@@ -27,7 +27,7 @@ const SEEDS={
  practice:['Próbaügyek','Kizárólag kitalált, képzési célú RP-eseteket használjatok.'],
  exams:['Vizsgák','A vezetőség itt teszi közzé a képzési alkalmak és vizsgák tudnivalóit.']
 };
-function buildCommands(){
+function commands(){
  const setup=new SlashCommandBuilder().setName('belv-jogi-setup').setDescription('Létrehozza a BELV Jogi és Ügyvédi Osztály hiányzó elemeit.').setDMPermission(false).setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
  const open=new SlashCommandBuilder().setName('belv-jogi-ugy').setDescription('Privát BELV jogi ügycsatornát nyit.').setDMPermission(false)
  .addUserOption(o=>o.setName('ugyfel').setDescription('Az érintett Discord-tag').setRequired(true))
