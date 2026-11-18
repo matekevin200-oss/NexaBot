@@ -9,7 +9,7 @@ const ROLES=[
  {name:'⭐ Vezető ügyvéd',color:0x183B66},{name:'⚖️ Ügyvéd',color:0x244F7A},
  {name:'📚 Ügyvédjelölt',color:0x79B8E5},{name:'📝 Gyakornok',color:0x9ACBEA}
 ];
-const LEGAL_LEADS=ROLES.slice(0,2).map(x=>x.name);
+const LEGAL_LEADS=ROLES.slice(0,3).map(x=>x.name);
 const CATS=[
  {key:'main',name:'⚖️・BELV | JOGI ÉS ÜGYVÉDI OSZTÁLY',channels:[['announcements','📢・jogi-közlemények'],['rules','📜・osztályszabályzat'],['chat','💬・jogi-osztály-chat'],['presence','📅・jelenlét-és-időpontok']]},
  {key:'legal',name:'📂・BELV | JOGI ÜGYINTÉZÉS',channels:[['intake','📥・új-megkeresések'],['assignment','🗂️・ügyelosztás'],['status','📋・ügyállapotok'],['templates','📄・iratminták'],['leadership','🔒・vezetőségi-egyeztetés']]},
