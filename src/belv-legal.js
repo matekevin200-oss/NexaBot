@@ -17,7 +17,7 @@ const CATS=[
 ];
 const SEEDS={
  announcements:['BELV Jogi és Ügyvédi Osztály','A BELV-en belüli Jogi és Ügyvédi Osztály megkezdte működését. A részleget a BELV vezetősége felügyeli. Az ügykezelés a szerveren belüli RP keretei között történik.'],
- rules:['Osztályszabályzat','• Az osztály a BELV belső szervezeti része, a BELV vezetőségének felügyelete alatt.\\n• Kizárólag szerveren belüli RP-ügyeket kezelünk; ez nem valós jogi tanácsadás.\\n• Ügyféladatot, bizonyítékot és ügyiratot nyilvános csatornába tilos küldeni.\\n• Minden ügyhöz kijelölt ügyvéd és ügyszám tartozik.\\n• Összeférhetetlenséget jelezni kell a vezetőségnek.\\n• Lezáráskor az ügycsatorna megmarad és csak olvasható lesz.'],
+ rules:['Osztályszabályzat','• Az osztály a BELV belső szervezeti része, a BELV vezetőségének felügyelete alatt.\n• Kizárólag szerveren belüli RP-ügyeket kezelünk; ez nem valós jogi tanácsadás.\n• Ügyféladatot, bizonyítékot és ügyiratot nyilvános csatornába tilos küldeni.\n• Minden ügyhöz kijelölt ügyvéd és ügyszám tartozik.\n• Összeférhetetlenséget jelezni kell a vezetőségnek.\n• Lezáráskor az ügycsatorna megmarad és csak olvasható lesz.'],
  intake:['Új megkeresések','Ide csak általános, személyes adatot nem tartalmazó kérdés írható. Ügyféladatot vagy bizonyítékot ne küldj ide. Jogosult osztálytag a /belv-jogi-ugy paranccsal nyithat privát ügycsatornát.'],
  assignment:['Ügyelosztás','A vezetőség vagy jogi osztályvezető rögzíti az ügyszámot és a kijelölt ügyvédet. Ügyféladat kizárólag az adott ügy privát csatornájába kerülhet.'],
  status:['Ügyállapotok','Állapotok: **Új megkeresés → Ügyvéd kijelölve → Folyamatban → Vezetői felülvizsgálat → Lezárva / Archiválva.** Bizalmas adatot ne tegyetek ide.'],
@@ -67,9 +67,9 @@ function access(g,key){
 async function schema(){
  if(!isPersistentStore())throw new Error('A jogi ügykezeléshez tartós adatbázis szükséges.');
  const sql=[
- 'CREATE TABLE IF NOT EXISTS nexabot_belv_legal_setup (guild_id TEXT PRIMARY KEY,status TEXT NOT NULL,resources JSONB NOT NULL DEFAULT \'{}\'::jsonb,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())',
+ 'CREATE TABLE IF NOT EXISTS nexabot_belv_legal_setup (guild_id TEXT PRIMARY KEY,status TEXT NOT NULL,resources JSONB NOT NULL NOT NULL::jsonb,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())',
  'CREATE TABLE IF NOT EXISTS nexabot_belv_legal_sequence (guild_id TEXT PRIMARY KEY,next_number INTEGER NOT NULL DEFAULT 1)',
- 'CREATE TABLE IF NOT EXISTS nexabot_belv_legal_cases (guild_id TEXT NOT NULL,case_number INTEGER NOT NULL,channel_id TEXT NOT NULL,client_id TEXT NOT NULL,lawyer_id TEXT NOT NULL,created_by TEXT NOT NULL,status TEXT NOT NULL DEFAULT \'open\',summary TEXT,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),closed_at TIMESTAMPTZ,PRIMARY KEY(guild_id,case_number),UNIQUE(guild_id,channel_id))'
+ 'CREATE TABLE IF NOT EXISTS nexabot_belv_legal_cases (guild_id TEXT NOT NULL,case_number INTEGER NOT NULL,channel_id TEXT NOT NULL,client_id TEXT NOT NULL,lawyer_id TEXT NOT NULL,created_by TEXT NOT NULL,status TEXT NOT NULL NOT NULL,summary TEXT,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),closed_at TIMESTAMPTZ,PRIMARY KEY(guild_id,case_number),UNIQUE(guild_id,channel_id))'
  ];
  for(const q of sql)await dbQuery(q);
 }
@@ -108,7 +108,7 @@ async function setup(i){
     await c.permissionOverwrites.set(access(g,key),'BELV jogi osztály jogosultság');
     const seed=SEEDS[key];if(!seed)continue;const marker='NEXA_BELV_LEGAL:'+key;
     const msgs=await c.messages.fetch({limit:50}).catch(()=>null);
-    if(msgs?.some(m=>m.author.id===g.client.user.id&&String(m.embeds[0]?.footer?.text||\').includes(marker)))continue;
+    if(msgs?.some(m=>m.author.id===g.client.user.id&&String(m.embeds[0]?.footer?.text||'').includes(marker)))continue;
     await c.send({embeds:[embed(seed[0],seed[1]).setFooter({text:marker+' • BELV'})]});created.push('kezdőüzenet: '+c.name);
    }catch(e){errors.push('Csatorna '+c.name+': '+e.message);}
   }
@@ -116,15 +116,15 @@ async function setup(i){
   await dbQuery('UPDATE nexabot_belv_legal_setup SET status=$2,resources=$3::jsonb,updated_at=NOW() WHERE guild_id=$1',[g.id,complete?'completed':'partial',JSON.stringify({roles:roleIds,categories:categoryIds,channels:channelIds})]);
   await audit(complete?'belv_legal_setup_completed':'belv_legal_setup_partial',i,{created:created.length,existing:existing.length,errors});
   const lines=['**BELV Jogi és Ügyvédi Osztály '+(complete?'telepítve':'részben telepítve')+'.**','**Létrehozva:** '+(created.join(' • ')||'semmi új'),'**Már létezett:** '+(existing.join(' • ')||'nincs')];
-  if(errors.length)lines.push('**Ellenőrizendő:** '+errors.join(' • '));return i.editReply(lines.join('\\n').slice(0,1950));
+  if(errors.length)lines.push('**Ellenőrizendő:** '+errors.join(' • '));return i.editReply(lines.join('\n').slice(0,1950));
  }catch(e){
   await dbQuery('UPDATE nexabot_belv_legal_setup SET status=$2,updated_at=NOW() WHERE guild_id=$1',[g.id,'partial']).catch(()=>null);
   await recordError(e,{command:'belv-jogi-setup',guildId:g.id,userId:i.user.id});await audit('belv_legal_setup_failed',i,{error:e.message,created:created.length});
-  return i.editReply('A telepítés részben sikerült; a már létrejött elemeket megtartottam. Futtasd újra.\\n'+(errors.join('\\n')||e.message).slice(0,1400));
+  return i.editReply('A telepítés részben sikerült; a már létrejött elemeket megtartottam. Futtasd újra.\n'+(errors.join('\n')||e.message).slice(0,1400));
  }
 }
 async function isInstalled(id){if(!isPersistentStore())return false;await schema();const r=await dbQuery('SELECT status FROM nexabot_belv_legal_setup WHERE guild_id=$1',[id]);return ['completed','partial'].includes(r?.rows?.[0]?.status);}
-function safeName(s){return String(s||'ugy').normalize('NFKD').replace(/[\\u0300-\\u036f]/g,\').toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-+|-+$/g,\').slice(0,55)||'ugy';}
+function safeName(s){return String(s||'ugy').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,55)||'ugy';}
 async function openCase(i){
  if(i.guildId!==BELV_GUILD_ID)return reply(i,'Ez a parancs kizárólag a BELV Discord-szerveren használható.');
  if(!await isInstalled(i.guildId))return reply(i,'A jogi osztály nincs telepítve. Előbb futtasd a /belv-jogi-setup parancsot.');
@@ -148,8 +148,8 @@ async function openCase(i){
  try{
   await dbQuery('INSERT INTO nexabot_belv_legal_cases(guild_id,case_number,channel_id,client_id,lawyer_id,created_by,status) VALUES($1,$2,$3,$4,$5,$6,$7)',[i.guildId,n,channel.id,clientUser.id,lawyer.id,i.user.id,'open']);
   const fields=[['Ügyfél RP-neve','ugyfel-neve'],['Rövid leírás','rovid-leiras'],['Időpont','eset-idopontja'],['Érintettek','erintettek'],['Bizonyítékok / tanúk','bizonyitekok-vagy-tanuk'],['Kért segítség','kert-segitseg'],['Egyeztetés','egyeztetesi-idopont']];
-  const text=['**Ügyszám:** BELV-JOGI-'+num,'**Ügyfél:** <@'+clientUser.id+'>','**Ügyvéd:** <@'+lawyer.id+'>'].concat(fields.map(p=>'**'+p[0]+':** '+i.options.getString(p[1]))).join('\\n');
-  await channel.send({embeds:[embed('BELV jogi ügy • '+num,text+'\\n\\nCsak szerveren belüli RP-ügyet kezeljetek; valós személyes adatot ne osszatok meg.')]});
+  const text=['**Ügyszám:** BELV-JOGI-'+num,'**Ügyfél:** <@'+clientUser.id+'>','**Ügyvéd:** <@'+lawyer.id+'>'].concat(fields.map(p=>'**'+p[0]+':** '+i.options.getString(p[1]))).join('\n');
+  await channel.send({embeds:[embed('BELV jogi ügy • '+num,text+'\n\nCsak szerveren belüli RP-ügyet kezeljetek; valós személyes adatot ne osszatok meg.')]});
   await audit('belv_legal_case_opened',i,{caseNumber:n,channelId:channel.id,clientId:clientUser.id,lawyerId:lawyer.id});
   return i.editReply('Privát ügycsatorna létrejött: <#'+channel.id+'>');
  }catch(e){await recordError(e,{command:'belv-jogi-ugy',guildId:i.guildId,userId:i.user.id});return i.editReply('A csatornát megtartottam, de az ügy mentése hibázott: '+e.message.slice(0,600));}
@@ -163,7 +163,7 @@ async function closeCase(i){
  const marker='NEXA_BELV_LEGAL_CLOSED:'+n;
  const recent=await c.messages.fetch({limit:50}).catch(()=>null);
  if(!recent?.some(m=>m.author.id===i.client.user.id&&String(m.embeds[0]?.footer?.text||'').includes(marker))){
-  await c.send({embeds:[embed('Lezárt ügy • BELV-JOGI-'+String(n).padStart(3,'0'),summary+'\\n\\nA csatorna megmarad és csak olvasható.').setFooter({text:marker})]});
+  await c.send({embeds:[embed('Lezárt ügy • BELV-JOGI-'+String(n).padStart(3,'0'),summary+'\n\nA csatorna megmarad és csak olvasható.').setFooter({text:marker})]});
  }
  const res=await dbQuery('UPDATE nexabot_belv_legal_cases SET status=$3,summary=$4,closed_at=NOW() WHERE guild_id=$1 AND case_number=$2 AND status=$5 RETURNING case_number',[i.guildId,n,'closed',summary,'open']);
  if(!res?.rowCount)return i.editReply('Az ügy nem található, vagy már lezárták.');
