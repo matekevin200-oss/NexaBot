@@ -166,6 +166,14 @@ async function closeCase(i){
  await c.send({embeds:[embed('Lezárt ügy • BELV-JOGI-'+String(n).padStart(3,'0'),summary+'\\n\\nA csatorna megmarad és csak olvasható.')]}).catch(()=>null);
  await audit('belv_legal_case_closed',i,{caseNumber:n,channelId:c.id});return i.editReply('Az ügy lezárult és archiválva lett; a csatornát nem töröltem.');
 }
+async function syncGuildCommands(guild){
+ if(!guild?.commands||guild.id!==BELV_GUILD_ID)return;
+ const current=await guild.commands.fetch();
+ for(const payload of commands()){
+  const match=current.find(command=>command.name===payload.name);
+  if(match)await match.edit(payload);else await guild.commands.create(payload);
+ }
+}
 async function handleInteraction(i){
  if(!i.isChatInputCommand?.())return false;
  if(i.commandName==='belv-jogi-setup')return setup(i);
@@ -173,4 +181,4 @@ async function handleInteraction(i){
  if(i.commandName==='belv-jogi-lezaras')return closeCase(i);
  return false;
 }
-module.exports={buildCommands:commands,handleInteraction,BELV_GUILD_ID,CLASS_ROLES:ROLES,CATEGORIES:CATS,isBelvLeader:isLeader,isLegalMember};
+module.exports={buildCommands:commands,syncGuildCommands,handleInteraction,BELV_GUILD_ID,CLASS_ROLES:ROLES,CATEGORIES:CATS,isBelvLeader:isLeader,isLegalMember};
