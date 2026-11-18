@@ -177,4 +177,20 @@ assert.equal(activityModule.weekStartFor(new Date('2026-11-08T23:30:00Z')), '202
 assert.equal(activityModule.weekStartFor(new Date('2026-11-04T12:00:00Z'), '2026-11-01'), '2026-10-26', 'requested weekly periods normalize to Monday');
 assert.ok(!activity.includes('dashboard') && !activity.includes('website') && !activity.includes('/api/'), 'BELV weekly activity does not add website endpoints');
 
+const legal = read('src/belv-legal.js');
+assert.ok(order.includes('src/belv-legal.js'), 'BELV legal subdepartment is bundled');
+assert.ok(legal.includes("const BELV_GUILD_ID='1517509643734221030'"), 'BELV legal module is isolated to the BELV guild');
+assert.ok(legal.includes("guild.id!==BELV_GUILD_ID"), 'legal setup commands are registered only in BELV');
+assert.ok(legal.includes("setName('belv-jogi-setup')") && legal.includes("setName('belv-jogi-ugy')") && legal.includes("setName('belv-jogi-lezaras')"), 'BELV legal setup and case commands exist');
+assert.ok(legal.includes('PermissionFlagsBits.Administrator') && legal.includes('PermissionFlagsBits.ManageRoles') && legal.includes('PermissionFlagsBits.ManageChannels'), 'legal installation checks administrator and bot permissions');
+assert.ok(legal.includes('nexabot_belv_legal_cases') && legal.includes('UNIQUE(guild_id,channel_id)'), 'legal cases persist with guild-scoped unique channels');
+assert.ok(legal.includes('permissionOverwrites:perms') && legal.includes('clientUser.id') && legal.includes('lawyer.id'), 'private legal cases grant access to the selected client and lawyer');
+assert.ok(legal.includes("['leadership','🔒・vezetőségi-egyeztetés']") && legal.includes("if(key==='leadership')"), 'leadership channel has a separate restricted policy');
+assert.ok(legal.includes('Lezáráskor az ügycsatorna megmarad') && legal.includes('csak olvasható'), 'case closure preserves the channel');
+assert.ok(legal.includes('guild.id!==BELV_GUILD_ID)return') && legal.includes("guild.commands.create(payload)"), 'legal commands register only in the BELV guild');
+assert.ok(read('src/belv-mdt.js').includes("require('./belv-legal').syncGuildCommands(guild)"), 'BELV startup sync publishes the legal commands on the BELV server');
+const legalModule = require('../src/belv-legal.js');
+assert.deepEqual(legalModule.buildCommands().map(command => command.name), ['belv-jogi-setup', 'belv-jogi-ugy', 'belv-jogi-lezaras']);
+assert.equal(legalModule.CATEGORIES.reduce((sum, category) => sum + category.channels.length, 0), 12, 'BELV legal setup contains the requested 12 channels');
+
 console.log('NEXA checks passed: ' + order.length + ' source modules, reproducible bundle, BELV permissions, mentions, shifts, and economy invariants.');

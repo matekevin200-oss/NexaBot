@@ -937,6 +937,10 @@ async function handleBelvRosterCommand(interaction) {
 }
 async function syncMdtGuildCommand(guild) {
   if (!guild?.commands) return;
+  if (guild.id === BELV_GUILD_ID) {
+    try { await require('./belv-legal').syncGuildCommands(guild); }
+    catch (error) { await require('./telemetry').recordError(error, { module: 'belv_legal_command_sync', guildId: guild.id }).catch(() => null); }
+  }
   await require('./belv-oral-exam').syncGuildCommand(guild);
   if (guild.id === BELV_GUILD_ID) {
     try { await require('./bomo').syncSetupCommand(guild); }
