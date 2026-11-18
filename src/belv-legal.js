@@ -131,7 +131,7 @@ async function openCase(i){
  if(!isLegalMember(i.member))return reply(i,'Ügyet csak BELV vezető vagy jogi osztálytag nyithat.');
  const clientUser=i.options.getUser('ugyfel'),lawyerUser=i.options.getUser('ugyved');
  const client=await i.guild.members.fetch(clientUser.id).catch(()=>null),lawyer=await i.guild.members.fetch(lawyerUser.id).catch(()=>null);
- if(!client||!lawyer)return reply(i,'Az ügyfélnek és a kijelölt ügyvédnek a BELV szerver tagjának kell lennie.');
+ if(!client||!lawyer||client.user.bot||lawyer.user.bot)return reply(i,'Az ügyfélnek és a kijelölt ügyvédnek is valódi BELV-szervertagnak kell lennie.');
  const lawyerOK=isLeader(lawyer)||lawyer.roles.cache.some(r=>['⚖️ Jogi osztályvezető','⚖️ Jogi osztályvezető-helyettes','⭐ Vezető ügyvéd','⚖️ Ügyvéd'].includes(r.name));
  if(!lawyerOK)return reply(i,'A kijelölt személynek ügyvéd vagy magasabb jogi osztályrang kell.');
  await i.deferReply({flags:MessageFlags.Ephemeral});await schema();
