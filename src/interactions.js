@@ -1172,6 +1172,7 @@ async function handleInteraction(interaction) {
     if (isSupportModerationPaused(interaction.guildId) && /^(?:mod_|moderation_)/.test(String(interaction.customId || ''))) {
       return ephemeralError(interaction, 'A Support moderációja szünetel; ez a moderációs művelet nem hajtható végre.');
     }
+    if (interaction.isChatInputCommand() && String(interaction.commandName || '').startsWith('belv-jogi-')) return await require('./belv-legal').handleInteraction(interaction);
     if(String(interaction.customId||'').startsWith('nt:'))return await require('./next-ticket').handle(interaction);
     if(String(interaction.customId||'').startsWith('nxform:'))return await require('./next-commands').handle(interaction);
     if(String(interaction.customId||'').startsWith('n5:'))return await require('./next-discord').handle(interaction);
