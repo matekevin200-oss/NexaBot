@@ -160,11 +160,15 @@ async function closeCase(i){
  const p=c.topic.split('|'),n=Number(p[2]),lawyerId=p[4];
  if(i.user.id!==lawyerId&&!isLegalLead(i.member)&&!isLeader(i.member))return reply(i,'Csak a kijelölt ügyvéd, a jogi osztály vezetője vagy a BELV vezetősége zárhatja le.');
  await i.deferReply({flags:MessageFlags.Ephemeral});await schema();const summary=i.options.getString('osszefoglalo');
+ const marker='NEXA_BELV_LEGAL_CLOSED:'+n;
+ const recent=await c.messages.fetch({limit:50}).catch(()=>null);
+ if(!recent?.some(m=>m.author.id===i.client.user.id&&String(m.embeds[0]?.footer?.text||'').includes(marker))){
+  await c.send({embeds:[embed('Lezárt ügy • BELV-JOGI-'+String(n).padStart(3,'0'),summary+'\\n\\nA csatorna megmarad és csak olvasható.').setFooter({text:marker})]});
+ }
  const res=await dbQuery('UPDATE nexabot_belv_legal_cases SET status=$3,summary=$4,closed_at=NOW() WHERE guild_id=$1 AND case_number=$2 AND status=$5 RETURNING case_number',[i.guildId,n,'closed',summary,'open']);
  if(!res?.rowCount)return i.editReply('Az ügy nem található, vagy már lezárták.');
  for(const ow of c.permissionOverwrites.cache.values())await c.permissionOverwrites.edit(ow.id,{SendMessages:false,AddReactions:false}).catch(()=>null);
  await c.setTopic(c.topic+'|closed').catch(()=>null);
- await c.send({embeds:[embed('Lezárt ügy • BELV-JOGI-'+String(n).padStart(3,'0'),summary+'\\n\\nA csatorna megmarad és csak olvasható.')]}).catch(()=>null);
  await audit('belv_legal_case_closed',i,{caseNumber:n,channelId:c.id});return i.editReply('Az ügy lezárult és archiválva lett; a csatornát nem töröltem.');
 }
 async function syncGuildCommands(guild){
