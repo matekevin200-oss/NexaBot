@@ -57,11 +57,12 @@ function overwrites(g,allowed,writers=allowed){
  for(const name of allowed){const r=role(g,name);if(!r)continue;const allow=[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory];if(writers.includes(name))allow.push(PermissionFlagsBits.SendMessages);out.push({id:r.id,allow});}
  return out;
 }
+function belvLeaderNames(g){return [...g.roles.cache.values()].filter(r=>r.name===LEADERSHIP||((x=>x&&x.min<=19)(classifyBelvRole(r,rankMap())))).map(r=>r.name);}
 function access(g,key){
- const legal=ROLES.map(x=>x.name);
- if(key==='leadership'){const names=LEGAL_LEADS.concat([LEADERSHIP]);return overwrites(g,names,names);}
- if(['announcements','rules','materials','exams'].includes(key))return overwrites(g,legal.concat([LEADERSHIP]),[]);
- return overwrites(g,legal.concat([LEADERSHIP]));
+ const legal=ROLES.map(x=>x.name),leaders=belvLeaderNames(g);
+ if(key==='leadership'){const names=[...new Set(LEGAL_LEADS.concat(leaders))];return overwrites(g,names,names);}
+ if(['announcements','rules','materials','exams'].includes(key))return overwrites(g,legal.concat(leaders),[]);
+ return overwrites(g,legal.concat(leaders));
 }
 async function schema(){
  if(!isPersistentStore())throw new Error('A jogi ügykezeléshez tartós adatbázis szükséges.');
