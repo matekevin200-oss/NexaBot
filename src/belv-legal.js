@@ -92,11 +92,11 @@ async function setup(i){
   else errors.push('A BELV vezetőségi rang alatti pozíciót nem lehetett biztonságosan megállapítani.');
   const initial=await g.channels.fetch();
   for(const cat of CATS){
-   let parent=initial.find(c=>c.type===ChannelType.GuildCategory&&c.name===cat.name);
+   let parent=initial.find(c=>c?.type===ChannelType.GuildCategory&&c.name===cat.name);
    if(!parent){parent=await g.channels.create({name:cat.name,type:ChannelType.GuildCategory,permissionOverwrites:[{id:g.roles.everyone.id,deny:[PermissionFlagsBits.ViewChannel]}],reason:'BELV jogi osztály'});created.push('kategória: '+cat.name);}else existing.push('kategória: '+cat.name);
    categoryIds[cat.key]=parent.id;
    for(const [key,name] of cat.channels){
-    const all=await g.channels.fetch();let c=all.find(x=>x.type===ChannelType.GuildText&&x.name===name);
+    const all=await g.channels.fetch();let c=all.find(x=>x?.type===ChannelType.GuildText&&x.name===name);
     if(c&&c.parentId!==parent.id){errors.push('Más kategóriában már létezik, nem módosítottam: '+name);continue;}
     if(!c){c=await g.channels.create({name,type:ChannelType.GuildText,parent:parent.id,permissionOverwrites:access(g,key),reason:'BELV jogi osztály'});created.push('csatorna: '+name);}else existing.push('csatorna: '+name);
     channelIds[key]=c.id;
@@ -136,7 +136,7 @@ async function openCase(i){
  if(!lawyerOK)return reply(i,'A kijelölt személynek ügyvéd vagy magasabb jogi osztályrang kell.');
  await i.deferReply({flags:MessageFlags.Ephemeral});await schema();
  const seq=await dbQuery('INSERT INTO nexabot_belv_legal_sequence(guild_id,next_number) VALUES($1,2) ON CONFLICT(guild_id) DO UPDATE SET next_number=nexabot_belv_legal_sequence.next_number+1 RETURNING next_number-1 AS case_number',[i.guildId]);
- const n=Number(seq?.rows?.[0]?.case_number),parent=(await i.guild.channels.fetch()).find(c=>c.type===ChannelType.GuildCategory&&c.name===CATS[1].name);
+ const n=Number(seq?.rows?.[0]?.case_number),parent=(await i.guild.channels.fetch()).find(c=>c?.type===ChannelType.GuildCategory&&c.name===CATS[1].name);
  if(!parent)return i.editReply('Jogi ügyintézési kategória nem található. Futtasd újra a telepítőt.');
  const legalLeads=LEGAL_LEADS.map(x=>role(i.guild,x)).filter(Boolean),belvLeads=[...i.guild.roles.cache.values()].filter(r=>r.name===LEADERSHIP||((x=>x&&x.min<=19)(classifyBelvRole(r,rankMap()))));
  const allow=r=>({id:r.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ReadMessageHistory]});
