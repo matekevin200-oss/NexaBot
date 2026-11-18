@@ -66,9 +66,9 @@ function access(g,key){
 async function schema(){
  if(!isPersistentStore())throw new Error('A jogi ügykezeléshez tartós adatbázis szükséges.');
  const sql=[
- 'CREATE TABLE IF NOT EXISTS nexabot_belv_legal_setup (guild_id TEXT PRIMARY KEY,status TEXT NOT NULL,resources JSONB NOT NULL DEFAULT ''{}''::jsonb,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())',
+ 'CREATE TABLE IF NOT EXISTS nexabot_belv_legal_setup (guild_id TEXT PRIMARY KEY,status TEXT NOT NULL,resources JSONB NOT NULL DEFAULT \'{}\'::jsonb,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())',
  'CREATE TABLE IF NOT EXISTS nexabot_belv_legal_sequence (guild_id TEXT PRIMARY KEY,next_number INTEGER NOT NULL DEFAULT 1)',
- 'CREATE TABLE IF NOT EXISTS nexabot_belv_legal_cases (guild_id TEXT NOT NULL,case_number INTEGER NOT NULL,channel_id TEXT NOT NULL,client_id TEXT NOT NULL,lawyer_id TEXT NOT NULL,created_by TEXT NOT NULL,status TEXT NOT NULL DEFAULT ''open'',summary TEXT,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),closed_at TIMESTAMPTZ,PRIMARY KEY(guild_id,case_number),UNIQUE(guild_id,channel_id))'
+ 'CREATE TABLE IF NOT EXISTS nexabot_belv_legal_cases (guild_id TEXT NOT NULL,case_number INTEGER NOT NULL,channel_id TEXT NOT NULL,client_id TEXT NOT NULL,lawyer_id TEXT NOT NULL,created_by TEXT NOT NULL,status TEXT NOT NULL DEFAULT \'open\',summary TEXT,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),closed_at TIMESTAMPTZ,PRIMARY KEY(guild_id,case_number),UNIQUE(guild_id,channel_id))'
  ];
  for(const q of sql)await dbQuery(q);
 }
@@ -107,7 +107,7 @@ async function setup(i){
     await c.permissionOverwrites.set(access(g,key),'BELV jogi osztály jogosultság');
     const seed=SEEDS[key];if(!seed)continue;const marker='NEXA_BELV_LEGAL:'+key;
     const msgs=await c.messages.fetch({limit:50}).catch(()=>null);
-    if(msgs?.some(m=>m.author.id===g.client.user.id&&String(m.embeds[0]?.footer?.text||'').includes(marker)))continue;
+    if(msgs?.some(m=>m.author.id===g.client.user.id&&String(m.embeds[0]?.footer?.text||\').includes(marker)))continue;
     await c.send({embeds:[embed(seed[0],seed[1]).setFooter({text:marker+' • BELV'})]});created.push('kezdőüzenet: '+c.name);
    }catch(e){errors.push('Csatorna '+c.name+': '+e.message);}
   }
@@ -123,7 +123,7 @@ async function setup(i){
  }
 }
 async function isInstalled(id){if(!isPersistentStore())return false;await schema();const r=await dbQuery('SELECT status FROM nexabot_belv_legal_setup WHERE guild_id=$1',[id]);return ['completed','partial'].includes(r?.rows?.[0]?.status);}
-function safeName(s){return String(s||'ugy').normalize('NFKD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,55)||'ugy';}
+function safeName(s){return String(s||'ugy').normalize('NFKD').replace(/[\\u0300-\\u036f]/g,\').toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-+|-+$/g,\').slice(0,55)||'ugy';}
 async function openCase(i){
  if(i.guildId!==BELV_GUILD_ID)return reply(i,'Ez a parancs kizárólag a BELV Discord-szerveren használható.');
  if(!await isInstalled(i.guildId))return reply(i,'A jogi osztály nincs telepítve. Előbb futtasd a /belv-jogi-setup parancsot.');
