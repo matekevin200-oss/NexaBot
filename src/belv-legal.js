@@ -3,13 +3,13 @@ const {ActionRowBuilder,ButtonBuilder,ButtonStyle,ChannelType,EmbedBuilder,Messa
 const {dbQuery,isPersistentStore}=require('./config');
 const {classifyBelvRole,configuredRankRoleMap}=require('./belv-roster-rules');
 const {recordAudit,recordError}=require('./telemetry');
-const BELV_GUILD_ID='1517509643734221030';
+const BELV_GUILD_ID='1517509643734221030',LAWYER_ROLE='Ügyvédek';
 const ROLES=[
  {name:'⚖️ Jogi osztályvezető',color:0x8E2430},{name:'⚖️ Jogi osztályvezető-helyettes',color:0xA66A24},
  {name:'⭐ Vezető ügyvéd',color:0x183B66},{name:'⚖️ Ügyvéd',color:0x244F7A},
  {name:'📚 Ügyvédjelölt',color:0x79B8E5},{name:'📝 Gyakornok',color:0x9ACBEA}
 ];
-const LEGAL_LEADS=ROLES.slice(0,3).map(x=>x.name);
+const LEGAL_LEADS=ROLES.slice(0,3).map(x=>x.name),ATTORNEY_RANKS=ROLES.slice(0,4).map(x=>x.name);
 const legalIntakeDrafts=new Map();
 const CATS=[
  {key:'main',name:'⚖️・BELV | JOGI ÉS ÜGYVÉDI OSZTÁLY',channels:[['announcements','📢・jogi-közlemények'],['rules','📜・osztályszabályzat'],['chat','💬・jogi-osztály-chat'],['presence','📅・jelenlét-és-időpontok']]},
@@ -37,9 +37,8 @@ function commands(){
   return [setup.toJSON(),open.toJSON(),close.toJSON()];
 }
 function rankMap(){return configuredRankRoleMap(process.env.BELV_RANK_ROLE_IDS);}
-function isLeader(m){return Boolean(m?.roles?.cache?.some(r=>{const x=classifyBelvRole(r,rankMap());return x&&x.max<=9;}));}
 function isLegalLead(m){return Boolean(m?.roles?.cache?.some(r=>LEGAL_LEADS.includes(r.name)));}
-function isLegalMember(m){return isLeader(m)||Boolean(m?.roles?.cache?.some(r=>ROLES.some(x=>x.name===r.name)));}
+function isLegalMember(m){return Boolean(m?.roles?.cache?.some(r=>r.name===LAWYER_ROLE));}
 function role(g,n){return g.roles.cache.find(r=>r.name===n)||null;}
 function reply(i,text){return i.reply({content:text,flags:MessageFlags.Ephemeral});}
 function admin(i){return i.user.id===i.guild.ownerId||i.memberPermissions?.has(PermissionFlagsBits.Administrator);}
@@ -50,19 +49,21 @@ function overwrites(g,allowed,writers=allowed){
  for(const name of allowed){const r=role(g,name);if(!r)continue;const allow=[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory];if(writers.includes(name))allow.push(PermissionFlagsBits.SendMessages);out.push({id:r.id,allow});}
  return out;
 }
-function belvLeaderNames(g){return [...g.roles.cache.values()].filter(r=>{const x=classifyBelvRole(r,rankMap());return x&&x.max<=9;}).map(r=>r.name);}
 function caseOverwrites(g,clientId,lawyerId,closed=false){
- const allowedRoles=[...new Set(LEGAL_LEADS.concat(belvLeaderNames(g)))],out=[{id:g.roles.everyone.id,deny:[PermissionFlagsBits.ViewChannel]}];
- for(const name of allowedRoles){const r=role(g,name);if(!r)continue;const allow=[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory];if(!closed)allow.push(PermissionFlagsBits.SendMessages);out.push({id:r.id,allow});}
+ const out=[{id:g.roles.everyone.id,deny:[PermissionFlagsBits.ViewChannel]}];
  for(const id of [clientId,lawyerId]){if(!/^\d{16,22}$/.test(String(id||'')))continue;const allow=[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory];if(!closed)allow.push(PermissionFlagsBits.SendMessages);out.push({id:String(id),allow});}
  const bot=g.members.me;if(bot)out.push({id:bot.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,...(closed?[]:[PermissionFlagsBits.SendMessages]),PermissionFlagsBits.ManageChannels]});
  return out;
 }
-function access(g,key){
- const legal=ROLES.map(x=>x.name),leaders=belvLeaderNames(g);
- if(key==='leadership'){const names=[...new Set(LEGAL_LEADS.concat(leaders))];return overwrites(g,names,names);}
- if(['announcements','rules','materials','exams'].includes(key))return overwrites(g,legal.concat(leaders),[]);
- return overwrites(g,legal.concat(leaders));
+function access(g,key){return overwrites(g,[LAWYER_ROLE]);}
+async function syncAttorneyMemberships(g,groupRole,errors){
+ const members=await g.members.fetch();
+ for(const member of members.values()){
+  const shouldHave=member.roles.cache.some(r=>ATTORNEY_RANKS.includes(r.name)),has=member.roles.cache.has(groupRole.id);
+  if(shouldHave===has)continue;
+  try{if(shouldHave)await member.roles.add(groupRole,'BELV jogi ügyvédcsoport automatikus hozzárendelése');else await member.roles.remove(groupRole,'BELV jogi ügyvédcsoport szinkronizálása');}
+  catch(e){errors.push('Ügyvédek rang szinkronja ('+member.user.tag+'): '+e.message);}
+ }
 }
 async function schema(){
  if(!isPersistentStore())throw new Error('A jogi ügykezeléshez tartós adatbázis szükséges.');
@@ -86,10 +87,13 @@ async function setup(i){
  try{
   await schema();await dbQuery('INSERT INTO nexabot_belv_legal_setup(guild_id,status) VALUES($1,$2) ON CONFLICT(guild_id) DO UPDATE SET status=$2,updated_at=NOW()',[g.id,'installing']);
   for(const item of ROLES){let r=role(g,item.name);if(!r){r=await g.roles.create({name:item.name,color:item.color,permissions:[],hoist:false,mentionable:false,reason:'BELV belső jogi osztály'});created.push('rang: '+item.name);}else existing.push('rang: '+item.name);roleIds[item.name]=r.id;}
+  let lawyerGroup=role(g,LAWYER_ROLE);if(!lawyerGroup){lawyerGroup=await g.roles.create({name:LAWYER_ROLE,color:0x244F7A,permissions:[],hoist:false,mentionable:false,reason:'BELV jogi ügyvéd-hozzáférési csoport'});created.push('rang: '+LAWYER_ROLE);}else existing.push('rang: '+LAWYER_ROLE);roleIds[LAWYER_ROLE]=lawyerGroup.id;
   const leaders=[...g.roles.cache.values()].map(r=>({r,rank:classifyBelvRole(r,rankMap())})).filter(x=>x.rank&&x.rank.min<=19);
   const floor=leaders.length?Math.min(...leaders.map(x=>x.r.position)):0;
   if(floor>ROLES.length){const pos=ROLES.slice().reverse().map((x,n)=>({role:roleIds[x.name],position:floor-ROLES.length+n}));try{await g.roles.setPositions(pos);}catch(e){errors.push('Rangsorrend: '+e.message);}}
   else errors.push('A BELV vezetőségi rang alatti pozíciót nem lehetett biztonságosan megállapítani.');
+  if(floor>ROLES.length+1){try{await g.roles.setPositions([{role:lawyerGroup.id,position:floor-ROLES.length-1}]);}catch(e){errors.push('Ügyvédek rang sorrendje: '+e.message);}}
+  try{await syncAttorneyMemberships(g,lawyerGroup,errors);}catch(e){errors.push('Ügyvédek rang szinkronja: '+e.message);}
   const initial=await g.channels.fetch();
   for(const cat of CATS){
    let parent=initial.find(c=>c?.type===ChannelType.GuildCategory&&c.name===cat.name);
@@ -188,8 +192,8 @@ async function validateCaseParties(i,clientId,lawyerId){
  if(!isLegalMember(i.member))return 'Ügyet csak BELV vezető vagy jogi osztálytag nyithat.';
  const [client,lawyer]=await Promise.all([i.guild.members.fetch(clientId).catch(()=>null),i.guild.members.fetch(lawyerId).catch(()=>null)]);
  if(!client||!lawyer||client.user.bot||lawyer.user.bot)return 'Az ügyfélnek és a kijelölt ügyvédnek is valódi BELV-szervertagnak kell lennie.';
- const lawyerOK=isLeader(lawyer)||lawyer.roles.cache.some(r=>['⚖️ Jogi osztályvezető','⚖️ Jogi osztályvezető-helyettes','⭐ Vezető ügyvéd','⚖️ Ügyvéd'].includes(r.name));
- if(!lawyerOK)return 'A kijelölt személynek ügyvéd vagy magasabb jogi osztályrang kell.';
+ const lawyerRole=role(i.guild,LAWYER_ROLE),lawyerOK=Boolean(lawyerRole&&lawyer.roles.cache.has(lawyerRole.id));
+ if(!lawyerOK)return 'A kijelölt személynek az Ügyvédek ranggal kell rendelkeznie.';
  return {client,lawyer};
 }
 async function openCase(i){
@@ -225,7 +229,7 @@ async function closeCase(i){
  if(i.guildId!==BELV_GUILD_ID)return reply(i,'Ez a parancs kizárólag a BELV Discord-szerveren használható.');
  const c=i.channel;if(!c?.topic?.startsWith('nexa-belv-legal|'))return reply(i,'Ezt a parancsot az ügy privát csatornájában használd.');
  const p=c.topic.split('|'),lawyerId=p[4];
- if(i.user.id!==lawyerId&&!isLegalLead(i.member)&&!isLeader(i.member))return reply(i,'Csak a kijelölt ügyvéd, a jogi osztály vezetője vagy a BELV vezetősége zárhatja le.');
+ if(i.user.id!==lawyerId&&!isLegalLead(i.member))return reply(i,'Csak a kijelölt ügyvéd vagy a jogi osztály vezetője zárhatja le.');
  if(c.topic.endsWith('|closed'))return reply(i,'Ez az ügy már le van zárva.');
  const modal=new ModalBuilder().setCustomId('belv_legal:close:'+c.id).setTitle('Ügy lezárása és archiválása')
   .addComponents(caseModalInput('closing_summary','Rövid záró összefoglaló',TextInputStyle.Paragraph,900,'RP-ügy lezárásának rövid összefoglalója'));
@@ -235,7 +239,7 @@ async function closeCaseFromModal(i,expectedChannelId){
  if(i.guildId!==BELV_GUILD_ID||i.channelId!==expectedChannelId)return reply(i,'A lezáró űrlap csak az eredeti BELV ügycsatornában használható.');
  const c=i.channel;if(!c?.topic?.startsWith('nexa-belv-legal|')||c.topic.endsWith('|closed'))return reply(i,'Az ügy nem található, vagy már lezárták.');
  const p=c.topic.split('|'),n=Number(p[2]),lawyerId=p[4];
- if(i.user.id!==lawyerId&&!isLegalLead(i.member)&&!isLeader(i.member))return reply(i,'Csak a kijelölt ügyvéd, a jogi osztály vezetője vagy a BELV vezetősége zárhatja le.');
+ if(i.user.id!==lawyerId&&!isLegalLead(i.member))return reply(i,'Csak a kijelölt ügyvéd vagy a jogi osztály vezetője zárhatja le.');
  const summary=i.fields.getTextInputValue('closing_summary').trim();
  if(!summary)return reply(i,'A záró összefoglaló nem lehet üres.');
  await i.deferReply({flags:MessageFlags.Ephemeral});await schema();
@@ -274,4 +278,12 @@ async function handleInteraction(i){
  if(i.commandName==='belv-jogi-lezaras')return closeCase(i);
  return false;
 }
-module.exports={buildCommands:commands,syncGuildCommands,handleInteraction,BELV_GUILD_ID,CLASS_ROLES:ROLES,CATEGORIES:CATS,isBelvLeader:isLeader,isLegalMember};
+async function syncAttorneyAggregate(member){
+ if(!member||member.guild?.id!==BELV_GUILD_ID)return;
+ const groupRole=role(member.guild,LAWYER_ROLE);if(!groupRole)return;
+ const shouldHave=member.roles.cache.some(r=>ATTORNEY_RANKS.includes(r.name)),has=member.roles.cache.has(groupRole.id);
+ if(shouldHave===has)return;
+ try{if(shouldHave)await member.roles.add(groupRole,'BELV jogi ügyvédcsoport automatikus hozzárendelése');else await member.roles.remove(groupRole,'BELV jogi ügyvédcsoport szinkronizálása');}
+ catch(error){await recordError(error,{command:'belv_legal_attorney_role_sync',guildId:member.guild.id,userId:member.id}).catch(()=>null);}
+}
+module.exports={buildCommands:commands,syncGuildCommands,handleInteraction,BELV_GUILD_ID,CLASS_ROLES:ROLES,CATEGORIES:CATS,isLegalMember,syncAttorneyAggregate};
