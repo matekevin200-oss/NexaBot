@@ -130,7 +130,6 @@ function intakeFormRows(){
 }
 async function startIntake(i){
  if(i.guildId!==BELV_GUILD_ID)return reply(i,'Ez az űrlap kizárólag a BELV Discord-szerveren használható.');
- if(!await isInstalled(i.guildId))return reply(i,'A jogi osztály nincs telepítve. Előbb futtasd a /belv-jogi-setup parancsot.');
  if(!isLegalMember(i.member))return reply(i,'Ezt az ügyindító űrlapot csak BELV vezető vagy jogi osztálytag használhatja.');
  legalIntakeDrafts.set(intakeDraftKey(i),{updatedAt:Date.now()});
  return i.reply({content:'Válaszd ki az ügyfelet és a kijelölt ügyvédet. Ezután nyomd meg a **Tovább az űrlaphoz** gombot. A részleteket privát űrlapon kéred be.',components:intakeFormRows(),flags:MessageFlags.Ephemeral});
