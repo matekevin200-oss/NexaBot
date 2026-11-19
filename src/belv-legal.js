@@ -18,7 +18,7 @@ const CATS=[
 const SEEDS={
  announcements:['BELV Jogi és Ügyvédi Osztály','A BELV-en belüli Jogi és Ügyvédi Osztály megkezdte működését. A részleget a BELV vezetősége felügyeli. Az ügykezelés a szerveren belüli RP keretei között történik.'],
  rules:['Osztályszabályzat','• Az osztály a BELV belső szervezeti része, a BELV vezetőségének felügyelete alatt.\n• Kizárólag szerveren belüli RP-ügyeket kezelünk; ez nem valós jogi tanácsadás.\n• Ügyféladatot, bizonyítékot és ügyiratot nyilvános csatornába tilos küldeni.\n• Minden ügyhöz kijelölt ügyvéd és ügyszám tartozik.\n• Összeférhetetlenséget jelezni kell a vezetőségnek.\n• Lezáráskor az ügycsatorna megmarad és csak olvasható lesz.'],
- intake:['Új megkeresések','Ide csak általános, személyes adatot nem tartalmazó kérdés írható. Ügyféladatot vagy bizonyítékot ne küldj ide. Jogosult osztálytag a /belv-jogi-ugy paranccsal nyithat privát ügycsatornát.'],
+ intake:['Új megkeresések','Ide csak általános, személyes adatot nem tartalmazó kérdés írható. Ügyféladatot vagy bizonyítékot ne küldj ide. Jogosult osztálytag a /belv-jogi-ugy paranccsal megnyitja és beküldi az interaktív Discord-űrlapot; az ügyfél és a kijelölt ügyvéd külön megadható.'],
  assignment:['Ügyelosztás','A vezetőség vagy jogi osztályvezető rögzíti az ügyszámot és a kijelölt ügyvédet. Ügyféladat kizárólag az adott ügy privát csatornájába kerülhet.'],
  status:['Ügyállapotok','Állapotok: **Új megkeresés → Ügyvéd kijelölve → Folyamatban → Vezetői felülvizsgálat → Lezárva / Archiválva.** Bizalmas adatot ne tegyetek ide.'],
  templates:['Iratminták','Csak jóváhagyott, RP-célú iratmintát tegyetek közzé. Személyes vagy konkrét ügyadatot ne másoljatok ide.'],
@@ -212,8 +212,8 @@ async function syncGuildCommands(guild){
 async function handleInteraction(i){
  if(i.isModalSubmit?.()&&String(i.customId||'').startsWith('belv_legal:')){
   const parts=i.customId.split(':');
-  if(parts[1]==='open'&&parts.length===4&&/^\\d{16,22}$/.test(parts[2])&&/^\\d{16,22}$/.test(parts[3]))return openCaseFromModal(i,parts[2],parts[3]);
-  if(parts[1]==='close'&&parts.length===3&&/^\\d{16,22}$/.test(parts[2]))return closeCaseFromModal(i,parts[2]);
+  if(parts[1]==='open'&&parts.length===4&&/^\d{16,22}$/.test(parts[2])&&/^\d{16,22}$/.test(parts[3]))return openCaseFromModal(i,parts[2],parts[3]);
+  if(parts[1]==='close'&&parts.length===3&&/^\d{16,22}$/.test(parts[2]))return closeCaseFromModal(i,parts[2]);
   return reply(i,'Érvénytelen vagy lejárt jogi űrlap.');
  }
  if(!i.isChatInputCommand?.())return false;
