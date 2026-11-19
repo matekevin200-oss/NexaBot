@@ -1195,6 +1195,7 @@ async function handleInteraction(interaction) {
     if (interaction.isModalSubmit() && String(interaction.customId || '').startsWith('belv_activity:')) return await require('./belv-activity').handleModal(interaction);
     if (interaction.isModalSubmit() && String(interaction.customId || '').startsWith('belv_oral_score:')) return await require('./belv-oral-exam').handleModal(interaction);
     if (interaction.isModalSubmit() && String(interaction.customId || '').startsWith('mdt_review:')) return await handleMdtReviewModal(interaction);
+    if (interaction.isModalSubmit() && String(interaction.customId || '').startsWith('belv_legal:')) return await require('./belv-legal').handleInteraction(interaction);
     if (interaction.isModalSubmit()) return await handleModal(interaction);
   } catch (error) {
     console.error('Interakciós hiba:', error);
