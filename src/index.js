@@ -212,7 +212,7 @@ client.once(Events.ClientReady, async (readyClient) => {
 });
 
 const {invalidateMember}=require('./mdt-network-auth');
-client.on(Events.GuildMemberUpdate,(_old,member)=>invalidateMember(member.guild.id,member.id));
+client.on(Events.GuildMemberUpdate,(_old,member)=>{invalidateMember(member.guild.id,member.id);require('./belv-legal').syncAttorneyAggregate(member);});
 client.on(Events.GuildMemberRemove,member=>invalidateMember(member.guild.id,member.id));
 client.on(Events.InteractionCreate, handleInteraction);
 registerEvents(client);
