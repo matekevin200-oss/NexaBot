@@ -189,7 +189,7 @@ function caseModalInput(id,label,style,maxLength,placeholder){
 async function validateCaseParties(i,clientId,lawyerId){
  if(i.guildId!==BELV_GUILD_ID)return 'Ez a parancs kizárólag a BELV Discord-szerveren használható.';
  if(!await isInstalled(i.guildId))return 'A jogi osztály nincs telepítve. Előbb futtasd a /belv-jogi-setup parancsot.';
- if(!isLegalMember(i.member))return 'Ügyet csak BELV vezető vagy jogi osztálytag nyithat.';
+ if(!isLegalMember(i.member))return 'Ügyet csak az Ügyvédek ranggal lehet indítani.';
  const [client,lawyer]=await Promise.all([i.guild.members.fetch(clientId).catch(()=>null),i.guild.members.fetch(lawyerId).catch(()=>null)]);
  if(!client||!lawyer||client.user.bot||lawyer.user.bot)return 'Az ügyfélnek és a kijelölt ügyvédnek is valódi BELV-szervertagnak kell lennie.';
  const lawyerRole=role(i.guild,LAWYER_ROLE),lawyerOK=Boolean(lawyerRole&&lawyer.roles.cache.has(lawyerRole.id));
