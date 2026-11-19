@@ -54,7 +54,7 @@ function belvLeaderNames(g){return [...g.roles.cache.values()].filter(r=>{const 
 function caseOverwrites(g,clientId,lawyerId,closed=false){
  const allowedRoles=[...new Set(LEGAL_LEADS.concat(belvLeaderNames(g)))],out=[{id:g.roles.everyone.id,deny:[PermissionFlagsBits.ViewChannel]}];
  for(const name of allowedRoles){const r=role(g,name);if(!r)continue;const allow=[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory];if(!closed)allow.push(PermissionFlagsBits.SendMessages);out.push({id:r.id,allow});}
- for(const id of [clientId,lawyerId]){if(!/^\\d{16,22}$/.test(String(id||'')))continue;const allow=[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory];if(!closed)allow.push(PermissionFlagsBits.SendMessages);out.push({id:String(id),allow});}
+ for(const id of [clientId,lawyerId]){if(!/^\d{16,22}$/.test(String(id||'')))continue;const allow=[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory];if(!closed)allow.push(PermissionFlagsBits.SendMessages);out.push({id:String(id),allow});}
  const bot=g.members.me;if(bot)out.push({id:bot.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,...(closed?[]:[PermissionFlagsBits.SendMessages]),PermissionFlagsBits.ManageChannels]});
  return out;
 }
