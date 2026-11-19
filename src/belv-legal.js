@@ -142,7 +142,7 @@ async function selectIntakeParty(i){
  if(i.customId.endsWith('select-client'))draft.clientId=selected;else draft.lawyerId=selected;
  draft.updatedAt=Date.now();legalIntakeDrafts.set(key,draft);
  const status=['Ügyfél: '+(draft.clientId?'<@'+draft.clientId+'>':'nincs kiválasztva'),'Ügyvéd: '+(draft.lawyerId?'<@'+draft.lawyerId+'>':'nincs kiválasztva')].join(' • ');
- return i.update({content:status+'\\nVálaszd ki mindkettőt, majd folytasd az űrlappal.',components:intakeFormRows()});
+ return i.update({content:status+'\nVálaszd ki mindkettőt, majd folytasd az űrlappal.',components:intakeFormRows()});
 }
 function buildCaseModal(clientId,lawyerId){
  return new ModalBuilder().setCustomId('belv_legal:open:'+clientId+':'+lawyerId).setTitle('BELV jogi ügy űrlap')
