@@ -1,5 +1,5 @@
 'use strict';
-const {ChannelType,EmbedBuilder,MessageFlags,PermissionFlagsBits,SlashCommandBuilder}=require('discord.js');
+const {ActionRowBuilder,ChannelType,EmbedBuilder,MessageFlags,ModalBuilder,PermissionFlagsBits,SlashCommandBuilder,TextInputBuilder,TextInputStyle}=require('discord.js');
 const {dbQuery,isPersistentStore}=require('./config');
 const {classifyBelvRole,configuredRankRoleMap}=require('./belv-roster-rules');
 const {recordAudit,recordError}=require('./telemetry');
@@ -18,7 +18,7 @@ const CATS=[
 const SEEDS={
  announcements:['BELV Jogi és Ügyvédi Osztály','A BELV-en belüli Jogi és Ügyvédi Osztály megkezdte működését. A részleget a BELV vezetősége felügyeli. Az ügykezelés a szerveren belüli RP keretei között történik.'],
  rules:['Osztályszabályzat','• Az osztály a BELV belső szervezeti része, a BELV vezetőségének felügyelete alatt.\n• Kizárólag szerveren belüli RP-ügyeket kezelünk; ez nem valós jogi tanácsadás.\n• Ügyféladatot, bizonyítékot és ügyiratot nyilvános csatornába tilos küldeni.\n• Minden ügyhöz kijelölt ügyvéd és ügyszám tartozik.\n• Összeférhetetlenséget jelezni kell a vezetőségnek.\n• Lezáráskor az ügycsatorna megmarad és csak olvasható lesz.'],
- intake:['Új megkeresések','Ide csak általános, személyes adatot nem tartalmazó kérdés írható. Ügyféladatot vagy bizonyítékot ne küldj ide. Jogosult osztálytag a /belv-jogi-ugy paranccsal nyithat privát ügycsatornát.'],
+ intake:['Új megkeresések','Ide csak általános, személyes adatot nem tartalmazó kérdés írható. Ügyféladatot vagy bizonyítékot ne küldj ide. Jogosult osztálytag a /belv-jogi-ugy paranccsal megnyitja és beküldi az interaktív Discord-űrlapot; az ügyfél és a kijelölt ügyvéd külön megadható.'],
  assignment:['Ügyelosztás','A vezetőség vagy jogi osztályvezető rögzíti az ügyszámot és a kijelölt ügyvédet. Ügyféladat kizárólag az adott ügy privát csatornájába kerülhet.'],
  status:['Ügyállapotok','Állapotok: **Új megkeresés → Ügyvéd kijelölve → Folyamatban → Vezetői felülvizsgálat → Lezárva / Archiválva.** Bizalmas adatot ne tegyetek ide.'],
  templates:['Iratminták','Csak jóváhagyott, RP-célú iratmintát tegyetek közzé. Személyes vagy konkrét ügyadatot ne másoljatok ide.'],
@@ -29,19 +29,11 @@ const SEEDS={
 };
 function commands(){
  const setup=new SlashCommandBuilder().setName('belv-jogi-setup').setDescription('Létrehozza a BELV Jogi és Ügyvédi Osztály hiányzó elemeit.').setDMPermission(false).setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
- const open=new SlashCommandBuilder().setName('belv-jogi-ugy').setDescription('Privát BELV jogi ügycsatornát nyit.').setDMPermission(false)
- .addUserOption(o=>o.setName('ugyfel').setDescription('Az érintett Discord-tag').setRequired(true))
- .addUserOption(o=>o.setName('ugyved').setDescription('A kijelölt ügyvéd').setRequired(true))
- .addStringOption(o=>o.setName('ugyfel-neve').setDescription('Ügyfél RP-neve').setRequired(true).setMaxLength(100))
- .addStringOption(o=>o.setName('rovid-leiras').setDescription('Rövid RP-leírás').setRequired(true).setMaxLength(700))
- .addStringOption(o=>o.setName('eset-idopontja').setDescription('Az eset időpontja').setRequired(true).setMaxLength(120))
- .addStringOption(o=>o.setName('erintettek').setDescription('Az RP-ben érintettek').setRequired(true).setMaxLength(500))
- .addStringOption(o=>o.setName('bizonyitekok-vagy-tanuk').setDescription('RP-bizonyítékok vagy tanúk').setRequired(true).setMaxLength(700))
- .addStringOption(o=>o.setName('kert-segitseg').setDescription('Milyen segítséget kér?').setRequired(true).setMaxLength(500))
- .addStringOption(o=>o.setName('egyeztetesi-idopont').setDescription('Mikor érhető el?').setRequired(true).setMaxLength(150));
- const close=new SlashCommandBuilder().setName('belv-jogi-lezaras').setDescription('Lezárja és archiválja a jogi ügycsatornát.').setDMPermission(false)
- .addStringOption(o=>o.setName('osszefoglalo').setDescription('Rövid RP-ügy záró összefoglaló').setRequired(true).setMaxLength(900));
- return [setup.toJSON(),open.toJSON(),close.toJSON()];
+ const open=new SlashCommandBuilder().setName('belv-jogi-ugy').setDescription('Privát BELV jogi ügycsatornát nyitó űrlap.').setDMPermission(false)
+  .addUserOption(o=>o.setName('ugyfel').setDescription('Az érintett Discord-tag').setRequired(true))
+  .addUserOption(o=>o.setName('ugyved').setDescription('A kijelölt ügyvéd').setRequired(true));
+  const close=new SlashCommandBuilder().setName('belv-jogi-lezaras').setDescription('Megnyitja az ügy lezáró űrlapját.').setDMPermission(false);
+  return [setup.toJSON(),open.toJSON(),close.toJSON()];
 }
 function rankMap(){return configuredRankRoleMap(process.env.BELV_RANK_ROLE_IDS);}
 function isLeader(m){return Boolean(m?.roles?.cache?.some(r=>r.name===LEADERSHIP||((x=>x&&x.min<=19)(classifyBelvRole(r,rankMap())))));}
@@ -125,41 +117,79 @@ async function setup(i){
 }
 async function isInstalled(id){if(!isPersistentStore())return false;await schema();const r=await dbQuery('SELECT status FROM nexabot_belv_legal_setup WHERE guild_id=$1',[id]);return ['completed','partial'].includes(r?.rows?.[0]?.status);}
 function safeName(s){return String(s||'ugy').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,55)||'ugy';}
-async function openCase(i){
- if(i.guildId!==BELV_GUILD_ID)return reply(i,'Ez a parancs kizárólag a BELV Discord-szerveren használható.');
- if(!await isInstalled(i.guildId))return reply(i,'A jogi osztály nincs telepítve. Előbb futtasd a /belv-jogi-setup parancsot.');
- if(!isLegalMember(i.member))return reply(i,'Ügyet csak BELV vezető vagy jogi osztálytag nyithat.');
- const clientUser=i.options.getUser('ugyfel'),lawyerUser=i.options.getUser('ugyved');
- const client=await i.guild.members.fetch(clientUser.id).catch(()=>null),lawyer=await i.guild.members.fetch(lawyerUser.id).catch(()=>null);
- if(!client||!lawyer||client.user.bot||lawyer.user.bot)return reply(i,'Az ügyfélnek és a kijelölt ügyvédnek is valódi BELV-szervertagnak kell lennie.');
+function caseModalInput(id,label,style,maxLength,placeholder){
+ return new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(id).setLabel(label).setStyle(style).setRequired(true).setMinLength(1).setMaxLength(maxLength).setPlaceholder(placeholder));
+}
+async function validateCaseParties(i,clientId,lawyerId){
+ if(i.guildId!==BELV_GUILD_ID)return 'Ez a parancs kizárólag a BELV Discord-szerveren használható.';
+ if(!await isInstalled(i.guildId))return 'A jogi osztály nincs telepítve. Előbb futtasd a /belv-jogi-setup parancsot.';
+ if(!isLegalMember(i.member))return 'Ügyet csak BELV vezető vagy jogi osztálytag nyithat.';
+ const [client,lawyer]=await Promise.all([i.guild.members.fetch(clientId).catch(()=>null),i.guild.members.fetch(lawyerId).catch(()=>null)]);
+ if(!client||!lawyer||client.user.bot||lawyer.user.bot)return 'Az ügyfélnek és a kijelölt ügyvédnek is valódi BELV-szervertagnak kell lennie.';
  const lawyerOK=isLeader(lawyer)||lawyer.roles.cache.some(r=>['⚖️ Jogi osztályvezető','⚖️ Jogi osztályvezető-helyettes','⭐ Vezető ügyvéd','⚖️ Ügyvéd'].includes(r.name));
- if(!lawyerOK)return reply(i,'A kijelölt személynek ügyvéd vagy magasabb jogi osztályrang kell.');
+ if(!lawyerOK)return 'A kijelölt személynek ügyvéd vagy magasabb jogi osztályrang kell.';
+ return {client,lawyer};
+}
+async function openCase(i){
+ const clientUser=i.options.getUser('ugyfel'),lawyerUser=i.options.getUser('ugyved');
+ const parties=await validateCaseParties(i,clientUser.id,lawyerUser.id);
+ if(typeof parties==='string')return reply(i,parties);
+ const modal=new ModalBuilder().setCustomId('belv_legal:open:'+clientUser.id+':'+lawyerUser.id).setTitle('BELV jogi ügy űrlap')
+  .addComponents(
+   caseModalInput('client_name','Ügyfél RP-neve',TextInputStyle.Short,100,'Az ügyfél RP-ben használt neve'),
+   caseModalInput('summary_time','Rövid leírás és eset időpontja',TextInputStyle.Paragraph,700,'Mi történt, és mikor?'),
+   caseModalInput('involved','Érintettek',TextInputStyle.Paragraph,500,'Az RP-esetben érintett személyek'),
+   caseModalInput('evidence','Bizonyítékok vagy tanúk',TextInputStyle.Paragraph,700,'RP-bizonyítékok, tanúk vagy hivatkozások'),
+   caseModalInput('requested_help','Kért segítség és egyeztetési időpont',TextInputStyle.Paragraph,650,'Milyen segítség kell, és mikor érhető el az ügyfél?')
+  );
+ return i.showModal(modal);
+}
+async function openCaseFromModal(i,clientId,lawyerId){
+ const parties=await validateCaseParties(i,clientId,lawyerId);
+ if(typeof parties==='string')return reply(i,parties);
+ const {lawyer}=parties;
  await i.deferReply({flags:MessageFlags.Ephemeral});await schema();
- const seq=await dbQuery('INSERT INTO nexabot_belv_legal_sequence(guild_id,next_number) VALUES($1,2) ON CONFLICT(guild_id) DO UPDATE SET next_number=nexabot_belv_legal_sequence.next_number+1 RETURNING next_number-1 AS case_number',[i.guildId]);
- const n=Number(seq?.rows?.[0]?.case_number),parent=(await i.guild.channels.fetch()).find(c=>c?.type===ChannelType.GuildCategory&&c.name===CATS[1].name);
+ const parent=(await i.guild.channels.fetch()).find(c=>c?.type===ChannelType.GuildCategory&&c.name===CATS[1].name);
  if(!parent)return i.editReply('Jogi ügyintézési kategória nem található. Futtasd újra a telepítőt.');
+ const seq=await dbQuery('INSERT INTO nexabot_belv_legal_sequence(guild_id,next_number) VALUES($1,2) ON CONFLICT(guild_id) DO UPDATE SET next_number=nexabot_belv_legal_sequence.next_number+1 RETURNING next_number-1 AS case_number',[i.guildId]);
+ const n=Number(seq?.rows?.[0]?.case_number);
+ if(!Number.isInteger(n)||n<1)return i.editReply('Nem sikerült ügyszámot kiosztani. Próbáld újra.');
  const legalLeads=LEGAL_LEADS.map(x=>role(i.guild,x)).filter(Boolean),belvLeads=[...i.guild.roles.cache.values()].filter(r=>r.name===LEADERSHIP||((x=>x&&x.min<=19)(classifyBelvRole(r,rankMap()))));
  const allow=r=>({id:r.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ReadMessageHistory]});
  const perms=[{id:i.guild.roles.everyone.id,deny:[PermissionFlagsBits.ViewChannel]},...legalLeads.map(allow),...belvLeads.map(allow),
-  {id:clientUser.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ReadMessageHistory]},
+  {id:clientId,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ReadMessageHistory]},
   {id:lawyer.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ReadMessageHistory]},
   {id:i.guild.members.me.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.ManageChannels]}];
- const num=String(n).padStart(3,'0'),channel=await i.guild.channels.create({name:'belv-ugy-'+num+'-'+safeName(i.options.getString('ugyfel-neve')),type:ChannelType.GuildText,parent:parent.id,topic:'nexa-belv-legal|'+i.guildId+'|'+n+'|'+clientUser.id+'|'+lawyer.id,permissionOverwrites:perms,reason:'Privát BELV RP jogi ügy'});
+ const clientName=i.fields.getTextInputValue('client_name').trim(),summaryTime=i.fields.getTextInputValue('summary_time').trim(),
+  involved=i.fields.getTextInputValue('involved').trim(),evidence=i.fields.getTextInputValue('evidence').trim(),
+  requestedHelp=i.fields.getTextInputValue('requested_help').trim();
+ const num=String(n).padStart(3,'0'),channel=await i.guild.channels.create({name:'belv-ugy-'+num+'-'+safeName(clientName),type:ChannelType.GuildText,parent:parent.id,topic:'nexa-belv-legal|'+i.guildId+'|'+n+'|'+clientId+'|'+lawyer.id,permissionOverwrites:perms,reason:'Privát BELV RP jogi ügy'});
  try{
-  await dbQuery('INSERT INTO nexabot_belv_legal_cases(guild_id,case_number,channel_id,client_id,lawyer_id,created_by,status) VALUES($1,$2,$3,$4,$5,$6,$7)',[i.guildId,n,channel.id,clientUser.id,lawyer.id,i.user.id,'open']);
-  const fields=[['Ügyfél RP-neve','ugyfel-neve'],['Rövid leírás','rovid-leiras'],['Időpont','eset-idopontja'],['Érintettek','erintettek'],['Bizonyítékok / tanúk','bizonyitekok-vagy-tanuk'],['Kért segítség','kert-segitseg'],['Egyeztetés','egyeztetesi-idopont']];
-  const text=['**Ügyszám:** BELV-JOGI-'+num,'**Ügyfél:** <@'+clientUser.id+'>','**Ügyvéd:** <@'+lawyer.id+'>'].concat(fields.map(p=>'**'+p[0]+':** '+i.options.getString(p[1]))).join('\n');
+  await dbQuery('INSERT INTO nexabot_belv_legal_cases(guild_id,case_number,channel_id,client_id,lawyer_id,created_by,status) VALUES($1,$2,$3,$4,$5,$6,$7)',[i.guildId,n,channel.id,clientId,lawyer.id,i.user.id,'open']);
+  const text=['**Ügyszám:** BELV-JOGI-'+num,'**Ügyfél Discord-tag:** <@'+clientId+'>','**Kijelölt ügyvéd:** <@'+lawyer.id+'>','**Ügyfél RP-neve:** '+clientName,'**Rövid leírás és eset időpontja:** '+summaryTime,'**Érintettek:** '+involved,'**Bizonyítékok vagy tanúk:** '+evidence,'**Kért segítség és egyeztetési időpont:** '+requestedHelp].join('\n');
   await channel.send({embeds:[embed('BELV jogi ügy • '+num,text+'\n\nCsak szerveren belüli RP-ügyet kezeljetek; valós személyes adatot ne osszatok meg.')]});
-  await audit('belv_legal_case_opened',i,{caseNumber:n,channelId:channel.id,clientId:clientUser.id,lawyerId:lawyer.id});
+  await audit('belv_legal_case_opened',i,{caseNumber:n,channelId:channel.id,clientId,lawyerId:lawyer.id});
   return i.editReply('Privát ügycsatorna létrejött: <#'+channel.id+'>');
  }catch(e){await recordError(e,{command:'belv-jogi-ugy',guildId:i.guildId,userId:i.user.id});return i.editReply('A csatornát megtartottam, de az ügy mentése hibázott: '+e.message.slice(0,600));}
 }
 async function closeCase(i){
  if(i.guildId!==BELV_GUILD_ID)return reply(i,'Ez a parancs kizárólag a BELV Discord-szerveren használható.');
  const c=i.channel;if(!c?.topic?.startsWith('nexa-belv-legal|'))return reply(i,'Ezt a parancsot az ügy privát csatornájában használd.');
+ const p=c.topic.split('|'),lawyerId=p[4];
+ if(i.user.id!==lawyerId&&!isLegalLead(i.member)&&!isLeader(i.member))return reply(i,'Csak a kijelölt ügyvéd, a jogi osztály vezetője vagy a BELV vezetősége zárhatja le.');
+ if(c.topic.endsWith('|closed'))return reply(i,'Ez az ügy már le van zárva.');
+ const modal=new ModalBuilder().setCustomId('belv_legal:close:'+c.id).setTitle('Ügy lezárása és archiválása')
+  .addComponents(caseModalInput('closing_summary','Rövid záró összefoglaló',TextInputStyle.Paragraph,900,'RP-ügy lezárásának rövid összefoglalója'));
+ return i.showModal(modal);
+}
+async function closeCaseFromModal(i,expectedChannelId){
+ if(i.guildId!==BELV_GUILD_ID||i.channelId!==expectedChannelId)return reply(i,'A lezáró űrlap csak az eredeti BELV ügycsatornában használható.');
+ const c=i.channel;if(!c?.topic?.startsWith('nexa-belv-legal|')||c.topic.endsWith('|closed'))return reply(i,'Az ügy nem található, vagy már lezárták.');
  const p=c.topic.split('|'),n=Number(p[2]),lawyerId=p[4];
  if(i.user.id!==lawyerId&&!isLegalLead(i.member)&&!isLeader(i.member))return reply(i,'Csak a kijelölt ügyvéd, a jogi osztály vezetője vagy a BELV vezetősége zárhatja le.');
- await i.deferReply({flags:MessageFlags.Ephemeral});await schema();const summary=i.options.getString('osszefoglalo');
+ const summary=i.fields.getTextInputValue('closing_summary').trim();
+ if(!summary)return reply(i,'A záró összefoglaló nem lehet üres.');
+ await i.deferReply({flags:MessageFlags.Ephemeral});await schema();
  const marker='NEXA_BELV_LEGAL_CLOSED:'+n;
  const recent=await c.messages.fetch({limit:50}).catch(()=>null);
  if(!recent?.some(m=>m.author.id===i.client.user.id&&String(m.embeds[0]?.footer?.text||'').includes(marker))){
@@ -180,6 +210,12 @@ async function syncGuildCommands(guild){
  }
 }
 async function handleInteraction(i){
+ if(i.isModalSubmit?.()&&String(i.customId||'').startsWith('belv_legal:')){
+  const parts=i.customId.split(':');
+  if(parts[1]==='open'&&parts.length===4&&/^\d{16,22}$/.test(parts[2])&&/^\d{16,22}$/.test(parts[3]))return openCaseFromModal(i,parts[2],parts[3]);
+  if(parts[1]==='close'&&parts.length===3&&/^\d{16,22}$/.test(parts[2]))return closeCaseFromModal(i,parts[2]);
+  return reply(i,'Érvénytelen vagy lejárt jogi űrlap.');
+ }
  if(!i.isChatInputCommand?.())return false;
  if(i.commandName==='belv-jogi-setup')return setup(i);
  if(i.commandName==='belv-jogi-ugy')return openCase(i);
