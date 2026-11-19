@@ -3,7 +3,7 @@ const {ActionRowBuilder,ButtonBuilder,ButtonStyle,ChannelType,EmbedBuilder,Messa
 const {dbQuery,isPersistentStore}=require('./config');
 const {classifyBelvRole,configuredRankRoleMap}=require('./belv-roster-rules');
 const {recordAudit,recordError}=require('./telemetry');
-const BELV_GUILD_ID='1517509643734221030',LEADERSHIP='BELVÉDELMI VEZETŐSÉG';
+const BELV_GUILD_ID='1517509643734221030';
 const ROLES=[
  {name:'⚖️ Jogi osztályvezető',color:0x8E2430},{name:'⚖️ Jogi osztályvezető-helyettes',color:0xA66A24},
  {name:'⭐ Vezető ügyvéd',color:0x183B66},{name:'⚖️ Ügyvéd',color:0x244F7A},
@@ -37,7 +37,7 @@ function commands(){
   return [setup.toJSON(),open.toJSON(),close.toJSON()];
 }
 function rankMap(){return configuredRankRoleMap(process.env.BELV_RANK_ROLE_IDS);}
-function isLeader(m){return Boolean(m?.roles?.cache?.some(r=>r.name===LEADERSHIP||((x=>x&&x.min<=19)(classifyBelvRole(r,rankMap())))));}
+function isLeader(m){return Boolean(m?.roles?.cache?.some(r=>{const x=classifyBelvRole(r,rankMap());return x&&x.max<=9;}));}
 function isLegalLead(m){return Boolean(m?.roles?.cache?.some(r=>LEGAL_LEADS.includes(r.name)));}
 function isLegalMember(m){return isLeader(m)||Boolean(m?.roles?.cache?.some(r=>ROLES.some(x=>x.name===r.name)));}
 function role(g,n){return g.roles.cache.find(r=>r.name===n)||null;}
@@ -50,7 +50,7 @@ function overwrites(g,allowed,writers=allowed){
  for(const name of allowed){const r=role(g,name);if(!r)continue;const allow=[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory];if(writers.includes(name))allow.push(PermissionFlagsBits.SendMessages);out.push({id:r.id,allow});}
  return out;
 }
-function belvLeaderNames(g){return [...g.roles.cache.values()].filter(r=>r.name===LEADERSHIP||((x=>x&&x.min<=19)(classifyBelvRole(r,rankMap())))).map(r=>r.name);}
+function belvLeaderNames(g){return [...g.roles.cache.values()].filter(r=>{const x=classifyBelvRole(r,rankMap());return x&&x.max<=9;}).map(r=>r.name);}
 function access(g,key){
  const legal=ROLES.map(x=>x.name),leaders=belvLeaderNames(g);
  if(key==='leadership'){const names=[...new Set(LEGAL_LEADS.concat(leaders))];return overwrites(g,names,names);}
