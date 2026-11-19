@@ -51,6 +51,13 @@ function overwrites(g,allowed,writers=allowed){
  return out;
 }
 function belvLeaderNames(g){return [...g.roles.cache.values()].filter(r=>{const x=classifyBelvRole(r,rankMap());return x&&x.max<=9;}).map(r=>r.name);}
+function caseOverwrites(g,clientId,lawyerId,closed=false){
+ const allowedRoles=[...new Set(LEGAL_LEADS.concat(belvLeaderNames(g)))],out=[{id:g.roles.everyone.id,deny:[PermissionFlagsBits.ViewChannel]}];
+ for(const name of allowedRoles){const r=role(g,name);if(!r)continue;const allow=[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory];if(!closed)allow.push(PermissionFlagsBits.SendMessages);out.push({id:r.id,allow});}
+ for(const id of [clientId,lawyerId]){if(!/^\\d{16,22}$/.test(String(id||'')))continue;const allow=[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory];if(!closed)allow.push(PermissionFlagsBits.SendMessages);out.push({id:String(id),allow});}
+ const bot=g.members.me;if(bot)out.push({id:bot.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,...(closed?[]:[PermissionFlagsBits.SendMessages]),PermissionFlagsBits.ManageChannels]});
+ return out;
+}
 function access(g,key){
  const legal=ROLES.map(x=>x.name),leaders=belvLeaderNames(g);
  if(key==='leadership'){const names=[...new Set(LEGAL_LEADS.concat(leaders))];return overwrites(g,names,names);}
@@ -94,6 +101,13 @@ async function setup(i){
     if(!c){c=await g.channels.create({name,type:ChannelType.GuildText,parent:parent.id,permissionOverwrites:access(g,key),reason:'BELV jogi osztály'});created.push('csatorna: '+name);}else existing.push('csatorna: '+name);
     channelIds[key]=c.id;
    }
+  }
+  const caseRows=await dbQuery('SELECT case_number,channel_id,client_id,lawyer_id,status FROM nexabot_belv_legal_cases WHERE guild_id=$1',[g.id]);
+  for(const row of caseRows?.rows||[]){
+   const c=await g.channels.fetch(String(row.channel_id)).catch(()=>null);
+   if(!c||c.type!==ChannelType.GuildText||!String(c.topic||'').startsWith('nexa-belv-legal|')){errors.push('Ügycsatorna nem található vagy nem ellenőrizhető: BELV-JOGI-'+String(row.case_number).padStart(3,'0'));continue;}
+   try{await c.permissionOverwrites.set(caseOverwrites(g,row.client_id,row.lawyer_id,row.status==='closed'),'BELV jogi ügy hozzáférések frissítése');}
+   catch(e){errors.push('Ügycsatorna jogosultsága ('+c.name+'): '+e.message);}
   }
   for(const cat of CATS)for(const [key] of cat.channels){
    const c=g.channels.cache.get(channelIds[key]);if(!c)continue;
@@ -194,12 +208,7 @@ async function openCaseFromModal(i,clientId,lawyerId){
  const seq=await dbQuery('INSERT INTO nexabot_belv_legal_sequence(guild_id,next_number) VALUES($1,2) ON CONFLICT(guild_id) DO UPDATE SET next_number=nexabot_belv_legal_sequence.next_number+1 RETURNING next_number-1 AS case_number',[i.guildId]);
  const n=Number(seq?.rows?.[0]?.case_number);
  if(!Number.isInteger(n)||n<1)return i.editReply('Nem sikerült ügyszámot kiosztani. Próbáld újra.');
- const legalLeads=LEGAL_LEADS.map(x=>role(i.guild,x)).filter(Boolean),belvLeads=[...i.guild.roles.cache.values()].filter(r=>r.name===LEADERSHIP||((x=>x&&x.min<=19)(classifyBelvRole(r,rankMap()))));
- const allow=r=>({id:r.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ReadMessageHistory]});
- const perms=[{id:i.guild.roles.everyone.id,deny:[PermissionFlagsBits.ViewChannel]},...legalLeads.map(allow),...belvLeads.map(allow),
-  {id:clientId,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ReadMessageHistory]},
-  {id:lawyer.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ReadMessageHistory]},
-  {id:i.guild.members.me.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.ManageChannels]}];
+ const perms=caseOverwrites(i.guild,clientId,lawyer.id,false);
  const clientName=i.fields.getTextInputValue('client_name').trim(),summaryTime=i.fields.getTextInputValue('summary_time').trim(),
   involved=i.fields.getTextInputValue('involved').trim(),evidence=i.fields.getTextInputValue('evidence').trim(),
   requestedHelp=i.fields.getTextInputValue('requested_help').trim();
