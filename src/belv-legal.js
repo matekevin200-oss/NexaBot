@@ -139,7 +139,7 @@ async function selectIntakeParty(i){
  if(i.guildId!==BELV_GUILD_ID||!isLegalMember(i.member))return reply(i,'Ezt az űrlapot csak BELV vezető vagy jogi osztálytag használhatja.');
  const key=intakeDraftKey(i),draft=legalIntakeDrafts.get(key);
  if(!draft||Date.now()-draft.updatedAt>10*60*1000){legalIntakeDrafts.delete(key);return reply(i,'Az űrlap lejárt. Kattints újra a **BELV jogi ügy indítása** gombra.');}
- const selected=i.values?.[0];if(!/^\\d{16,22}$/.test(String(selected||'')))return reply(i,'Nem sikerült kiolvasni a kiválasztott Discord-tagot.');
+ const selected=i.values?.[0];if(!/^\d{16,22}$/.test(String(selected||'')))return reply(i,'Nem sikerült kiolvasni a kiválasztott Discord-tagot.');
  if(i.customId.endsWith('select-client'))draft.clientId=selected;else draft.lawyerId=selected;
  draft.updatedAt=Date.now();legalIntakeDrafts.set(key,draft);
  const status=['Ügyfél: '+(draft.clientId?'<@'+draft.clientId+'>':'nincs kiválasztva'),'Ügyvéd: '+(draft.lawyerId?'<@'+draft.lawyerId+'>':'nincs kiválasztva')].join(' • ');
