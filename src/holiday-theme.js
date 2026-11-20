@@ -7,18 +7,18 @@ const { recordAudit, recordError } = require('./telemetry');
 const BELV_GUILD_ID = '1517509643734221030';
 const locks = new Set();
 const THEMES = Object.freeze({
-  karacsony: { label: 'Karácsony', emojis: ['🎄', '❄️', '🎁', '🕯️', '⭐', '🔔'] },
-  uj_ev: { label: 'Újév', emojis: ['🎆', '✨', '🥂', '🎊', '🪩', '⭐'] },
-  valentin: { label: 'Valentin-nap', emojis: ['💝', '❤️', '🌹', '💌', '💕', '💘'] },
-  husvet: { label: 'Húsvét', emojis: ['🐣', '🐰', '🥚', '🌷', '🪻', '🌼'] },
-  halloween: { label: 'Halloween', emojis: ['🎃', '👻', '🦇', '🕸️', '☠️', '🌙'] },
-  mikulas: { label: 'Mikulás', emojis: ['🎅', '🧦', '🍬', '🔔', '🎁', '❄️'] },
-  farsang: { label: 'Farsang', emojis: ['🎭', '🎉', '🎈', '🎊', '🥳', '🎶'] },
-  marcius15: { label: 'Március 15.', emojis: ['🇭🇺', '⭐', '📜', '🟥', '⬜', '🟩'] },
-  augusztus20: { label: 'Augusztus 20.', emojis: ['🇭🇺', '👑', '🌾', '⭐', '🟥', '🟩'] },
-  mindenszentek: { label: 'Mindenszentek', emojis: ['🕯️', '🕊️', '🌹', '⭐', '🍂', '🤍'] },
-  anyak_napja: { label: 'Anyák napja', emojis: ['🌷', '💐', '💝', '🌸', '❤️', '🌼'] },
-  gyereknap: { label: 'Gyereknap', emojis: ['🎈', '🧸', '🎨', '🎉', '🌈', '🎁'] }
+  karacsony: { label: 'Karácsony', emojis: ['🎄', '🎁', '✨', '❄️', '🕯️', '🔔'] },
+  uj_ev: { label: 'Újév', emojis: ['🎆', '🥂', '🎇', '✨', '🪩', '🎉'] },
+  valentin: { label: 'Valentin-nap', emojis: ['💌', '🌹', '💝', '🩷', '💘', '❤️'] },
+  husvet: { label: 'Húsvét', emojis: ['🐣', '🐰', '🥚', '🌷', '🌼', '🪻'] },
+  halloween: { label: 'Halloween', emojis: ['🎃', '🦇', '👻', '🕸️', '🕯️', '🌙'] },
+  mikulas: { label: 'Mikulás', emojis: ['🎅', '🛷', '🎁', '🔔', '🍪', '❄️'] },
+  farsang: { label: 'Farsang', emojis: ['🎭', '🥳', '🎊', '🎈', '🎶', '🎉'] },
+  marcius15: { label: 'Március 15.', emojis: ['🇭🇺', '🪶', '📜', '⭐', '🟥', '🟩'] },
+  augusztus20: { label: 'Augusztus 20.', emojis: ['🇭🇺', '👑', '🌾', '⛪', '🎆', '✨'] },
+  mindenszentek: { label: 'Mindenszentek', emojis: ['🕯️', '🕊️', '🤍', '🌹', '🍂', '🙏'] },
+  anyak_napja: { label: 'Anyák napja', emojis: ['💐', '🌷', '🩷', '🌸', '🌼', '💝'] },
+  gyereknap: { label: 'Gyereknap', emojis: ['🎈', '🧸', '🪁', '🎨', '🌈', '🎁'] }
 });
 
 function buildCommand() {
