@@ -280,6 +280,7 @@ async function handleCommand(interaction) {
   if (interaction.commandName === 'szobeli') return require('./belv-oral-exam').handleCommand(interaction);
   if (interaction.commandName === 'mdt') return handleMdtCommand(interaction);
   if (interaction.commandName === 'allomany') return require('./belv-mdt').handleBelvRosterCommand(interaction);
+  if (interaction.commandName === 'unnepi-megjelenes') return require('./holiday-theme').handleCommand(interaction);
   if (interaction.commandName === 'belv-rendszer') return require('./belv-discipline').handleCommand(interaction);
   if (interaction.commandName === 'bomo-setup') return require('./bomo').handleCommand(interaction);
   if (interaction.commandName.startsWith('aktivitas-')) return require('./belv-activity').handleCommand(interaction);
