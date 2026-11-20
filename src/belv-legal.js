@@ -170,6 +170,35 @@ async function setup(i){
    {name:'Képzés',roles:trainingRoles},
    {name:'Egyéb rangok',roles:otherRoles}
   ].filter(group=>group.roles.length);
+  const colorUpdates=new Map();
+  const setColor=(r,color)=>{if(r)colorUpdates.set(r.id,{role:r,color});};
+  for(const {r,rank} of leaders){
+   const color=rank.min<=1?0x812A38:rank.min<=2?0x963B45:rank.min<=3?0x825E39:rank.min<=9?0x96682F:rank.min<=14?0x8B7736:0x4D5F70;
+   setColor(r,color);
+  }
+  for(const r of bomoRoles){
+   const name=normalizedRoleName(r.name);
+   const color=name.includes('parancsnokhelyettes')?0x963B45:name.includes('parancsnok')?0x812A38:name.includes('vezeto operativ')?0x8C5A24:name.includes('operativ tiszt')?0x225C50:name.includes('fedett ugynok')?0x29445D:0x687783;
+   setColor(r,color);
+  }
+  const legalColors=[0x812A38,0x96612F,0x27465F,0x315B78,0x315B78,0x719BB7,0x91B2C3];
+  legalOrder.forEach((r,index)=>setColor(r,legalColors[index]||0x315B78));
+  const staffColors=[
+   [20,24,0x67517D],[25,34,0x555D75],[35,39,0x2D536D],[40,49,0x355D73],
+   [50,59,0x2F665E],[60,69,0x3D615D],[70,89,0x4E6E69],[90,99,0x778D8D]
+  ];
+  for(const r of belvStaffRoles){
+   const rank=roleRank(r),range=staffColors.find(([min,max])=>rank&&rank.min>=min&&rank.min<=max);
+   if(range)setColor(r,range[2]);
+  }
+  for(const r of disciplineRoles)setColor(r,0x913844);
+  for(const r of trainingRoles)setColor(r,0x718DA1);
+  let recolored=0;
+  for(const {role:target,color} of colorUpdates.values()){
+   if(target.color===color)continue;
+   try{await target.edit({color,reason:'BELV rangok egységes, komoly színpalettája'});recolored++;}
+   catch(e){errors.push('Rang színe ('+target.name+'): '+e.message);}
+  }
   const orderedRoles=[];
   let separatorIndex=0;
   for(let index=0;index<groups.length;index++){
@@ -226,8 +255,8 @@ async function setup(i){
   }
   const expected=CATS.reduce((a,c)=>a+c.channels.length,0),complete=errors.length===0&&Object.keys(channelIds).length===expected;
   await dbQuery('UPDATE nexabot_belv_legal_setup SET status=$2,resources=$3::jsonb,updated_at=NOW() WHERE guild_id=$1',[g.id,complete?'completed':'partial',JSON.stringify({roles:roleIds,categories:categoryIds,channels:channelIds})]);
-  await audit(complete?'belv_legal_setup_completed':'belv_legal_setup_partial',i,{created:created.length,existing:existing.length,errors});
-  const lines=['**BELV Jogi és Ügyvédi Osztály '+(complete?'telepítve':'részben telepítve')+'.**','**Létrehozva:** '+(created.join(' • ')||'semmi új'),'**Már létezett:** '+(existing.join(' • ')||'nincs')];
+  await audit(complete?'belv_legal_setup_completed':'belv_legal_setup_partial',i,{created:created.length,existing:existing.length,recolored,errors});
+  const lines=['**BELV Jogi és Ügyvédi Osztály '+(complete?'telepítve':'részben telepítve')+'.**','**Létrehozva:** '+(created.join(' • ')||'semmi új'),'**Már létezett:** '+(existing.join(' • ')||'nincs'),'**Rangszínek frissítve:** '+recolored];
   if(errors.length)lines.push('**Ellenőrizendő:** '+errors.join(' • '));return i.editReply(lines.join('\n').slice(0,1950));
  }catch(e){
   await dbQuery('UPDATE nexabot_belv_legal_setup SET status=$2,updated_at=NOW() WHERE guild_id=$1',[g.id,'partial']).catch(()=>null);
