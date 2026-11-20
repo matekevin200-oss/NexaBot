@@ -52,7 +52,7 @@ function overwrites(g,allowed,writers=allowed){
 }
 function applicationOverwrites(g){
  const out=[{id:g.roles.everyone.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory],deny:[PermissionFlagsBits.SendMessages,PermissionFlagsBits.AddReactions]}];
- const group=role(g,LAWYER_ROLE);if(group)out.push({id:group.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory]});
+ for(const r of g.roles.cache.values()){const rank=classifyBelvRole(r,rankMap());if(rank&&['foosztalyvezeto','muveleti-vezeto'].includes(rank.key))out.push({id:r.id,deny:[PermissionFlagsBits.ViewChannel]});}
  const bot=g.members.me;if(bot)out.push({id:bot.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages,PermissionFlagsBits.EmbedLinks]});
  return out;
 }
