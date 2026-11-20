@@ -19,6 +19,8 @@ const CATS=[
 ];
 const SEEDS={
  announcements:['BELV Jogi és Ügyvédi Osztály','A BELV-en belüli Jogi és Ügyvédi Osztály megkezdte működését. A részleget a BELV vezetősége felügyeli. Az ügykezelés a szerveren belüli RP keretei között történik.'],
+ chat:['Jogi osztály – belső kommunikáció','Üdvözlünk a BELV Jogi és Ügyvédi Osztályának belső chatjében. Általános egyeztetésre használd; konkrét ügyféladatot, bizonyítékot vagy bizalmas iratot csak az adott privát ügycsatornában ossz meg. Tartsd be az osztály szabályzatát és kommunikálj tárgyszerűen.'],
+ presence:['Jelenlét- és időpont-egyeztetés','A **Jogi időpont megadása** gombbal jelezheted az elérhetőségedet vagy javasolhatsz egyeztetési időpontot. A beküldést a bot a jogi osztály csatornájában rögzíti. Ne adj meg ügyfélre vonatkozó bizalmas adatot.'],
  rules:['Osztályszabályzat','• Az osztály a BELV belső szervezeti része, a BELV vezetőségének felügyelete alatt.\n• Kizárólag szerveren belüli RP-ügyeket kezelünk; ez nem valós jogi tanácsadás.\n• Ügyféladatot, bizonyítékot és ügyiratot nyilvános csatornába tilos küldeni.\n• Minden ügyhöz kijelölt ügyvéd és ügyszám tartozik.\n• Összeférhetetlenséget jelezni kell a vezetőségnek.\n• Lezáráskor az ügycsatorna megmarad és csak olvasható lesz.'],
  intake:['Új megkeresések','Ügyféladatot és bizonyítékot ne küldj ebbe a csatornába. A **BELV jogi ügy indítása** gombbal válaszd ki az ügyfelet és az ügyvédet, majd töltsd ki a privát ügyűrlapot. A /belv-jogi-ugy parancs továbbra is használható.'],
  applications:['Jogi osztály jelentkezés','A gombbal nyisd meg a NEXA űrlapját. Kizárólag RP-adatokat adj meg; valódi személyes vagy érzékeny adatot ne küldj. A beküldés az Ügyvédek ranggal rendelkező jogi osztálytagokhoz kerül.'],
@@ -34,19 +36,22 @@ async function ensureLegalApplicationTemplate(guild,channelIds,roleIds){
  const current=getGuildConfig(guild.id),templates=current.applications?.templates||[];
  const template={
   key:LEGAL_APPLICATION_TEMPLATE_KEY,title:'BELV jogi osztály jelentkezés',emoji:'⚖️',
-  description:'Töltsd ki a NEXA jelentkezési űrlapját. A válaszaid privátan, a jogi osztály bírálóihoz kerülnek. Csak szerveren belüli RP-adatokat adj meg.',
+  description:'Kérjük, hogy minden kérdésre komolyan, részletesen és saját megfogalmazásodban válaszolj. A jelentkezés a kommunikációs készségedet, jogi ismereteidet, problémamegoldó képességedet és RP-tapasztalatodat méri. A jelentkezéseket legfeljebb 48 órán belül bíráljuk el; a hiányos, komolytalan vagy másolt válasz elutasítható. A válaszokat csak a jogi osztály bírálói látják.',
   openChannelId:channelIds.application,reviewChannelId:channelIds.leadership,resultChannelId:channelIds.application,
   accessRoleId:null,reviewerRoleId:roleIds[ROLES[0].name],
   reviewerRoleIds:[roleIds[ROLES[1].name],roleIds[ROLES[2].name]].filter(Boolean),
   acceptedRoleId:null,notificationRoleId:null,blindReview:false,active:true,cooldownHours:24,
   questions:[
-   {label:'RP-neved',placeholder:'A BELV-szerveren használt karaktered neve',maxLength:100},
-   {label:'Megpályázott jogi rang',placeholder:'Gyakornok vagy ügyvédjelölt',maxLength:100},
-   {label:'Miért jelentkezel a jogi osztályba?',placeholder:'Írd le a motivációdat',maxLength:1000},
-   {label:'RP- és ügyintézési tapasztalat',placeholder:'Korábbi tapasztalat vagy: nincs',maxLength:1000},
-   {label:'Heti elérhetőséged',placeholder:'Mikor tudsz részt venni az RP-ben?',maxLength:300},
-   {label:'Hogyan kezelnél egy bizalmas ügyiratot?',placeholder:'Írd le a titoktartási és hozzáférési szabályokat',maxLength:1000},
-   {label:'Helyzetgyakorlat',placeholder:'Mit teszel, ha illetéktelen kér adatot egy folyamatban lévő ügyről?',maxLength:1000}
+   {label:'1. 👤 Bemutatkozás — Mutatkozz be röviden! Hány éves vagy, és mióta játszol RP-szervereken?',placeholder:'Saját szavaiddal válaszolj.',maxLength:1000},
+   {label:'2. ⚖️ Motiváció — Miért szeretnél csatlakozni a BELV Jogi és Ügyvédi Osztályához? Miért ezt az alosztályt választottad?',placeholder:'Írd le a motivációdat és a választásod okát.',maxLength:1000},
+   {label:'3. 📚 Jogi alapismeretek — Szerinted mi egy ügyvéd legfontosabb feladata, és milyen kötelezettségei vannak az ügyfelével szemben?',placeholder:'Fejtsd ki a saját álláspontodat.',maxLength:1000},
+   {label:'4. 🏛️ Ártatlanság vélelme — Mit jelent az ártatlanság vélelme, és miért fontos egy büntetőeljárás során?',placeholder:'Magyarázd el a jelentőségét.',maxLength:1000},
+   {label:'5. 🔒 Ügyvédi titoktartás — Mit tennél, ha az ügyfeled bizalmas információkat osztana meg veled, amelyeket egy másik személy szeretne megtudni?',placeholder:'Írd le, hogyan kezelnéd a bizalmas információt.',maxLength:1000},
+   {label:'6. 🗣️ Tárgyalási szituáció — Egy tárgyaláson az ügyész olyan bizonyítékot mutat be, amely szerinted nem megbízható. Hogyan reagálnál, és milyen lépéseket tennél az ügyfeled védelmében?',placeholder:'Írd le a tárgyalási lépéseidet.',maxLength:1000},
+   {label:'7. 🚨 Intézkedési szituáció — Egy rendvédelmi szerv tagja szerinted szabálytalanul jár el az ügyfeleddel szemben. Hogyan kezelnéd a helyzetet?',placeholder:'Írd le a szabályos RP-eljárást.',maxLength:1000},
+   {label:'8. ⚖️ Etikai döntés — Mit tennél, ha az ügyfeled arra kérne, hogy hamis bizonyítékot használj fel a tárgyaláson?',placeholder:'Írd le az etikai döntésedet és az indokát.',maxLength:1000},
+   {label:'9. 🤝 Konfliktuskezelés — Hogyan kezelnéd, ha egy másik ügyvéd vagy rendvédelmi vezető tiszteletlenül beszélne veled egy hivatalos eljárás során?',placeholder:'Mutasd be a professzionális reakciódat.',maxLength:1000},
+   {label:'10. 🎯 Alkalmasság és aktivitás — Miért gondolod, hogy alkalmas lennél a Jogi és Ügyvédi Osztály tagjának? Hetente mennyi időt tudnál a feladataidra fordítani?',placeholder:'Írd le az alkalmasságodat és heti vállalásodat.',maxLength:1000}
   ]
  };
  const remaining=templates.filter(item=>item.key!==LEGAL_APPLICATION_TEMPLATE_KEY);
@@ -176,7 +181,7 @@ async function setup(i){
     const marker='NEXA_BELV_LEGAL:'+seedKey,appFooter='NexaBot • TGF Forge • '+LEGAL_APPLICATION_TEMPLATE_KEY;
     const msgs=await c.messages.fetch({limit:50}).catch(()=>null);
     const existingSeed=msgs?.find(m=>m.author.id===g.client.user.id&&(String(m.embeds[0]?.footer?.text||'').includes(marker)||(seedKey==='applications'&&String(m.embeds[0]?.footer?.text||'').startsWith(appFooter))));
-    let payload={embeds:[embed(seed[0],seed[1]).setFooter({text:marker+' • BELV'})],components:key==='intake'?[intakeButtonRow()]:key==='application'?[applicationButtonRow()]:[]};
+    let payload={embeds:[embed(seed[0],seed[1]).setFooter({text:marker+' • BELV'})],components:key==='intake'?[intakeButtonRow()]:key==='application'?[applicationButtonRow()]:key==='presence'?[presenceButtonRow()]:[]};
     if(seedKey==='applications'&&legalApplicationTemplate)payload=applicationPanel(legalApplicationTemplate);
     if(existingSeed){if(key==='intake'||seedKey==='applications')await existingSeed.edit(payload);continue;}
     await c.send(payload);created.push('kezdőüzenet: '+c.name);
@@ -198,6 +203,38 @@ function safeName(s){return String(s||'ugy').normalize('NFKD').replace(/[\u0300-
 function intakeDraftKey(i){return i.guildId+':'+i.user.id;}
 function intakeButtonRow(){return new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('belv_legal:intake').setLabel('BELV jogi ügy indítása').setStyle(ButtonStyle.Primary));}
 function applicationButtonRow(){return new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('belv_legal:application').setLabel('Jelentkezés a jogi osztályba').setStyle(ButtonStyle.Success));}
+function presenceButtonRow(){return new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('belv_legal:presence').setLabel('Jogi időpont megadása').setEmoji('📅').setStyle(ButtonStyle.Primary));}
+async function startPresenceForm(i){
+ if(i.guildId!==BELV_GUILD_ID)return reply(i,'Ez az űrlap kizárólag a BELV Discord-szerveren használható.');
+ if(!isLegalMember(i.member))return reply(i,'Ezt az űrlapot csak a jogi osztály Ügyvédek ranggal rendelkező tagjai használhatják.');
+ const modal=new ModalBuilder().setCustomId('belv_legal:presence-submit').setTitle('Jogi időpont-egyeztetés')
+  .addComponents(
+   caseModalInput('topic','Egyeztetés témája',TextInputStyle.Short,100,'Például: heti jogi megbeszélés'),
+   caseModalInput('time','Javasolt időpont',TextInputStyle.Short,100,'Dátum és idő, például: 2026.11.22. 18:00'),
+   caseModalInput('duration','Várható időtartam',TextInputStyle.Short,80,'Például: 30 perc'),
+   new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('participants').setLabel('Résztvevők').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500).setPlaceholder('Megjelölések vagy szerepkörök, ha ismertek')),
+   new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('notes').setLabel('Megjegyzés').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(800).setPlaceholder('Opcionális, bizalmas ügyadat nélkül'))
+  );
+ return i.showModal(modal);
+}
+async function submitPresenceForm(i){
+ if(i.guildId!==BELV_GUILD_ID)return reply(i,'Ez az űrlap kizárólag a BELV Discord-szerveren használható.');
+ if(!isLegalMember(i.member))return reply(i,'Ezt az űrlapot csak a jogi osztály tagjai küldhetik be.');
+ if(i.channel?.name!=='📅・jelenlét-és-időpontok')return reply(i,'Az időpontűrlap csak a BELV jogi jelenléti csatornájában használható.');
+ await i.deferReply({flags:MessageFlags.Ephemeral});
+ const topic=i.fields.getTextInputValue('topic').trim(),time=i.fields.getTextInputValue('time').trim(),duration=i.fields.getTextInputValue('duration').trim();
+ const participants=i.fields.getTextInputValue('participants').trim(),notes=i.fields.getTextInputValue('notes').trim();
+ const fields=[{name:'Téma',value:topic},{name:'Javasolt időpont',value:time},{name:'Várható időtartam',value:duration}];
+ if(participants)fields.push({name:'Résztvevők',value:participants});
+ if(notes)fields.push({name:'Megjegyzés',value:notes});
+ const message=await i.channel.send({
+  content:'📅 Időpont-egyeztetési javaslat • '+i.user,
+  embeds:[embed('Jogi időpont-egyeztetés','Beküldő: <@'+i.user.id+'>').addFields(fields).setTimestamp()],
+  allowedMentions:{users:[i.user.id]}
+ });
+ await audit('belv_legal_presence_submitted',i,{messageId:message.id,topic,time});
+ return i.editReply('✅ Az időpont-egyeztetési javaslatot rögzítettem: '+message.url);
+}
 function intakeFormRows(){
  return [
   new ActionRowBuilder().addComponents(new UserSelectMenuBuilder().setCustomId('belv_legal:select-client').setPlaceholder('Ügyfél kiválasztása').setMinValues(1).setMaxValues(1)),
@@ -356,6 +393,7 @@ async function syncGuildCommands(guild){
  }
 }
 async function handleInteraction(i){
+ if(i.isButton?.()&&i.customId==='belv_legal:presence')return startPresenceForm(i);
  if(i.isButton?.()&&i.customId==='belv_legal:application')return startApplication(i);
  if(i.isButton?.()&&i.customId==='belv_legal:intake')return startIntake(i);
  if(i.isButton?.()&&i.customId==='belv_legal:intake-next')return continueIntake(i);
@@ -363,6 +401,7 @@ async function handleInteraction(i){
  if(i.isModalSubmit?.()&&String(i.customId||'').startsWith('belv_legal:')){
   const parts=i.customId.split(':');
   if(parts[1]==='application-submit'&&parts.length===2)return submitApplication(i);
+  if(parts[1]==='presence-submit'&&parts.length===2)return submitPresenceForm(i);
   if(parts[1]==='open'&&parts.length===4&&/^\d{16,22}$/.test(parts[2])&&/^\d{16,22}$/.test(parts[3]))return openCaseFromModal(i,parts[2],parts[3]);
   if(parts[1]==='close'&&parts.length===3&&/^\d{16,22}$/.test(parts[2]))return closeCaseFromModal(i,parts[2]);
   return reply(i,'Érvénytelen vagy lejárt jogi űrlap.');
