@@ -18,6 +18,8 @@ const { recordAudit } = require('./telemetry');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const QUESTIONS_PER_PAGE = 5;
+const BELV_LEGAL_GUILD_ID = '1517509643734221030';
+const BELV_LEGAL_TEMPLATE_KEY = 'tgf_belv_legal';
 
 function templatesForGuild(guildId) {
   return getGuildConfig(guildId).applications?.templates || [];
@@ -173,7 +175,11 @@ function reviewTemplate(guildId, snapshot) {
 }
 
 function canReview(member, template) {
-  return [template.reviewerRoleId, ...(template.reviewerRoleIds || [])].some((id) => hasRoleOrAdmin(member, id));
+  const roleIds = [template?.reviewerRoleId, ...(template?.reviewerRoleIds || [])].filter(Boolean);
+  if (template?.key === BELV_LEGAL_TEMPLATE_KEY) {
+    return roleIds.some((id) => member?.roles?.cache?.has(id));
+  }
+  return roleIds.some((id) => hasRoleOrAdmin(member, id));
 }
 
 function reviewEmbeds(application, guild, revealIdentity = false) {
@@ -257,11 +263,24 @@ async function saveDraft(guildId, template, userId, answers, nextPage) {
 }
 
 async function handleApplicationButton(interaction) {
-  if (!isBviGuild(interaction.guildId) || !moduleEnabled(interaction.guildId, 'bvi')) {
+  const [action, value, pageText, ownerId] = interaction.customId.split(':');
+  const bviEnabled = isBviGuild(interaction.guildId) && moduleEnabled(interaction.guildId, 'bvi');
+  let legalApplicationAllowed = false;
+  if (!bviEnabled && interaction.guildId === BELV_LEGAL_GUILD_ID) {
+    if (['tgf_start', 'tgf_begin', 'tgf_continue'].includes(action)) {
+      legalApplicationAllowed = value === BELV_LEGAL_TEMPLATE_KEY;
+    } else if (['tgf_accept', 'tgf_reject'].includes(action)) {
+      const application = await dbQuery(
+        'SELECT template_key FROM nexabot_applications WHERE id = $1 AND guild_id = $2',
+        [value, interaction.guildId]
+      ).catch(() => null);
+      legalApplicationAllowed = application?.rows?.[0]?.template_key === BELV_LEGAL_TEMPLATE_KEY;
+    }
+  }
+  if (!bviEnabled && !legalApplicationAllowed) {
     return ephemeralError(interaction, 'Az egyedi TGF-rendszert ezen a szerveren az Owner nem engedélyezte.');
   }
   if (!isPersistentStore()) return ephemeralError(interaction, 'A TGF Forge biztonságos használatához PostgreSQL adatbázis szükséges.');
-  const [action, value, pageText, ownerId] = interaction.customId.split(':');
   if (action === 'tgf_start') {
     const template = findApplicationTemplate(interaction.guildId, value);
     if (!template?.active) return ephemeralError(interaction, 'Ez a jelentkezési folyamat jelenleg nem aktív.');
