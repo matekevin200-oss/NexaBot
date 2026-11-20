@@ -62,7 +62,7 @@ function caseOverwrites(g,clientId,lawyerId,closed=false){
  const bot=g.members.me;if(bot)out.push({id:bot.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,...(closed?[]:[PermissionFlagsBits.SendMessages]),PermissionFlagsBits.ManageChannels]});
  return out;
 }
-function access(g,key){if(key==='application')return applicationOverwrites(g);return overwrites(g,[LAWYER_ROLE]);}
+function access(g,key){return overwrites(g,[LAWYER_ROLE]);}
 async function syncAttorneyMemberships(g,groupRole,errors){
  const members=await g.members.fetch();
  for(const member of members.values()){
@@ -109,7 +109,7 @@ async function setup(i){
    for(const [key,name] of cat.channels){
     const all=await g.channels.fetch();let c=all.find(x=>x?.type===ChannelType.GuildText&&x.name===name);
     if(c&&c.parentId!==parent.id){errors.push('Más kategóriában már létezik, nem módosítottam: '+name);continue;}
-    if(!c){c=await g.channels.create({name,type:ChannelType.GuildText,parent:parent.id,permissionOverwrites:access(g,key),reason:'BELV jogi osztály'});created.push('csatorna: '+name);}else existing.push('csatorna: '+name);
+    if(!c){c=await g.channels.create({name,type:ChannelType.GuildText,parent:parent.id,permissionOverwrites:key==='application'?applicationOverwrites(g):access(g,key),reason:'BELV jogi osztály'});created.push('csatorna: '+name);}else existing.push('csatorna: '+name);
     channelIds[key]=c.id;
    }
   }
@@ -123,12 +123,12 @@ async function setup(i){
   for(const cat of CATS)for(const [key] of cat.channels){
    const c=g.channels.cache.get(channelIds[key]);if(!c)continue;
    try{
-    await c.permissionOverwrites.set(access(g,key),'BELV jogi osztály jogosultság');
+    await c.permissionOverwrites.set(key==='application'?applicationOverwrites(g):access(g,key),'BELV jogi osztály jogosultság');
     const seed=SEEDS[key];if(!seed)continue;const marker='NEXA_BELV_LEGAL:'+key;
     const msgs=await c.messages.fetch({limit:50}).catch(()=>null);
     const existingSeed=msgs?.find(m=>m.author.id===g.client.user.id&&String(m.embeds[0]?.footer?.text||'').includes(marker));
     const payload={embeds:[embed(seed[0],seed[1]).setFooter({text:marker+' • BELV'})],components:key==='intake'?[intakeButtonRow()]:key==='application'?[applicationButtonRow()]:[]};
-    if(existingSeed){if(key==='intake')await existingSeed.edit(payload);continue;}
+    if(existingSeed){if(key==='intake'||key==='application')await existingSeed.edit(payload);continue;}
     await c.send(payload);created.push('kezdőüzenet: '+c.name);
    }catch(e){errors.push('Csatorna '+c.name+': '+e.message);}
   }
@@ -170,19 +170,25 @@ async function startApplication(i){
 }
 async function submitApplication(i){
  if(i.guildId!==BELV_GUILD_ID)return reply(i,'Ez az űrlap kizárólag a BELV Discord-szerveren használható.');
- const inbox=(await i.guild.channels.fetch()).find(c=>c?.type===ChannelType.GuildText&&c.name==='🔒・vezetőségi-egyeztetés'&&c.parent?.name===CATS[1].name);
- if(!inbox)return reply(i,'Nem találom a jogi jelentkezések fogadására használt belső csatornát; értesítsd a BELV rendszergazdáját.');
- const fields=[
-  {name:'Jelentkező',value:'<@'+i.user.id+'>',inline:true},
-  {name:'RP-név',value:i.fields.getTextInputValue('rp_name').trim(),inline:true},
-  {name:'Megpályázott rang',value:i.fields.getTextInputValue('desired_rank').trim(),inline:true},
-  {name:'Motiváció',value:i.fields.getTextInputValue('motivation').trim()},
-  {name:'Tapasztalat',value:i.fields.getTextInputValue('experience').trim()},
-  {name:'Elérhetőség',value:i.fields.getTextInputValue('availability').trim()}
- ];
- await inbox.send({embeds:[embed('Új jogi osztály jelentkezés','Beküldő: <@'+i.user.id+'>').addFields(fields).setTimestamp()]});
- await audit('belv_legal_application_submitted',i,{reviewChannelId:inbox.id});
- return reply(i,'✅ A jelentkezésedet elküldtem a jogi osztály elbírálására.');
+ await i.deferReply({flags:MessageFlags.Ephemeral});
+ try{
+  const inbox=(await i.guild.channels.fetch()).find(c=>c?.type===ChannelType.GuildText&&c.name==='🔒・vezetőségi-egyeztetés'&&c.parent?.name===CATS[1].name);
+  if(!inbox)return i.editReply('Nem találom a jogi jelentkezések fogadására használt belső csatornát; értesítsd a BELV rendszergazdáját.');
+  const fields=[
+   {name:'Jelentkező',value:'<@'+i.user.id+'>',inline:true},
+   {name:'RP-név',value:i.fields.getTextInputValue('rp_name').trim(),inline:true},
+   {name:'Megpályázott rang',value:i.fields.getTextInputValue('desired_rank').trim(),inline:true},
+   {name:'Motiváció',value:i.fields.getTextInputValue('motivation').trim()},
+   {name:'Tapasztalat',value:i.fields.getTextInputValue('experience').trim()},
+   {name:'Elérhetőség',value:i.fields.getTextInputValue('availability').trim()}
+  ];
+  await inbox.send({embeds:[embed('Új jogi osztály jelentkezés','Beküldő: <@'+i.user.id+'>').addFields(fields).setTimestamp()]});
+  await audit('belv_legal_application_submitted',i,{reviewChannelId:inbox.id});
+  return i.editReply('✅ A jelentkezésedet elküldtem a jogi osztály elbírálására.');
+ }catch(error){
+  await recordError(error,{command:'belv_legal_application',guildId:i.guildId,userId:i.user.id}).catch(()=>null);
+  return i.editReply('A jelentkezést nem sikerült továbbítani. Próbáld meg később, vagy szólj a jogi osztály egyik tagjának.');
+ }
 }
 async function startIntake(i){
  if(i.guildId!==BELV_GUILD_ID)return reply(i,'Ez az űrlap kizárólag a BELV Discord-szerveren használható.');
