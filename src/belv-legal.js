@@ -129,13 +129,17 @@ async function setup(i){
   const movableRoles=[...g.roles.cache.values()].filter(r=>!r.managed&&r.id!==g.roles.everyone.id&&r.position<(bot.roles?.highest?.position||Infinity));
   const roleRank=r=>classifyBelvRole(r,rankMap());
   const leaders=movableRoles.map(r=>({r,rank:roleRank(r)})).filter(x=>x.rank&&x.rank.min<=19).sort((a,b)=>a.rank.min-b.rank.min||b.r.position-a.r.position);
-  const normalizedRoleName=value=>String(value||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();
+  const normalizedRoleName=value=>[...String(value||'').normalize('NFD')].filter(ch=>{const cp=ch.codePointAt(0);return cp<0x300||cp>0x36f;}).join('').toLowerCase();
   const roleGroupOrder=(roles,keys)=>roles.sort((a,b)=>{
    const ai=keys.findIndex(key=>normalizedRoleName(a.name).includes(key));
    const bi=keys.findIndex(key=>normalizedRoleName(b.name).includes(key));
    return (ai<0?keys.length:ai)-(bi<0?keys.length:bi)||b.position-a.position;
   });
-  const separators=roleGroupOrder(movableRoles.filter(r=>/^[\\s|•·…-—_─━]+$/u.test(r.name)&&(r.name.match(/[-—_─━]/g)||[]).length>=4),[]);
+  const separatorMarks=new Set(['-','—','_','─','━']),separatorSymbols=new Set(['|','•','·','…']);
+  const separators=roleGroupOrder(movableRoles.filter(r=>{
+   const chars=[...String(r.name||'').trim()],count=chars.filter(ch=>separatorMarks.has(ch)).length;
+   return count>=4&&chars.every(ch=>separatorMarks.has(ch)||separatorSymbols.has(ch)||ch.trim()==='');
+  }),[]);
   const separatorIds=new Set(separators.map(r=>r.id));
   const used=new Set([...leaders.map(x=>x.r.id),...separatorIds]);
   const take=(predicate,sorter=(a,b)=>b.position-a.position)=>{
@@ -153,8 +157,8 @@ async function setup(i){
    .map(name=>role(g,name)).filter(r=>r&&!used.has(r.id));
   for(const r of legalOrder)used.add(r.id);
   const belvStaffRoles=take(r=>{const rank=roleRank(r);return Boolean(rank&&rank.min>=20);},(a,b)=>(roleRank(a)?.min||999)-(roleRank(b)?.min||999)||b.position-a.position);
-  const disciplineRoles=take(r=>/figyelmeztet|fegyelmi|\\bwarn\\b|\\bstrike\\b|büntet/.test(normalizedRoleName(r.name)));
-  const trainingRoles=take(r=>/kikepzo|kikepzes|tananyag|vizsga|gyakornok/.test(normalizedRoleName(r.name)));
+  const disciplineRoles=take(r=>['figyelmeztet','fegyelmi','warn','strike','buntet'].some(key=>normalizedRoleName(r.name).includes(key)));
+  const trainingRoles=take(r=>['kikepzo','kikepzes','tananyag','vizsga','gyakornok'].some(key=>normalizedRoleName(r.name).includes(key)));
   const otherRoles=take(()=>true);
   const groups=[
    {name:'Adminisztráció',roles:adminRoles},
