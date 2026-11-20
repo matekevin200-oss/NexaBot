@@ -19,7 +19,7 @@ const { recordAudit } = require('./telemetry');
 const EPHEMERAL = MessageFlags.Ephemeral;
 const QUESTIONS_PER_PAGE = 5;
 const BELV_LEGAL_GUILD_ID = '1517509643734221030';
-const BELV_LEGAL_TEMPLATE_KEY = 'tgf_belv_legal';
+const BELV_LEGAL_TEMPLATE_KEY = 'tgf_belv_jogi';
 
 function templatesForGuild(guildId) {
   return getGuildConfig(guildId).applications?.templates || [];
