@@ -126,30 +126,63 @@ async function setup(i){
   await schema();await dbQuery('INSERT INTO nexabot_belv_legal_setup(guild_id,status) VALUES($1,$2) ON CONFLICT(guild_id) DO UPDATE SET status=$2,updated_at=NOW()',[g.id,'installing']);
   for(const item of ROLES){let r=role(g,item.name);if(!r){r=await g.roles.create({name:item.name,color:item.color,permissions:[],hoist:false,mentionable:false,reason:'BELV belső jogi osztály'});created.push('rang: '+item.name);}else existing.push('rang: '+item.name);roleIds[item.name]=r.id;}
   let lawyerGroup=role(g,LAWYER_ROLE);if(!lawyerGroup){lawyerGroup=await g.roles.create({name:LAWYER_ROLE,color:0x244F7A,permissions:[],hoist:false,mentionable:false,reason:'BELV jogi ügyvéd-hozzáférési csoport'});created.push('rang: '+LAWYER_ROLE);}else existing.push('rang: '+LAWYER_ROLE);roleIds[LAWYER_ROLE]=lawyerGroup.id;
-  const leaders=[...g.roles.cache.values()]
-   .map(r=>({r,rank:classifyBelvRole(r,rankMap())}))
-   .filter(x=>x.rank&&x.rank.min<=19)
-   .sort((a,b)=>a.rank.min-b.rank.min||b.r.position-a.r.position);
-  const rankName=value=>String(value||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();
-  const bomoOrder=['parancsnok','parancsnokhelyettes','vezeto operativ','operativ tiszt','fedett ugynok','jelolt'];
-  const bomoRoles=[...g.roles.cache.values()].filter(r=>rankName(r.name).includes('bomo'))
-   .sort((a,b)=>{
-    const ai=bomoOrder.findIndex(part=>rankName(a.name).includes(part));
-    const bi=bomoOrder.findIndex(part=>rankName(b.name).includes(part));
-    return (ai<0?bomoOrder.length:ai)-(bi<0?bomoOrder.length:bi)||b.position-a.position;
-   });
-  const separators=[...g.roles.cache.values()].filter(r=>/^[\\s|•·…]*[-—_─━]{4,}[\\s|•·…]*$/.test(r.name));
+  const movableRoles=[...g.roles.cache.values()].filter(r=>!r.managed&&r.id!==g.roles.everyone.id&&r.position<(bot.roles?.highest?.position||Infinity));
+  const roleRank=r=>classifyBelvRole(r,rankMap());
+  const leaders=movableRoles.map(r=>({r,rank:roleRank(r)})).filter(x=>x.rank&&x.rank.min<=19).sort((a,b)=>a.rank.min-b.rank.min||b.r.position-a.r.position);
+  const normalizedRoleName=value=>String(value||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();
+  const roleGroupOrder=(roles,keys)=>roles.sort((a,b)=>{
+   const ai=keys.findIndex(key=>normalizedRoleName(a.name).includes(key));
+   const bi=keys.findIndex(key=>normalizedRoleName(b.name).includes(key));
+   return (ai<0?keys.length:ai)-(bi<0?keys.length:bi)||b.position-a.position;
+  });
+  const separators=roleGroupOrder(movableRoles.filter(r=>/^[\\s|•·…-—_─━]+$/u.test(r.name)&&(r.name.match(/[-—_─━]/g)||[]).length>=4),[]);
+  const separatorIds=new Set(separators.map(r=>r.id));
+  const used=new Set([...leaders.map(x=>x.r.id),...separatorIds]);
+  const take=(predicate,sorter=(a,b)=>b.position-a.position)=>{
+   const found=movableRoles.filter(r=>!used.has(r.id)&&predicate(r)).sort(sorter);
+   for(const r of found)used.add(r.id);
+   return found;
+  };
+  const adminRoles=take(r=>r.permissions.has(PermissionFlagsBits.Administrator));
+  const bomoRoles=take(r=>normalizedRoleName(r.name).includes('bomo'),(a,b)=>{
+   const order=['parancsnok','parancsnokhelyettes','vezeto operativ','operativ tiszt','fedett ugynok','jelolt'];
+   const ai=order.findIndex(key=>normalizedRoleName(a.name).includes(key)),bi=order.findIndex(key=>normalizedRoleName(b.name).includes(key));
+   return (ai<0?order.length:ai)-(bi<0?order.length:bi)||b.position-a.position;
+  });
   const legalOrder=[ROLES[0].name,ROLES[1].name,ROLES[2].name,ROLES[3].name,LAWYER_ROLE,ROLES[4].name,ROLES[5].name]
-   .map(name=>role(g,name)).filter(Boolean);
-  const special=role(g,'Special');
-  const orderedRoles=[...leaders.map(x=>x.r),...separators.slice(0,1),...bomoRoles,...separators.slice(1,2),...legalOrder,...separators.slice(2),...(special?[special]:[])];
+   .map(name=>role(g,name)).filter(r=>r&&!used.has(r.id));
+  for(const r of legalOrder)used.add(r.id);
+  const belvStaffRoles=take(r=>{const rank=roleRank(r);return Boolean(rank&&rank.min>=20);},(a,b)=>(roleRank(a)?.min||999)-(roleRank(b)?.min||999)||b.position-a.position);
+  const disciplineRoles=take(r=>/figyelmeztet|fegyelmi|\\bwarn\\b|\\bstrike\\b|büntet/.test(normalizedRoleName(r.name)));
+  const trainingRoles=take(r=>/kikepzo|kikepzes|tananyag|vizsga|gyakornok/.test(normalizedRoleName(r.name)));
+  const otherRoles=take(()=>true);
+  const groups=[
+   {name:'Adminisztráció',roles:adminRoles},
+   {name:'BELV vezetőség',roles:leaders.map(x=>x.r)},
+   {name:'BOMO',roles:bomoRoles},
+   {name:'Jogi osztály',roles:legalOrder},
+   {name:'BELV állomány',roles:belvStaffRoles},
+   {name:'Figyelmeztetések és fegyelem',roles:disciplineRoles},
+   {name:'Képzés',roles:trainingRoles},
+   {name:'Egyéb rangok',roles:otherRoles}
+  ].filter(group=>group.roles.length);
+  const orderedRoles=[];
+  let separatorIndex=0;
+  for(let index=0;index<groups.length;index++){
+   if(index>0&&separatorIndex<separators.length)orderedRoles.push(separators[separatorIndex++]);
+   orderedRoles.push(...groups[index].roles);
+  }
+  while(separatorIndex<separators.length)orderedRoles.push(separators[separatorIndex++]);
   const orderedUnique=[...new Map(orderedRoles.map(r=>[r.id,r])).values()];
-  if(leaders.length&&orderedUnique.length){
-   const topPosition=Math.max(...leaders.map(x=>x.r.position));
-   const positions=orderedUnique.map((r,index)=>({role:r.id,position:topPosition-index}));
-   try{await g.roles.setPositions(positions);}
-   catch(e){errors.push('BELV/BOMO/jogi rangsorrend: '+e.message);}
-  }else errors.push('A BELV vezetőségi rangok pozícióját nem lehetett biztonságosan megállapítani.');
+  if(orderedUnique.length){
+   const topPosition=Math.max(...adminRoles.map(r=>r.position),...leaders.map(x=>x.r.position));
+   if(!Number.isFinite(topPosition)||topPosition-orderedUnique.length+1<1)errors.push('A BELV rangcsoportok elrendezéséhez nincs elég biztonságos rangpozíció.');
+   else{
+    const positions=orderedUnique.map((r,index)=>({role:r.id,position:topPosition-index}));
+    try{await g.roles.setPositions(positions);}
+    catch(e){errors.push('BELV kategóriás rangsorrend: '+e.message);}
+   }
+  }else errors.push('Nem találtam átrendezhető BELV-rangokat.');
   try{await syncAttorneyMemberships(g,lawyerGroup,errors);}catch(e){errors.push('Ügyvédek rang szinkronja: '+e.message);}
   const initial=await g.channels.fetch();
   for(const cat of CATS){
