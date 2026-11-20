@@ -193,6 +193,6 @@ assert.ok(legal.includes('guild.id!==BELV_GUILD_ID)return') && legal.includes("g
 assert.ok(read('src/belv-mdt.js').includes("require('./belv-legal').syncGuildCommands(guild)"), 'BELV startup sync publishes the legal commands on the BELV server');
 const legalModule = require('../src/belv-legal.js');
 assert.deepEqual(legalModule.buildCommands().map(command => command.name), ['belv-jogi-setup', 'belv-jogi-ugy', 'belv-jogi-lezaras']);
-assert.equal(legalModule.CATEGORIES.reduce((sum, category) => sum + category.channels.length, 0), 12, 'BELV legal setup contains the requested 12 channels');
+assert.equal(legalModule.CATEGORIES.reduce((sum, category) => sum + category.channels.length, 0), 13, 'BELV legal setup includes the application channel');
 
 console.log('NEXA checks passed: ' + order.length + ' source modules, reproducible bundle, BELV permissions, mentions, shifts, and economy invariants.');
