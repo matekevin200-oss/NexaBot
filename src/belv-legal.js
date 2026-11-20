@@ -34,19 +34,22 @@ async function ensureLegalApplicationTemplate(guild,channelIds,roleIds){
  const current=getGuildConfig(guild.id),templates=current.applications?.templates||[];
  const template={
   key:LEGAL_APPLICATION_TEMPLATE_KEY,title:'BELV jogi osztály jelentkezés',emoji:'⚖️',
-  description:'Töltsd ki a NEXA jelentkezési űrlapját. A válaszaid privátan, a jogi osztály bírálóihoz kerülnek. Csak szerveren belüli RP-adatokat adj meg.',
+  description:'Kérjük, hogy minden kérdésre komolyan, részletesen és saját megfogalmazásodban válaszolj. A jelentkezés a kommunikációs készségedet, jogi ismereteidet, problémamegoldó képességedet és RP-tapasztalatodat méri. A jelentkezéseket legfeljebb 48 órán belül bíráljuk el; a hiányos, komolytalan vagy másolt válasz elutasítható. A válaszokat csak a jogi osztály bírálói látják.',
   openChannelId:channelIds.application,reviewChannelId:channelIds.leadership,resultChannelId:channelIds.application,
   accessRoleId:null,reviewerRoleId:roleIds[ROLES[0].name],
   reviewerRoleIds:[roleIds[ROLES[1].name],roleIds[ROLES[2].name]].filter(Boolean),
   acceptedRoleId:null,notificationRoleId:null,blindReview:false,active:true,cooldownHours:24,
   questions:[
-   {label:'RP-neved',placeholder:'A BELV-szerveren használt karaktered neve',maxLength:100},
-   {label:'Megpályázott jogi rang',placeholder:'Gyakornok vagy ügyvédjelölt',maxLength:100},
-   {label:'Miért jelentkezel a jogi osztályba?',placeholder:'Írd le a motivációdat',maxLength:1000},
-   {label:'RP- és ügyintézési tapasztalat',placeholder:'Korábbi tapasztalat vagy: nincs',maxLength:1000},
-   {label:'Heti elérhetőséged',placeholder:'Mikor tudsz részt venni az RP-ben?',maxLength:300},
-   {label:'Hogyan kezelnél egy bizalmas ügyiratot?',placeholder:'Írd le a titoktartási és hozzáférési szabályokat',maxLength:1000},
-   {label:'Helyzetgyakorlat',placeholder:'Mit teszel, ha illetéktelen kér adatot egy folyamatban lévő ügyről?',maxLength:1000}
+   {label:'1. 👤 Bemutatkozás — Mutatkozz be röviden! Hány éves vagy, és mióta játszol RP-szervereken?',placeholder:'Saját szavaiddal válaszolj.',maxLength:1000},
+   {label:'2. ⚖️ Motiváció — Miért szeretnél csatlakozni a BELV Jogi és Ügyvédi Osztályához? Miért ezt az alosztályt választottad?',placeholder:'Írd le a motivációdat és a választásod okát.',maxLength:1000},
+   {label:'3. 📚 Jogi alapismeretek — Szerinted mi egy ügyvéd legfontosabb feladata, és milyen kötelezettségei vannak az ügyfelével szemben?',placeholder:'Fejtsd ki a saját álláspontodat.',maxLength:1000},
+   {label:'4. 🏛️ Ártatlanság vélelme — Mit jelent az ártatlanság vélelme, és miért fontos egy büntetőeljárás során?',placeholder:'Magyarázd el a jelentőségét.',maxLength:1000},
+   {label:'5. 🔒 Ügyvédi titoktartás — Mit tennél, ha az ügyfeled bizalmas információkat osztana meg veled, amelyeket egy másik személy szeretne megtudni?',placeholder:'Írd le, hogyan kezelnéd a bizalmas információt.',maxLength:1000},
+   {label:'6. 🗣️ Tárgyalási szituáció — Egy tárgyaláson az ügyész olyan bizonyítékot mutat be, amely szerinted nem megbízható. Hogyan reagálnál, és milyen lépéseket tennél az ügyfeled védelmében?',placeholder:'Írd le a tárgyalási lépéseidet.',maxLength:1000},
+   {label:'7. 🚨 Intézkedési szituáció — Egy rendvédelmi szerv tagja szerinted szabálytalanul jár el az ügyfeleddel szemben. Hogyan kezelnéd a helyzetet?',placeholder:'Írd le a szabályos RP-eljárást.',maxLength:1000},
+   {label:'8. ⚖️ Etikai döntés — Mit tennél, ha az ügyfeled arra kérne, hogy hamis bizonyítékot használj fel a tárgyaláson?',placeholder:'Írd le az etikai döntésedet és az indokát.',maxLength:1000},
+   {label:'9. 🤝 Konfliktuskezelés — Hogyan kezelnéd, ha egy másik ügyvéd vagy rendvédelmi vezető tiszteletlenül beszélne veled egy hivatalos eljárás során?',placeholder:'Mutasd be a professzionális reakciódat.',maxLength:1000},
+   {label:'10. 🎯 Alkalmasság és aktivitás — Miért gondolod, hogy alkalmas lennél a Jogi és Ügyvédi Osztály tagjának? Hetente mennyi időt tudnál a feladataidra fordítani?',placeholder:'Írd le az alkalmasságodat és heti vállalásodat.',maxLength:1000}
   ]
  };
  const remaining=templates.filter(item=>item.key!==LEGAL_APPLICATION_TEMPLATE_KEY);
