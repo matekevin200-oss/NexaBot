@@ -240,6 +240,154 @@ input,select,textarea{background:#09182b!important;border-color:#294561!importan
 .support-message p{white-space:pre-wrap;overflow-wrap:anywhere}.record{background:rgba(13,27,46,.85);border-color:#294360}.record:hover{background:#152f4c;border-color:#4774a3}.ticket-center{background:radial-gradient(600px 350px at 100% 0,rgba(60,146,242,.14),transparent),#0e1b2c;border-color:#365775}
 .section-kicker{color:#8fcaff}.muted,.help{color:#9eafc5}.savebar{background:rgba(9,20,37,.96);border-color:#304e70;backdrop-filter:blur(12px)}.live-sync.is-live{color:#67d9c5}.stat-value{color:#edf5ff}
 :focus-visible{outline:2px solid #86c5ff;outline-offset:3px}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+/* NEXA CONTROL OS · authenticated dashboard redesign; presentation only */
+html body.nexa-v153.app-redesign-v26{
+ --bg:#070b17!important;--panel:#0d1426!important;--card:#141d32!important;
+ --card2:#1b2740!important;--line:#303e60!important;--text:#f4f6ff!important;
+ --muted:#a8b7d1!important;--primary:#918cff!important;--accent:#84c8ff!important;
+ --cyan:#84c8ff!important;--gold:#eecb8a!important;
+ background:radial-gradient(900px 560px at 83% -9%,rgba(110,92,220,.16),transparent 70%),#080d1c!important;
+ color:#f4f6ff!important;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif!important
+}
+html body.nexa-v153.app-redesign-v26 .topbar{
+ height:74px!important;background:rgba(8,13,28,.97)!important;
+ border-bottom:1px solid #2b3855!important;box-shadow:0 8px 35px #03060d55!important
+}
+html body.nexa-v153.app-redesign-v26 .topbar-inner{padding:0 27px!important}
+html body.nexa-v153.app-redesign-v26 .brand-mark,
+html body.nexa-v153.app-redesign-v26 .v2-sidebar-mark{
+ background:linear-gradient(140deg,#a2e1ff,#938aff)!important;color:#10162b!important;
+ border-radius:13px!important;box-shadow:0 0 0 1px #aecbff70,0 10px 24px #666cda33!important
+}
+html body.nexa-v153.app-redesign-v26 .brand-text{color:#f4f7ff!important;font-weight:850!important}
+html body.nexa-v153.app-redesign-v26 .brand-text span{color:#9acaff!important}
+html body.nexa-v153.app-redesign-v26 .v2-top-context>span,
+html body.nexa-v153.app-redesign-v26 .v2-sidebar-head small,
+html body.nexa-v153.app-redesign-v26 .workspace-overline,
+html body.nexa-v153.app-redesign-v26 .section-kicker{color:#9bb2eb!important;letter-spacing:.12em!important}
+html body.nexa-v153.app-redesign-v26 .live-pill,
+html body.nexa-v153.app-redesign-v26 .workspace-status{
+ color:#b8d5ff!important;background:#17223c!important;border:1px solid #405779!important;border-radius:99px!important
+}
+html body.nexa-v153.app-redesign-v26 .v2-app{
+ grid-template-columns:270px minmax(0,1fr)!important;min-height:calc(100vh - 74px)!important;
+ background:transparent!important
+}
+html body.nexa-v153.app-redesign-v26 .v2-sidebar{
+ background:linear-gradient(180deg,#0e172a,#0a1021)!important;border-right:1px solid #293955!important;
+ padding:28px 15px!important;box-shadow:none!important
+}
+html body.nexa-v153.app-redesign-v26 .v2-sidebar-head{
+ background:#16233b!important;border:1px solid #334967!important;
+ padding:14px!important;border-radius:15px!important;margin-bottom:22px!important
+}
+html body.nexa-v153.app-redesign-v26 .v2-sidebar-nav a,
+html body.nexa-v153.app-redesign-v26 .side-link{
+ color:#b1bfd8!important;border:1px solid transparent!important;
+ border-radius:11px!important;transition:background .15s,border-color .15s!important
+}
+html body.nexa-v153.app-redesign-v26 .v2-sidebar-nav a:hover,
+html body.nexa-v153.app-redesign-v26 .side-link:hover{
+ background:#1b2a47!important;border-color:#354e79!important;color:#fff!important
+}
+html body.nexa-v153.app-redesign-v26 .v2-sidebar-nav a.active,
+html body.nexa-v153.app-redesign-v26 .side-link.active{
+ color:#fff!important;background:linear-gradient(105deg,#303c6c,#1b2c50)!important;
+ border-color:#626eae!important;box-shadow:inset 3px 0 #a6b8ff!important
+}
+html body.nexa-v153.app-redesign-v26 .v2-sidebar-foot{
+ border-top:1px solid #2d3e5e!important;color:#94a9c7!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-main{
+ max-width:none!important;min-width:0!important;
+ padding:34px clamp(21px,3.3vw,58px) 65px!important;background:transparent!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-heading{
+ border-bottom:1px solid #2a3b57!important;padding-bottom:24px!important;margin-bottom:29px!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-heading h1{
+ color:#f8f9ff!important;font-size:clamp(32px,3.1vw,46px)!important;
+ font-weight:820!important;letter-spacing:-.052em!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-heading p{color:#a5b4cd!important}
+html body.nexa-v153.app-redesign-v26 .workspace-content{max-width:1470px!important}
+html body.nexa-v153.app-redesign-v26 .workspace-content .card,
+html body.nexa-v153.app-redesign-v26 .workspace-content .section,
+html body.nexa-v153.app-redesign-v26 .workspace-content .owner-server,
+html body.nexa-v153.app-redesign-v26 .workspace-content .stat,
+html body.nexa-v153.app-redesign-v26 .workspace-content .stat-card,
+html body.nexa-v153.app-redesign-v26 .workspace-content .status-card,
+html body.nexa-v153.app-redesign-v26 .workspace-content .n5-widget{
+ background:linear-gradient(145deg,#17233b,#101a2d)!important;color:#f0f4ff!important;
+ border:1px solid #324765!important;border-radius:17px!important;box-shadow:0 12px 33px #0003!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-content .card:hover,
+html body.nexa-v153.app-redesign-v26 .workspace-content .owner-server:hover{border-color:#6989c4!important}
+html body.nexa-v153.app-redesign-v26 .workspace-content h1,
+html body.nexa-v153.app-redesign-v26 .workspace-content h2,
+html body.nexa-v153.app-redesign-v26 .workspace-content h3{color:#f5f8ff!important;letter-spacing:-.025em!important}
+html body.nexa-v153.app-redesign-v26 .workspace-content .muted,
+html body.nexa-v153.app-redesign-v26 .workspace-content .help{color:#aabbd4!important}
+html body.nexa-v153.app-redesign-v26 .workspace-content .btn{
+ border-radius:10px!important;background:#233557!important;border:1px solid #4b658e!important;
+ color:#eaf0ff!important;font-weight:700!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-content .btn:hover{
+ background:#324773!important;border-color:#7d9be0!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-content .btn.green,
+html body.nexa-v153.app-redesign-v26 .workspace-content .btn.primary{
+ background:linear-gradient(115deg,#8ac8ff,#a39bff)!important;border-color:transparent!important;
+ color:#0d152e!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-content input,
+html body.nexa-v153.app-redesign-v26 .workspace-content select,
+html body.nexa-v153.app-redesign-v26 .workspace-content textarea{
+ background:#0c172b!important;color:#eef3ff!important;
+ border:1px solid #405478!important;border-radius:10px!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-content input:focus,
+html body.nexa-v153.app-redesign-v26 .workspace-content select:focus,
+html body.nexa-v153.app-redesign-v26 .workspace-content textarea:focus{
+ outline:2px solid #88b4ff55!important;border-color:#94baff!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-content table{
+ background:#121d32!important;border:1px solid #334967!important;border-radius:12px!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-content th{background:#202e4b!important;color:#c6d6f3!important}
+html body.nexa-v153.app-redesign-v26 .workspace-content td{border-bottom-color:#2f415f!important}
+html body.nexa-v153.app-redesign-v26 .workspace-content .badge{
+ background:#28365b!important;border:1px solid #586c9d!important;color:#d7e0ff!important;border-radius:8px!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-content .owner-view-tabs a,
+html body.nexa-v153.app-redesign-v26 .workspace-content .tabs a{
+ background:#14213a!important;border:1px solid #344b70!important;color:#b4c6e8!important;border-radius:10px!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-content .owner-view-tabs a.active,
+html body.nexa-v153.app-redesign-v26 .workspace-content .tabs a.active{
+ background:#304879!important;color:#fff!important;border-color:#84a2e8!important
+}
+html body.nexa-v153.app-redesign-v26 .profile-menu summary,
+html body.nexa-v153.app-redesign-v26 .locale-switch{
+ background:#14233c!important;border-color:#374f72!important
+}
+html body.nexa-v153.app-redesign-v26 .profile-popover{
+ background:#142038!important;border-color:#3a5175!important
+}
+@media(max-width:920px){
+ html body.nexa-v153.app-redesign-v26 .v2-app{display:block!important}
+ html body.nexa-v153.app-redesign-v26 .v2-sidebar{width:280px!important}
+ html body.nexa-v153.app-redesign-v26 .workspace-main{padding:22px 18px 50px!important}
+}
+@media(max-width:600px){
+ html body.nexa-v153.app-redesign-v26 .workspace-heading h1{font-size:30px!important}
+ html body.nexa-v153.app-redesign-v26 .workspace-heading{display:block!important}
+}
+@media(prefers-reduced-motion:reduce){
+ html body.nexa-v153.app-redesign-v26 *{transition:none!important;animation:none!important}
+}
+
 `;
 }
 
