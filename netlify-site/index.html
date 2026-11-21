@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="NEXA – professzionális Discord bot, moderáció, ticketkezelés és közösségi vezérlőközpont.">
+  <title>NEXA • Discord közösségek új szinten</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/config.js" defer></script>
+  <script src="/site.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Ugrás a tartalomhoz</a>
+  <header class="nav">
+    <a class="logo" href="/" aria-label="NEXA kezdőlap"><span class="mark">N</span> NEXA</a>
+    <nav aria-label="Fő navigáció">
+      <a href="#funkciok">Funkciók</a>
+      <a href="#platform">Platform</a>
+      <a class="nav-action dashboard-link" href="#" hidden>Vezérlőpult</a>
+    </nav>
+  </header>
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="glow" aria-hidden="true"></div>
+      <p class="eyebrow"><span class="status-dot"></span> NEXA PLATFORM</p>
+      <h1 id="hero-title">A Discord-szervered.<br><span class="gradient">Egyetlen vezérlőközpontban.</span></h1>
+      <p class="lead">Moderáció, ticketkezelés, szolgálatkövetés és közösségi automatizálás. Együtt, átláthatóan, a NEXA rendszerében.</p>
+      <div class="actions">
+        <a class="button primary dashboard-link" href="#" hidden>Vezérlőpult megnyitása <span aria-hidden="true">↗</span></a>
+        <a class="button secondary" href="#funkciok">Funkciók felfedezése <span aria-hidden="true">↓</span></a>
+      </div>
+      <p id="setup-note" class="setup-note" hidden>A vezérlőpult linkje még nincs beállítva. A Netlify környezeti változói között add meg a NEXA_DASHBOARD_URL értékét.</p>
+      <div class="hero-preview" aria-label="NEXA funkciók áttekintése">
+        <div class="preview-header"><span class="preview-logo">N</span><span>NEXA / Overview</span><span class="preview-pill">CONTROL CENTER</span></div>
+        <div class="preview-body">
+          <div class="preview-side"><span>◈ Áttekintés</span><span>◇ Moderáció</span><span>▤ Ticketek</span><span>◷ Szolgálat</span></div>
+          <div class="preview-main">
+            <div class="preview-label">EGY PLATFORM. TÖBB LEHETŐSÉG.</div>
+            <div class="mini-grid"><div><strong>01</strong><span>Moderáció</span></div><div><strong>02</strong><span>Ticketek</span></div><div><strong>03</strong><span>Aktivitás</span></div></div>
+            <div class="preview-chart"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <small>Illusztratív felület — nem élő statisztika</small>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section id="funkciok" class="features" aria-labelledby="features-title">
+      <p class="eyebrow">ESZKÖZÖK, AMIK EGYÜTT MŰKÖDNEK</p>
+      <h2 id="features-title">Minden, amire egy közösségnek szüksége lehet.</h2>
+      <div class="cards">
+        <article><span class="feature-icon">◈</span><h3>Moderáció</h3><p>Jogosultságok, figyelmeztetések, biztonsági eszközök és naplók.</p></article>
+        <article><span class="feature-icon">▤</span><h3>Ticketkezelés</h3><p>Ügyek megnyitása, kezelése, lezárása és áttekintése.</p></article>
+        <article><span class="feature-icon">◷</span><h3>Szolgálatkezelés</h3><p>Szolgálati idő, aktivitás és statisztikák egy helyen.</p></article>
+        <article><span class="feature-icon">⌘</span><h3>Owner Center</h3><p>Tulajdonosi eszközök és központi felügyeleti lehetőségek.</p></article>
+        <article><span class="feature-icon">✧</span><h3>BELV / BOMO</h3><p>Dedikált közösségi és szervezeti munkafolyamatok.</p></article>
+        <article><span class="feature-icon">▥</span><h3>Dashboard</h3><p>Webes áttekintés a Discord-szerverek beállításaihoz.</p></article>
+      </div>
+    </section>
+    <section id="platform" class="cta">
+      <p class="eyebrow">NEXA ECOSYSTEM</p>
+      <h2>Több mint egy Discord bot.</h2>
+      <p>A webes kezelőfelület és a Discord-bot együtt alkotják a NEXA platformot.</p>
+      <a class="button primary dashboard-link" href="#" hidden>Ugrás a kezelőfelületre ↗</a>
+    </section>
+  </main>
+  <footer><span>NEXA © <span id="year">2026</span></span><span>Discord közösségekhez tervezve.</span></footer>
+</body>
+</html>
