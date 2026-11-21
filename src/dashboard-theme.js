@@ -241,6 +241,11 @@ input,select,textarea{background:#09182b!important;border-color:#294561!importan
 .section-kicker{color:#8fcaff}.muted,.help{color:#9eafc5}.savebar{background:rgba(9,20,37,.96);border-color:#304e70;backdrop-filter:blur(12px)}.live-sync.is-live{color:#67d9c5}.stat-value{color:#edf5ff}
 :focus-visible{outline:2px solid #86c5ff;outline-offset:3px}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 
+
+`;
+}
+
+function controlOsOverride(){return `
 /* NEXA CONTROL OS · authenticated dashboard redesign; presentation only */
 html body.nexa-v153.app-redesign-v26{
  --bg:#070b17!important;--panel:#0d1426!important;--card:#141d32!important;
@@ -388,7 +393,5 @@ html body.nexa-v153.app-redesign-v26 .profile-popover{
  html body.nexa-v153.app-redesign-v26 *{transition:none!important;animation:none!important}
 }
 
-`;
-}
-
-module.exports = { dashboardTheme };
+`}
+module.exports = { dashboardTheme, controlOsOverride };
