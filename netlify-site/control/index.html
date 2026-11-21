@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="NEXA kezelőközpont: gyors elérés a működő Discord-szerver kezelőfelülethez.">
+<title>NEXA • Kezelőközpont</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/control/control.css">
+<script src="/config.js" defer></script>
+<script src="/control/control.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Ugrás a tartalomhoz</a>
+<div class="workspace">
+  <aside class="sidebar">
+    <a class="logo" href="/"><span class="mark">N</span>NEXA</a>
+    <p class="side-caption">CONTROL CENTER</p>
+    <nav aria-label="Kezelőközpont">
+      <a class="selected" href="/control/">◈ &nbsp; Áttekintés</a>
+      <a href="#modulok">▤ &nbsp; Funkciók</a>
+      <a href="#kapcsolat">↗ &nbsp; Csatlakozás</a>
+      <a href="/">← &nbsp; Vissza a főoldalra</a>
+    </nav>
+    <div class="side-footer">NEXA · Secure workspace<br><small>A belépés a Render rendszeren történik.</small></div>
+  </aside>
+  <main id="main" class="workmain">
+    <header class="workhead">
+      <div><p class="eyebrow">NEXA / VEZÉRLŐKÖZPONT</p><h1>Szerverkezelés, egy helyen.</h1></div>
+      <a id="login-top" class="button primary backend" data-path="/login" href="#" hidden>Bejelentkezés Discorddal ↗</a>
+    </header>
+    <section class="intro">
+      <div><p class="eyebrow">KÖZPONTI HOZZÁFÉRÉS</p><h2>Üdvözlünk a NEXA kezelőközpontban!</h2><p>Innen egy kattintással eléred a meglévő, Discord-bejelentkezéssel és szerveroldali jogosultságokkal védett beállításokat.</p></div>
+      <div class="status-card"><span class="status-dot"></span> Backend kapcsolat <strong id="backend-state">Nincs ellenőrizve</strong><small id="backend-note">Nem jelenítünk meg kitalált élő adatokat.</small></div>
+    </section>
+    <section id="modulok" aria-labelledby="modules-heading">
+      <p class="eyebrow">MODULOK</p><h2 id="modules-heading">Válassz kezelőfelületet</h2>
+      <div class="module-grid">
+        <article><span class="module-symbol">◈</span><h3>Szervereim</h3><p>Discord-szerverek listája, konfigurációja és kezelése.</p><a class="backend" data-path="/dashboard" href="#" hidden>Megnyitás ↗</a></article>
+        <article><span class="module-symbol">▤</span><h3>Ticketkezelés</h3><p>Nyitott ügyek és ügyfélkapcsolati munkafolyamatok.</p><a class="backend" data-path="/helpdesk" href="#" hidden>Megnyitás ↗</a></article>
+        <article><span class="module-symbol">⌘</span><h3>Owner Center</h3><p>Tulajdonosi és globális felügyeleti eszközök, kizárólag jogosultaknak.</p><a class="backend" data-path="/owner" href="#" hidden>Megnyitás ↗</a></article>
+        <article><span class="module-symbol">◷</span><h3>Szolgálat és aktivitás</h3><p>Szolgálati idők és szervermodulok a kiválasztott szerver beállításain belül.</p><a class="backend" data-path="/dashboard" href="#" hidden>Szerver kiválasztása ↗</a></article>
+        <article><span class="module-symbol">◇</span><h3>Moderáció</h3><p>Szerverenkénti beállítások és jogosultsághoz kötött műveletek.</p><a class="backend" data-path="/dashboard" href="#" hidden>Szerver kiválasztása ↗</a></article>
+        <article><span class="module-symbol">✧</span><h3>BELV és BOMO</h3><p>A már telepített szervermodulok kezelése a meglévő rendszerben.</p><a class="backend" data-path="/dashboard" href="#" hidden>Szerver kiválasztása ↗</a></article>
+      </div>
+    </section>
+    <section id="kapcsolat" class="connection">
+      <h2>Biztonságos hozzáférés</h2><p>A Discord-bejelentkezést, jogosultságellenőrzést, adatkezelést és módosításokat a meglévő Render-alkalmazás végzi. Ez a Netlify-oldal egyelőre navigációs felület: nem másolja a felhasználói adatokat, és nem állítja, hogy külön hitelesített kezelőfelületet biztosít.</p>
+      <a id="connection-cta" class="button primary backend" data-path="/dashboard" href="#" hidden>Tovább a tényleges beállításokhoz ↗</a>
+      <p id="configuration-alert" class="configuration-alert" hidden>A Render dashboard URL-je még nincs beállítva. Add meg a NEXA_DASHBOARD_URL környezeti változót a Netlify projektben, és indíts új deployt.</p>
+    </section>
+    <footer><span>NEXA © <span id="year">2026</span></span><span>Platform belépőfelület · a jogosultságokat a Render ellenőrzi</span></footer>
+  </main>
+</div>
+</body>
+</html>
