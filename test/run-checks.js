@@ -195,4 +195,17 @@ const legalModule = require('../src/belv-legal.js');
 assert.deepEqual(legalModule.buildCommands().map(command => command.name), ['belv-jogi-setup', 'belv-jogi-ugy', 'belv-jogi-lezaras']);
 assert.equal(legalModule.CATEGORIES.reduce((sum, category) => sum + category.channels.length, 0), 13, 'BELV legal setup includes the application channel');
 
-console.log('NEXA checks passed: ' + order.length + ' source modules, reproducible bundle, BELV permissions, mentions, shifts, and economy invariants.');
+const musicModule = require('../src/music.js');
+const musicCommands = musicModule.buildMusicCommands().map(command => command.toJSON());
+assert.deepEqual(musicCommands.map(command => command.name), ['zene', 'music']);
+assert.ok(musicCommands.every(command => command.options.some(option => option.name === 'panel')), 'music panel publishing is available in both command languages');
+const musicMessage = musicModule.musicPanel({ channels: { cache: new Map([
+  ['voice-1', { id: 'voice-1', name: 'Zene voice', type: 2, position: 1 }]
+]) } }, 'hu');
+const musicControls = musicMessage.components.flatMap(row => row.components).map(component => component.toJSON());
+assert.ok(musicControls.some(component => component.custom_id === 'nexa_music:channel:hu' && component.options[0].value === 'voice-1'), 'music panel offers the guild voice channels');
+assert.ok(musicControls.some(component => component.custom_id === 'nexa_music:search:hu'), 'music panel opens YouTube search');
+assert.ok(musicControls.some(component => component.custom_id === 'nexa_music:url:hu'), 'music panel accepts a pasted link');
+assert.ok(musicControls.some(component => component.custom_id === 'nexa_music:volume_down:hu') && musicControls.some(component => component.custom_id === 'nexa_music:volume_up:hu'), 'music panel can adjust volume');
+
+console.log('NEXA checks passed: ' + order.length + ' source modules, reproducible bundle, BELV permissions, mentions, shifts, economy invariants, and music panel controls.');

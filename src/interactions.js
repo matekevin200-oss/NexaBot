@@ -1177,6 +1177,7 @@ async function handleInteraction(interaction) {
     if(String(interaction.customId||'').startsWith('nt:'))return await require('./next-ticket').handle(interaction);
     if(String(interaction.customId||'').startsWith('nxform:'))return await require('./next-commands').handle(interaction);
     if(String(interaction.customId||'').startsWith('n5:'))return await require('./next-discord').handle(interaction);
+    if ((interaction.isButton() || interaction.isModalSubmit() || interaction.isStringSelectMenu()) && String(interaction.customId || '').startsWith('nexa_music:')) return await require('./music').handleMusicComponent(interaction);
     if (interaction.isChatInputCommand()) { await require('./platform-moderation').commandAccess(interaction);if(await require('./next-commands').handle(interaction))return;return await handleCommand(interaction); }
     if ((interaction.isButton() || interaction.isModalSubmit() || interaction.isStringSelectMenu()) && String(interaction.customId || '').startsWith('eco:')) return await handleEconomyInteraction(interaction);
     if(interaction.isButton()&&['platform_mod_pause','platform_mod_resume'].includes(interaction.customId))return require('./platform-moderation').panel(interaction);
