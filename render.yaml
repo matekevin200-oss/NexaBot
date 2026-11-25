@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: 0.5c-512mb
     region: frankfurt
-    buildCommand: npm ci
+    buildCommand: YOUTUBE_DL_SKIP_PYTHON_CHECK=1 npm ci
     startCommand: npm start
     healthCheckPath: /health
     maxShutdownDelaySeconds: 90
