@@ -193,6 +193,9 @@ client.once(Events.ClientReady, async (readyClient) => {
       }
     }
     console.log(`NexaBot elindult: ${readyClient.user.tag}`);
+    await require('./music').ensureMusicPanel(readyClient).catch((error) => {
+      console.error('A zenei panel automatikus közzététele nem sikerült:', error.message);
+    });
     await restoreGiveaways(readyClient);
     console.log('A NEXA Bot 25.0.3 MDT Network • öt frakció és közös RP-nyilvántartás használatra kész.');
   } catch (error) {

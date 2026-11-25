@@ -161,6 +161,42 @@ function musicPanel(guild, language = 'hu') {
   return { embeds: [embed], components: rows };
 }
 
+async function ensureMusicPanel(client) {
+  const matches = [];
+  for (const guild of client.guilds.cache.values()) {
+    for (const channel of guild.channels.cache.values()) {
+      if (channel.type === ChannelType.GuildText && channel.name === 'zene-parancs') matches.push(channel);
+    }
+  }
+  if (matches.length !== 1) {
+    console.log(matches.length
+      ? `Zenei panel nem került ki: ${matches.length} #zene-parancs nevű csatorna található.`
+      : 'Zenei panel nem került ki: nem található #zene-parancs nevű csatorna.');
+    return false;
+  }
+  const channel = matches[0];
+  const permissions = channel.permissionsFor(client.user);
+  if (!permissions?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks])) {
+    console.warn(`Zenei panel nem került ki: hiányzó csatornajogosultság (${channel.guild.name}/#${channel.name}).`);
+    return false;
+  }
+  const recent = await channel.messages.fetch({ limit: 30 }).catch((error) => {
+    console.error(`Zenei panel üzenetei nem olvashatók (${channel.guild.name}/#${channel.name}):`, error.message);
+    return null;
+  });
+  if (!recent) return false;
+  const existing = recent.find((message) => message.author.id === client.user.id
+    && message.embeds.some((embed) => embed.title === '🎵 NEXA zenevezérlő'));
+  if (existing) {
+    await existing.edit(musicPanel(channel.guild, 'hu'));
+    console.log(`Zenei panel frissítve: ${channel.guild.name}/#${channel.name}`);
+  } else {
+    await channel.send(musicPanel(channel.guild, 'hu'));
+    console.log(`Zenei panel közzétéve: ${channel.guild.name}/#${channel.name}`);
+  }
+  return true;
+}
+
 function sameVoiceChannel(interaction, session) {
   return interaction.member?.voice?.channelId && interaction.member.voice.channelId === session.channelId;
 }
@@ -528,4 +564,4 @@ async function handleMusicComponent(interaction) {
   return true;
 }
 
-module.exports = { buildMusicCommands, handleMusicCommand, handleMusicComponent, musicPanel };
+module.exports = { buildMusicCommands, handleMusicCommand, handleMusicComponent, musicPanel, ensureMusicPanel };
