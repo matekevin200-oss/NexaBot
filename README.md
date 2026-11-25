@@ -14,6 +14,6 @@ A hiteles forrás a `src/` könyvtár; a `module-order.txt` határozza meg a cso
 
 BELV dokumentum-jóváhagyásnál add meg a szerveren a `BELV_APPROVAL_ROLE_ID` környezeti változót (vagy az Owner Center dokumentumbeállításában a jóváhagyó rangazonosítót). Rangnév alapján jóváhagyást a BELV nem fogad el.
 
-Zeneparancsok: `/zene` és `/music` (lejátszás, szünet, folytatás, kihagyás, várólista, hangerő, kilépés). A `/zene lejatszas` közvetlen HTTPS hangfolyamot fogad; a forrás domainjét előbb engedélyezni kell a `NEXA_MUSIC_ALLOWED_HOSTS` környezeti változóban, vesszővel elválasztva. YouTube-videó hangjának kinyerése és továbbítása nem támogatott; YouTube-linket a bot felismer és megnyitható linkként visszaad.
+Zeneparancsok: `/zene` és `/music` (lejátszás, szünet, folytatás, kihagyás, várólista, hangerő, kilépés). A lejátszás YouTube-videólinket vagy közvetlen HTTPS hangfolyamot fogad. A hangfolyam forrásdomainjét előbb engedélyezni kell a `NEXA_MUSIC_ALLOWED_HOSTS` környezeti változóban, vesszővel elválasztva. A lejátszásnál választható, melyik voice-csatornába csatlakozzon a bot; ha nincs kiválasztva, a parancsot kiadó jelenlegi csatornáját használja. YouTube-lejátszáshoz a build `youtube-dl-exec` csomagja telepíti a `yt-dlp` futtatható állományt.
 
 A bot indítása: `npm start`. Az élesítést a Render automatikus telepítése végzi a `main` frissítése után.
