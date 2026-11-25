@@ -15,7 +15,8 @@
     "dotenv": "16.6.1",
     "ffmpeg-static": "5.2.0",
     "opusscript": "0.0.8",
-    "pg": "^8.23.0"
+    "pg": "^8.23.0",
+    "youtube-dl-exec": "3.1.20"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.9",
