@@ -19579,15 +19579,29 @@ async function setupServer(guild, botUser) {
 }
 
 async function syncApplicationPanel(guild, botUser) {
-  const channel = byName(guild.channels.cache, NAMES.applicationChannel);
-  if (!channel?.isTextBased?.()) throw new Error('A BELV TGF csatornája nem található vagy nem írható.');
+  const preferred = byName(guild.channels.cache, NAMES.applicationChannel);
+  const candidates = [...guild.channels.cache.values()].filter((channel) =>
+    channel?.isTextBased?.() && !channel.isThread?.() &&
+    (channel.id === preferred?.id || /belv|jelentkez|tgf|application/i.test(channel.name))
+  );
   const payload = applicationPanel();
   const footer = payload.embeds[0]?.toJSON?.().footer?.text || '';
-  const messages = await channel.messages.fetch({ limit: 50 }).catch(() => null);
-  const existing = messages?.find((message) => message.author.id === botUser.id && (
-    message.components?.some((component) => component.components?.some((button) => button.customId === 'application_open')) ||
-    String(message.embeds[0]?.footer?.text || '').startsWith('NexaBot • BELV írásbeli')
-  ));
+  let channel = null;
+  let existing = null;
+  for (const candidate of candidates) {
+    const messages = await candidate.messages.fetch({ limit: 50 }).catch(() => null);
+    const match = messages?.find((message) => {
+      if (message.author.id !== botUser.id) return false;
+      const embed = message.embeds[0];
+      const text = `${embed?.title || ''}\n${embed?.description || ''}\n${embed?.footer?.text || ''}`.toLocaleLowerCase('hu-HU');
+      return message.components?.some((component) => component.components?.some((button) => button.customId === 'application_open')) ||
+        String(embed?.footer?.text || '').startsWith('NexaBot • BELV írásbeli') ||
+        text.includes('belvédelmi igazgatóság tgf');
+    });
+    if (match) { channel = candidate; existing = match; break; }
+  }
+  channel ||= preferred || candidates.find((candidate) => /belv|tgf|jelentkez/i.test(candidate.name));
+  if (!channel?.isTextBased?.()) throw new Error('A BELV TGF csatornája nem található vagy nem írható.');
   const needsUpdate = Boolean(existing && String(existing.embeds[0]?.footer?.text || '') !== footer);
   if (needsUpdate) await existing.edit(payload);
   else if (!existing) await channel.send(payload);
