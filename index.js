@@ -15407,10 +15407,9 @@ client.once(Events.ClientReady, async (readyClient) => {
     await require('./music').ensureMusicPanel(readyClient).catch((error) => {
       console.error('A zenei panel automatikus közzététele nem sikerült:', error.message);
     });
-    const belvGuild = readyClient.guilds.cache.get(require('./belv-legal').BELV_GUILD_ID);
-    if (belvGuild) await require('./setup').syncApplicationPanel(belvGuild, readyClient.user).then(({ updated, created }) => {
-      console.log(`BELV fő írásbeli TGF-panel: ${updated ? 'frissítve' : created ? 'közzétéve' : 'már naprakész'}.`);
-    }).catch((error) => recordError(error, { command: 'belv_main_written_panel_sync', guildId: belvGuild.id }));
+    await require('./setup').syncRpApplicationPanels(readyClient).then((result) => {
+      console.log(`BELV TGF-panelek: ${result.updated} frissítve, ${result.created} közzétéve, ${result.unchanged} naprakész, ${result.missing} szerver nem érhető el, ${result.failed} hiba.`);
+    }).catch((error) => recordError(error, { command: 'belv_main_written_panel_sync' }));
     await require('./belv-legal').migrateWrittenApplication(readyClient).then((migrated) => {
       if (migrated) console.log('A BELV írásbeli jelentkezési űrlap 25 kérdésre frissült, a panel megjelenése szinkronizálva.');
     }).catch((error) => recordError(error, { command: 'belv_written_application_migration', guildId: require('./belv-legal').BELV_GUILD_ID }));
@@ -19463,6 +19462,7 @@ module.exports = {
 "src/setup.js": function(module, exports, require) {
 const { ChannelType, PermissionFlagsBits } = require('discord.js');
 const { NAMES, COLORS } = require('./constants');
+const { getOwnerSettings } = require('./config');
 const { byName } = require('./utils');
 const { ticketPanel, applicationPanel, staffPanel } = require('./panels');
 
@@ -19594,7 +19594,25 @@ async function syncApplicationPanel(guild, botUser) {
   return { channelId: channel.id, updated: needsUpdate, created: !existing };
 }
 
-module.exports = { setupServer, syncApplicationPanel };
+async function syncRpApplicationPanels(client) {
+  const summary = { updated: 0, created: 0, unchanged: 0, missing: 0, failed: 0 };
+  for (const guildId of getOwnerSettings().rpGuilds) {
+    const guild = client?.guilds?.cache?.get(guildId);
+    if (!guild) { summary.missing += 1; continue; }
+    try {
+      const result = await syncApplicationPanel(guild, client.user);
+      if (result.updated) summary.updated += 1;
+      else if (result.created) summary.created += 1;
+      else summary.unchanged += 1;
+    } catch (error) {
+      summary.failed += 1;
+      console.warn(`BELV TGF-panel frissítése sikertelen (${guildId}):`, error.message);
+    }
+  }
+  return summary;
+}
+
+module.exports = { setupServer, syncApplicationPanel, syncRpApplicationPanels };
 
 },
 "src/shifts.js": function(module, exports, require) {

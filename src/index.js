@@ -196,10 +196,9 @@ client.once(Events.ClientReady, async (readyClient) => {
     await require('./music').ensureMusicPanel(readyClient).catch((error) => {
       console.error('A zenei panel automatikus közzététele nem sikerült:', error.message);
     });
-    const belvGuild = readyClient.guilds.cache.get(require('./belv-legal').BELV_GUILD_ID);
-    if (belvGuild) await require('./setup').syncApplicationPanel(belvGuild, readyClient.user).then(({ updated, created }) => {
-      console.log(`BELV fő írásbeli TGF-panel: ${updated ? 'frissítve' : created ? 'közzétéve' : 'már naprakész'}.`);
-    }).catch((error) => recordError(error, { command: 'belv_main_written_panel_sync', guildId: belvGuild.id }));
+    await require('./setup').syncRpApplicationPanels(readyClient).then((result) => {
+      console.log(`BELV TGF-panelek: ${result.updated} frissítve, ${result.created} közzétéve, ${result.unchanged} naprakész, ${result.missing} szerver nem érhető el, ${result.failed} hiba.`);
+    }).catch((error) => recordError(error, { command: 'belv_main_written_panel_sync' }));
     await require('./belv-legal').migrateWrittenApplication(readyClient).then((migrated) => {
       if (migrated) console.log('A BELV írásbeli jelentkezési űrlap 25 kérdésre frissült, a panel megjelenése szinkronizálva.');
     }).catch((error) => recordError(error, { command: 'belv_written_application_migration', guildId: require('./belv-legal').BELV_GUILD_ID }));

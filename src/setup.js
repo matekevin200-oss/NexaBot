@@ -1,5 +1,6 @@
 const { ChannelType, PermissionFlagsBits } = require('discord.js');
 const { NAMES, COLORS } = require('./constants');
+const { getOwnerSettings } = require('./config');
 const { byName } = require('./utils');
 const { ticketPanel, applicationPanel, staffPanel } = require('./panels');
 
@@ -131,4 +132,22 @@ async function syncApplicationPanel(guild, botUser) {
   return { channelId: channel.id, updated: needsUpdate, created: !existing };
 }
 
-module.exports = { setupServer, syncApplicationPanel };
+async function syncRpApplicationPanels(client) {
+  const summary = { updated: 0, created: 0, unchanged: 0, missing: 0, failed: 0 };
+  for (const guildId of getOwnerSettings().rpGuilds) {
+    const guild = client?.guilds?.cache?.get(guildId);
+    if (!guild) { summary.missing += 1; continue; }
+    try {
+      const result = await syncApplicationPanel(guild, client.user);
+      if (result.updated) summary.updated += 1;
+      else if (result.created) summary.created += 1;
+      else summary.unchanged += 1;
+    } catch (error) {
+      summary.failed += 1;
+      console.warn(`BELV TGF-panel frissítése sikertelen (${guildId}):`, error.message);
+    }
+  }
+  return summary;
+}
+
+module.exports = { setupServer, syncApplicationPanel, syncRpApplicationPanels };
