@@ -60,8 +60,9 @@ function applicationPanel(template) {
   const version = templateVersion(template);
   const embed = new EmbedBuilder()
     .setColor(COLORS.primary)
+    .setAuthor({ name: 'NEXA • HIVATALOS JELENTKEZÉSI PANEL' })
     .setTitle(`${template.emoji || '📋'} ${template.title}`)
-    .setDescription(template.description || 'Nyomd meg a gombot a jelentkezés megkezdéséhez.')
+    .setDescription(`╭─ **JELENTKEZÉSI FOLYAMAT**\n${template.description || 'A jelentkezés megkezdéséhez használd az alábbi gombot.'}\n\nOlvasd el figyelmesen a kérdéseket, és saját szavaiddal válaszolj.`)
     .addFields(
       { name: 'Kérdések', value: `${template.questions.length} db`, inline: true },
       { name: 'Folyamat', value: `${Math.ceil(template.questions.length / QUESTIONS_PER_PAGE)} lépés`, inline: true },
@@ -91,27 +92,42 @@ function applicationModal(template, page) {
   const start = page * QUESTIONS_PER_PAGE;
   const questions = template.questions.slice(start, start + QUESTIONS_PER_PAGE);
   const totalPages = Math.ceil(template.questions.length / QUESTIONS_PER_PAGE);
+  const section = applicationSection(template, page);
   const modal = new ModalBuilder()
     .setCustomId(`tgf_submit:${template.key}:${page}`)
-    .setTitle(`${template.title} • ${page + 1}/${totalPages}`.slice(0, 45));
+    .setTitle(`${template.title.slice(0, 25)} • ${section.short} ${page + 1}/${totalPages}`.slice(0, 45));
   for (const [offset, question] of questions.entries()) {
     const index = start + offset;
     const input = new TextInputBuilder()
       .setCustomId(`tgf_q_${index}`)
-      .setLabel(`${index + 1}. válasz`)
+      .setLabel(`${String(index + 1).padStart(2, '0')}. kérdés válasza`)
       .setStyle(TextInputStyle.Paragraph)
       .setRequired(question.required !== false)
       .setMaxLength(Math.min(1000, Math.max(50, Number(question.maxLength) || 1000)));
-    input.setPlaceholder('A teljes kérdést a megnyitás előtti oldalon látod.');
+    input.setPlaceholder('Saját szavaiddal, indoklással válaszolj.');
     modal.addComponents(new ActionRowBuilder().addComponents(input));
   }
   return modal;
 }
 
+function applicationSection(template, page) {
+  const belvSections = [
+    { title: 'Szakasz I • Alapelvek és alkalmasság', short: 'Alapelvek' },
+    { title: 'Szakasz II • Ügykezelés és bizonyítékok', short: 'Ügykezelés' },
+    { title: 'Szakasz III • Titoktartás és etika', short: 'Etika' },
+    { title: 'Szakasz IV • Fegyelmi eljárásrend', short: 'Eljárásrend' },
+    { title: 'Szakasz V • Szabályismeret és összetett eset', short: 'Esetelemzés' }
+  ];
+  if (template.key === BELV_LEGAL_TEMPLATE_KEY && belvSections[page]) return belvSections[page];
+  return { title: `Jelentkezési szakasz ${page + 1}`, short: `${page + 1}. rész` };
+}
+
 function questionPrompt(template,page){
-  const start=page*QUESTIONS_PER_PAGE,questions=template.questions.slice(start,start+QUESTIONS_PER_PAGE),totalPages=Math.ceil(template.questions.length/QUESTIONS_PER_PAGE);
-  const embed=new EmbedBuilder().setColor(COLORS.primary).setTitle(`${template.emoji||'📋'} ${template.title} · ${page+1}/${totalPages}`).setDescription('A válaszűrlap megnyitása előtt itt olvashatod el a kérdések teljes szövegét.');
-  embed.addFields(questions.map((question,offset)=>({name:`${start+offset+1}. kérdés${question.required===false?' · opcionális':''}`,value:String(question.label||'').slice(0,1000)||'—'})));
+  const start=page*QUESTIONS_PER_PAGE,questions=template.questions.slice(start,start+QUESTIONS_PER_PAGE),totalPages=Math.ceil(template.questions.length/QUESTIONS_PER_PAGE),section=applicationSection(template,page);
+  const progress=`**HALADÁS**  ${'▰'.repeat(page+1)}${'▱'.repeat(Math.max(0,totalPages-page-1))}  **${page+1}/${totalPages}**`;
+  const embed=new EmbedBuilder().setColor(COLORS.primary).setAuthor({name:'NEXA • JELENTKEZÉSI ŰRLAP'}).setTitle(`${template.emoji||'📋'} ${template.title}`).setDescription(`**${section.title}**\n${progress}\n\nA folytatáshoz olvasd át az alábbi kérdéseket, majd a gombbal nyisd meg a válaszlapot. Fogalmazz pontosan és saját szavaiddal.`);
+  embed.addFields(questions.map((question,offset)=>({name:`${String(start+offset+1).padStart(2,'0')}  •  ${question.required===false?'OPCIONÁLIS':'KÖTELEZŐ KÉRDÉS'}`,value:String(question.label||'').slice(0,1000)||'—'})));
+  embed.setFooter({text:`NexaBot TGF Forge • ${section.short} • ${page+1}/${totalPages}`}).setTimestamp();
   return embed;
 }
 

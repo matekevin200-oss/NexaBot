@@ -1451,6 +1451,14 @@ async function handleBelvRosterCommand(interaction) {
 }
 async function syncMdtGuildCommand(guild) {
   if (!guild?.commands) return;
+  if (guild.id === BELV_GUILD_ID) {
+    try { await require('./belv-legal').syncGuildCommands(guild); }
+    catch (error) { await require('./telemetry').recordError(error, { module: 'belv_legal_command_sync', guildId: guild.id }).catch(() => null); }
+  }
+  if (guild.id === BELV_GUILD_ID) {
+    try { await require('./holiday-theme').syncGuildCommand(guild); }
+    catch (error) { await require('./telemetry').recordError(error, { module: 'belv_holiday_command_sync', guildId: guild.id }).catch(() => null); }
+  }
   await require('./belv-oral-exam').syncGuildCommand(guild);
   if (guild.id === BELV_GUILD_ID) {
     try { await require('./bomo').syncSetupCommand(guild); }
@@ -4087,6 +4095,8 @@ const { recordAudit } = require('./telemetry');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const QUESTIONS_PER_PAGE = 5;
+const BELV_LEGAL_GUILD_ID = '1517509643734221030';
+const BELV_LEGAL_TEMPLATE_KEY = 'tgf_belv_jogi';
 
 function templatesForGuild(guildId) {
   return getGuildConfig(guildId).applications?.templates || [];
@@ -4127,8 +4137,9 @@ function applicationPanel(template) {
   const version = templateVersion(template);
   const embed = new EmbedBuilder()
     .setColor(COLORS.primary)
+    .setAuthor({ name: 'NEXA • HIVATALOS JELENTKEZÉSI PANEL' })
     .setTitle(`${template.emoji || '📋'} ${template.title}`)
-    .setDescription(template.description || 'Nyomd meg a gombot a jelentkezés megkezdéséhez.')
+    .setDescription(`╭─ **JELENTKEZÉSI FOLYAMAT**\n${template.description || 'A jelentkezés megkezdéséhez használd az alábbi gombot.'}\n\nOlvasd el figyelmesen a kérdéseket, és saját szavaiddal válaszolj.`)
     .addFields(
       { name: 'Kérdések', value: `${template.questions.length} db`, inline: true },
       { name: 'Folyamat', value: `${Math.ceil(template.questions.length / QUESTIONS_PER_PAGE)} lépés`, inline: true },
@@ -4158,27 +4169,42 @@ function applicationModal(template, page) {
   const start = page * QUESTIONS_PER_PAGE;
   const questions = template.questions.slice(start, start + QUESTIONS_PER_PAGE);
   const totalPages = Math.ceil(template.questions.length / QUESTIONS_PER_PAGE);
+  const section = applicationSection(template, page);
   const modal = new ModalBuilder()
     .setCustomId(`tgf_submit:${template.key}:${page}`)
-    .setTitle(`${template.title} • ${page + 1}/${totalPages}`.slice(0, 45));
+    .setTitle(`${template.title.slice(0, 25)} • ${section.short} ${page + 1}/${totalPages}`.slice(0, 45));
   for (const [offset, question] of questions.entries()) {
     const index = start + offset;
     const input = new TextInputBuilder()
       .setCustomId(`tgf_q_${index}`)
-      .setLabel(`${index + 1}. válasz`)
+      .setLabel(`${String(index + 1).padStart(2, '0')}. kérdés válasza`)
       .setStyle(TextInputStyle.Paragraph)
       .setRequired(question.required !== false)
       .setMaxLength(Math.min(1000, Math.max(50, Number(question.maxLength) || 1000)));
-    input.setPlaceholder('A teljes kérdést a megnyitás előtti oldalon látod.');
+    input.setPlaceholder('Saját szavaiddal, indoklással válaszolj.');
     modal.addComponents(new ActionRowBuilder().addComponents(input));
   }
   return modal;
 }
 
+function applicationSection(template, page) {
+  const belvSections = [
+    { title: 'Szakasz I • Alapelvek és alkalmasság', short: 'Alapelvek' },
+    { title: 'Szakasz II • Ügykezelés és bizonyítékok', short: 'Ügykezelés' },
+    { title: 'Szakasz III • Titoktartás és etika', short: 'Etika' },
+    { title: 'Szakasz IV • Fegyelmi eljárásrend', short: 'Eljárásrend' },
+    { title: 'Szakasz V • Szabályismeret és összetett eset', short: 'Esetelemzés' }
+  ];
+  if (template.key === BELV_LEGAL_TEMPLATE_KEY && belvSections[page]) return belvSections[page];
+  return { title: `Jelentkezési szakasz ${page + 1}`, short: `${page + 1}. rész` };
+}
+
 function questionPrompt(template,page){
-  const start=page*QUESTIONS_PER_PAGE,questions=template.questions.slice(start,start+QUESTIONS_PER_PAGE),totalPages=Math.ceil(template.questions.length/QUESTIONS_PER_PAGE);
-  const embed=new EmbedBuilder().setColor(COLORS.primary).setTitle(`${template.emoji||'📋'} ${template.title} · ${page+1}/${totalPages}`).setDescription('A válaszűrlap megnyitása előtt itt olvashatod el a kérdések teljes szövegét.');
-  embed.addFields(questions.map((question,offset)=>({name:`${start+offset+1}. kérdés${question.required===false?' · opcionális':''}`,value:String(question.label||'').slice(0,1000)||'—'})));
+  const start=page*QUESTIONS_PER_PAGE,questions=template.questions.slice(start,start+QUESTIONS_PER_PAGE),totalPages=Math.ceil(template.questions.length/QUESTIONS_PER_PAGE),section=applicationSection(template,page);
+  const progress=`**HALADÁS**  ${'▰'.repeat(page+1)}${'▱'.repeat(Math.max(0,totalPages-page-1))}  **${page+1}/${totalPages}**`;
+  const embed=new EmbedBuilder().setColor(COLORS.primary).setAuthor({name:'NEXA • JELENTKEZÉSI ŰRLAP'}).setTitle(`${template.emoji||'📋'} ${template.title}`).setDescription(`**${section.title}**\n${progress}\n\nA folytatáshoz olvasd át az alábbi kérdéseket, majd a gombbal nyisd meg a válaszlapot. Fogalmazz pontosan és saját szavaiddal.`);
+  embed.addFields(questions.map((question,offset)=>({name:`${String(start+offset+1).padStart(2,'0')}  •  ${question.required===false?'OPCIONÁLIS':'KÖTELEZŐ KÉRDÉS'}`,value:String(question.label||'').slice(0,1000)||'—'})));
+  embed.setFooter({text:`NexaBot TGF Forge • ${section.short} • ${page+1}/${totalPages}`}).setTimestamp();
   return embed;
 }
 
@@ -4242,7 +4268,11 @@ function reviewTemplate(guildId, snapshot) {
 }
 
 function canReview(member, template) {
-  return [template.reviewerRoleId, ...(template.reviewerRoleIds || [])].some((id) => hasRoleOrAdmin(member, id));
+  const roleIds = [template?.reviewerRoleId, ...(template?.reviewerRoleIds || [])].filter(Boolean);
+  if (template?.key === BELV_LEGAL_TEMPLATE_KEY) {
+    return roleIds.some((id) => member?.roles?.cache?.has(id));
+  }
+  return roleIds.some((id) => hasRoleOrAdmin(member, id));
 }
 
 function reviewEmbeds(application, guild, revealIdentity = false) {
@@ -4326,11 +4356,24 @@ async function saveDraft(guildId, template, userId, answers, nextPage) {
 }
 
 async function handleApplicationButton(interaction) {
-  if (!isBviGuild(interaction.guildId) || !moduleEnabled(interaction.guildId, 'bvi')) {
+  const [action, value, pageText, ownerId] = interaction.customId.split(':');
+  const bviEnabled = isBviGuild(interaction.guildId) && moduleEnabled(interaction.guildId, 'bvi');
+  let legalApplicationAllowed = false;
+  if (!bviEnabled && interaction.guildId === BELV_LEGAL_GUILD_ID) {
+    if (['tgf_start', 'tgf_begin', 'tgf_continue'].includes(action)) {
+      legalApplicationAllowed = value === BELV_LEGAL_TEMPLATE_KEY;
+    } else if (['tgf_accept', 'tgf_reject'].includes(action)) {
+      const application = await dbQuery(
+        'SELECT template_key FROM nexabot_applications WHERE id = $1 AND guild_id = $2',
+        [value, interaction.guildId]
+      ).catch(() => null);
+      legalApplicationAllowed = application?.rows?.[0]?.template_key === BELV_LEGAL_TEMPLATE_KEY;
+    }
+  }
+  if (!bviEnabled && !legalApplicationAllowed) {
     return ephemeralError(interaction, 'Az egyedi TGF-rendszert ezen a szerveren az Owner nem engedélyezte.');
   }
   if (!isPersistentStore()) return ephemeralError(interaction, 'A TGF Forge biztonságos használatához PostgreSQL adatbázis szükséges.');
-  const [action, value, pageText, ownerId] = interaction.customId.split(':');
   if (action === 'tgf_start') {
     const template = findApplicationTemplate(interaction.guildId, value);
     if (!template?.active) return ephemeralError(interaction, 'Ez a jelentkezési folyamat jelenleg nem aktív.');
@@ -6566,7 +6609,7 @@ function sanitizeConfig(guildId, input = {}) {
     .map((item) => {
       const key = String(item?.key || '').trim().toLowerCase();
       const questions = (Array.isArray(item?.questions) ? item.questions : [])
-        .slice(0, 15)
+        .slice(0, 25)
         .map((question, index) => ({
           id: `question_${index + 1}`,
           label: String(question?.label || '').trim().slice(0, 200),
@@ -8261,10 +8304,161 @@ input,select,textarea{background:#09182b!important;border-color:#294561!importan
 .support-message p{white-space:pre-wrap;overflow-wrap:anywhere}.record{background:rgba(13,27,46,.85);border-color:#294360}.record:hover{background:#152f4c;border-color:#4774a3}.ticket-center{background:radial-gradient(600px 350px at 100% 0,rgba(60,146,242,.14),transparent),#0e1b2c;border-color:#365775}
 .section-kicker{color:#8fcaff}.muted,.help{color:#9eafc5}.savebar{background:rgba(9,20,37,.96);border-color:#304e70;backdrop-filter:blur(12px)}.live-sync.is-live{color:#67d9c5}.stat-value{color:#edf5ff}
 :focus-visible{outline:2px solid #86c5ff;outline-offset:3px}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+
 `;
 }
 
-module.exports = { dashboardTheme };
+function controlOsOverride(){return `
+/* NEXA CONTROL OS · authenticated dashboard redesign; presentation only */
+html body.nexa-v153.app-redesign-v26{
+ --bg:#070b17!important;--panel:#0d1426!important;--card:#141d32!important;
+ --card2:#1b2740!important;--line:#303e60!important;--text:#f4f6ff!important;
+ --muted:#a8b7d1!important;--primary:#918cff!important;--accent:#84c8ff!important;
+ --cyan:#84c8ff!important;--gold:#eecb8a!important;
+ background:radial-gradient(900px 560px at 83% -9%,rgba(110,92,220,.16),transparent 70%),#080d1c!important;
+ color:#f4f6ff!important;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif!important
+}
+html body.nexa-v153.app-redesign-v26 .topbar{
+ height:74px!important;background:rgba(8,13,28,.97)!important;
+ border-bottom:1px solid #2b3855!important;box-shadow:0 8px 35px #03060d55!important
+}
+html body.nexa-v153.app-redesign-v26 .topbar-inner{padding:0 27px!important}
+html body.nexa-v153.app-redesign-v26 .brand-mark,
+html body.nexa-v153.app-redesign-v26 .v2-sidebar-mark{
+ background:linear-gradient(140deg,#a2e1ff,#938aff)!important;color:#10162b!important;
+ border-radius:13px!important;box-shadow:0 0 0 1px #aecbff70,0 10px 24px #666cda33!important
+}
+html body.nexa-v153.app-redesign-v26 .brand-text{color:#f4f7ff!important;font-weight:850!important}
+html body.nexa-v153.app-redesign-v26 .brand-text span{color:#9acaff!important}
+html body.nexa-v153.app-redesign-v26 .v2-top-context>span,
+html body.nexa-v153.app-redesign-v26 .v2-sidebar-head small,
+html body.nexa-v153.app-redesign-v26 .workspace-overline,
+html body.nexa-v153.app-redesign-v26 .section-kicker{color:#9bb2eb!important;letter-spacing:.12em!important}
+html body.nexa-v153.app-redesign-v26 .live-pill,
+html body.nexa-v153.app-redesign-v26 .workspace-status{
+ color:#b8d5ff!important;background:#17223c!important;border:1px solid #405779!important;border-radius:99px!important
+}
+html body.nexa-v153.app-redesign-v26 .v2-app{
+ grid-template-columns:270px minmax(0,1fr)!important;min-height:calc(100vh - 74px)!important;
+ background:transparent!important
+}
+html body.nexa-v153.app-redesign-v26 .v2-sidebar{
+ background:linear-gradient(180deg,#0e172a,#0a1021)!important;border-right:1px solid #293955!important;
+ padding:28px 15px!important;box-shadow:none!important
+}
+html body.nexa-v153.app-redesign-v26 .v2-sidebar-head{
+ background:#16233b!important;border:1px solid #334967!important;
+ padding:14px!important;border-radius:15px!important;margin-bottom:22px!important
+}
+html body.nexa-v153.app-redesign-v26 .v2-sidebar-nav a,
+html body.nexa-v153.app-redesign-v26 .side-link{
+ color:#b1bfd8!important;border:1px solid transparent!important;
+ border-radius:11px!important;transition:background .15s,border-color .15s!important
+}
+html body.nexa-v153.app-redesign-v26 .v2-sidebar-nav a:hover,
+html body.nexa-v153.app-redesign-v26 .side-link:hover{
+ background:#1b2a47!important;border-color:#354e79!important;color:#fff!important
+}
+html body.nexa-v153.app-redesign-v26 .v2-sidebar-nav a.active,
+html body.nexa-v153.app-redesign-v26 .side-link.active{
+ color:#fff!important;background:linear-gradient(105deg,#303c6c,#1b2c50)!important;
+ border-color:#626eae!important;box-shadow:inset 3px 0 #a6b8ff!important
+}
+html body.nexa-v153.app-redesign-v26 .v2-sidebar-foot{
+ border-top:1px solid #2d3e5e!important;color:#94a9c7!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-main{
+ max-width:none!important;min-width:0!important;
+ padding:34px clamp(21px,3.3vw,58px) 65px!important;background:transparent!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-heading{
+ border-bottom:1px solid #2a3b57!important;padding-bottom:24px!important;margin-bottom:29px!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-heading h1{
+ color:#f8f9ff!important;font-size:clamp(32px,3.1vw,46px)!important;
+ font-weight:820!important;letter-spacing:-.052em!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-heading p{color:#a5b4cd!important}
+html body.nexa-v153.app-redesign-v26 .workspace-content{max-width:1470px!important}
+html body.nexa-v153.app-redesign-v26 .workspace-content .card,
+html body.nexa-v153.app-redesign-v26 .workspace-content .section,
+html body.nexa-v153.app-redesign-v26 .workspace-content .owner-server,
+html body.nexa-v153.app-redesign-v26 .workspace-content .stat,
+html body.nexa-v153.app-redesign-v26 .workspace-content .stat-card,
+html body.nexa-v153.app-redesign-v26 .workspace-content .status-card,
+html body.nexa-v153.app-redesign-v26 .workspace-content .n5-widget{
+ background:linear-gradient(145deg,#17233b,#101a2d)!important;color:#f0f4ff!important;
+ border:1px solid #324765!important;border-radius:17px!important;box-shadow:0 12px 33px #0003!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-content .card:hover,
+html body.nexa-v153.app-redesign-v26 .workspace-content .owner-server:hover{border-color:#6989c4!important}
+html body.nexa-v153.app-redesign-v26 .workspace-content h1,
+html body.nexa-v153.app-redesign-v26 .workspace-content h2,
+html body.nexa-v153.app-redesign-v26 .workspace-content h3{color:#f5f8ff!important;letter-spacing:-.025em!important}
+html body.nexa-v153.app-redesign-v26 .workspace-content .muted,
+html body.nexa-v153.app-redesign-v26 .workspace-content .help{color:#aabbd4!important}
+html body.nexa-v153.app-redesign-v26 .workspace-content .btn{
+ border-radius:10px!important;background:#233557!important;border:1px solid #4b658e!important;
+ color:#eaf0ff!important;font-weight:700!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-content .btn:hover{
+ background:#324773!important;border-color:#7d9be0!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-content .btn.green,
+html body.nexa-v153.app-redesign-v26 .workspace-content .btn.primary{
+ background:linear-gradient(115deg,#8ac8ff,#a39bff)!important;border-color:transparent!important;
+ color:#0d152e!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-content input,
+html body.nexa-v153.app-redesign-v26 .workspace-content select,
+html body.nexa-v153.app-redesign-v26 .workspace-content textarea{
+ background:#0c172b!important;color:#eef3ff!important;
+ border:1px solid #405478!important;border-radius:10px!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-content input:focus,
+html body.nexa-v153.app-redesign-v26 .workspace-content select:focus,
+html body.nexa-v153.app-redesign-v26 .workspace-content textarea:focus{
+ outline:2px solid #88b4ff55!important;border-color:#94baff!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-content table{
+ background:#121d32!important;border:1px solid #334967!important;border-radius:12px!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-content th{background:#202e4b!important;color:#c6d6f3!important}
+html body.nexa-v153.app-redesign-v26 .workspace-content td{border-bottom-color:#2f415f!important}
+html body.nexa-v153.app-redesign-v26 .workspace-content .badge{
+ background:#28365b!important;border:1px solid #586c9d!important;color:#d7e0ff!important;border-radius:8px!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-content .owner-view-tabs a,
+html body.nexa-v153.app-redesign-v26 .workspace-content .tabs a{
+ background:#14213a!important;border:1px solid #344b70!important;color:#b4c6e8!important;border-radius:10px!important
+}
+html body.nexa-v153.app-redesign-v26 .workspace-content .owner-view-tabs a.active,
+html body.nexa-v153.app-redesign-v26 .workspace-content .tabs a.active{
+ background:#304879!important;color:#fff!important;border-color:#84a2e8!important
+}
+html body.nexa-v153.app-redesign-v26 .profile-menu summary,
+html body.nexa-v153.app-redesign-v26 .locale-switch{
+ background:#14233c!important;border-color:#374f72!important
+}
+html body.nexa-v153.app-redesign-v26 .profile-popover{
+ background:#142038!important;border-color:#3a5175!important
+}
+@media(max-width:920px){
+ html body.nexa-v153.app-redesign-v26 .v2-app{display:block!important}
+ html body.nexa-v153.app-redesign-v26 .v2-sidebar{width:280px!important}
+ html body.nexa-v153.app-redesign-v26 .workspace-main{padding:22px 18px 50px!important}
+}
+@media(max-width:600px){
+ html body.nexa-v153.app-redesign-v26 .workspace-heading h1{font-size:30px!important}
+ html body.nexa-v153.app-redesign-v26 .workspace-heading{display:block!important}
+}
+@media(prefers-reduced-motion:reduce){
+ html body.nexa-v153.app-redesign-v26 *{transition:none!important;animation:none!important}
+}
+
+`}
+module.exports = { dashboardTheme, controlOsOverride };
 
 },
 "src/server-architect.js": function(module, exports, require) {
@@ -9854,7 +10048,8 @@ html[data-n5-theme=light] .nexa-v153 .savebar{background:rgba(255,255,255,.96)!i
 @media(max-width:1050px){.nexa-v153 .n5-widget[data-widget-id=members],.nexa-v153 .n5-widget[data-widget-id=tickets],.nexa-v153 .n5-widget[data-widget-id=flows],.nexa-v153 .n5-widget[data-widget-id=moderation]{grid-column:span 6}.nexa-v153 .n5-widget-span-7,.nexa-v153 .n5-widget-span-5,.nexa-v153 .n5-widget-span-6{grid-column:span 12}}
 @media(max-width:760px){.nexa-v153 .n5-dashboard-toolbar{align-items:stretch;flex-direction:column}.nexa-v153 .n5-dashboard-layout{grid-template-columns:minmax(0,1fr)}.nexa-v153 .n5-widget,.nexa-v153 .n5-widget[data-widget-id=members],.nexa-v153 .n5-widget[data-widget-id=tickets],.nexa-v153 .n5-widget[data-widget-id=flows],.nexa-v153 .n5-widget[data-widget-id=moderation],.nexa-v153 .n5-widget-span-7,.nexa-v153 .n5-widget-span-5,.nexa-v153 .n5-widget-span-6{grid-column:1}.nexa-v153 .n5-layout-panel summary{flex-direction:column}.nexa-v153 .n5-layout-actions{width:100%;margin:4px 0 0}.nexa-v153 .n5-layout-actions .btn{flex:1}}
 @media(prefers-reduced-motion:reduce){.nexa-v153 .n5-widget{transition:none!important}}
-${nonSettingsRedesign}</style></head><body data-session-user="${escapeHtml(user?.id||'')}" class="nexa-v153 ${ownerView ? 'owner-mode' : ''}${isGuildSettingsPage ? ' nexa-settings-page' : ''}${redesignShell ? ' app-redesign-v26' : ''}${activePage ? ` page-${escapeHtml(activePage)}` : ''}"><header class="topbar${redesignShell ? ' v2-topbar' : ''}"><div class="topbar-inner">${user ? `<button class="sidebar-toggle" type="button" data-sidebar-toggle aria-label="Menu">☰</button>` : ``}<a class="brand" href="${homeUrl}"><span class="brand-mark">N</span><span class="brand-text">Nexa<span>Bot</span></span></a>${redesignShell ? `<div class="v2-top-context"><span>${ownerView ? 'NEXA / OWNER OPERATIONS' : activeGuildId ? 'NEXA / SERVER CONTROL' : 'NEXA / WORKSPACE'}</span><strong>${escapeHtml(currentGuild?.name || (ownerView ? 'Owner Center' : title))}</strong></div>` : ''}<a class="live-pill" href="/health">NEXA · SYSTEM STATUS</a><nav class="navlinks" aria-label="${pageLanguage === 'en' ? 'Main navigation' : 'Fő navigáció'}"><a${navClass('platform')} href="${platformUrl}">${platformLabel}</a><a${navClass('commands')} href="${commandsUrl}">${commandsLabel}</a><a${navClass('subscriptions')} href="${pricingUrl}">${pricingLabel}</a><a${navClass('guide')} href="${guideUrl}">${guideLabel}</a><a${navClass('privacy')} href="${privacyUrl}">${privacyLabel}</a></nav><div class="spacer"></div><button class="btn secondary small" type="button" data-n5-theme-toggle aria-label="Toggle theme">◐</button>${localeSwitcher}${userMenu}</div></header>${user ? (redesignShell ? `<div class="v2-app"><aside class="sidebar v2-sidebar" id="workspace-navigation"><div class="v2-sidebar-head"><span class="v2-sidebar-mark">N</span><div><strong>${ownerView ? 'Owner Operations' : currentGuild?.name || (pageLanguage === 'en' ? 'Workspace' : 'Munkaterület')}</strong><small>${ownerView ? 'SYSTEM CONTROL' : activeGuildId || 'NEXA COMMAND DECK'}</small></div></div><div class="v2-sidebar-nav">${sidebarNavigation}</div><div class="v2-sidebar-foot"><span class="v2-online-indicator"></span><span>${pageLanguage === 'en' ? 'NEXA services operational' : 'NEXA szolgáltatások működnek'}</span></div></aside><main class="workspace-main"><header class="workspace-heading"><div><div class="workspace-overline">${ownerView ? 'OWNER CENTER' : activeGuildId ? 'SERVER WORKSPACE' : 'NEXA DASHBOARD'}</div><h1>${escapeHtml(title)}</h1><p>${ownerView ? (pageLanguage === 'en' ? 'System overview, service health and administration.' : 'Rendszeráttekintés, szolgáltatásállapot és adminisztráció.') : activeGuildId ? (pageLanguage === 'en' ? 'Manage this Discord server from one workspace.' : 'A Discord-szerver kezelése egyetlen munkafelületről.') : (pageLanguage === 'en' ? 'Your servers, account and NEXA tools.' : 'Szervereid, fiókod és NEXA eszközeid.')}</p></div><a class="workspace-status" href="/health"><i></i>${pageLanguage === 'en' ? 'Systems online' : 'Rendszerek online'} <span>↗</span></a></header><div class="workspace-content">${content}</div></main></div>` : `<div class="app"><aside class="sidebar">${sidebarNavigation}<div class="footer-note">${escapeHtml(productName)}<br><span class="footer-release">NEXA 5.0 Next Generation • build 25.8.4</span></div></aside><main><div class="contextbar"><span>NEXA</span><b>›</b><span>${ownerView ? 'OWNER' : 'CONTROL'}</span><b>›</b><strong data-current-location>${escapeHtml(title)}</strong></div>${content}</main></div>`) : `<main class="public-main">${content}</main>`}<dialog id="n5-palette"><div class="n5-tools"><h2>${pageLanguage==='en'?'Find anything':'Keresés'}</h2><button type="button" class="btn secondary" data-n5-search-close>×</button></div><input type="search" aria-label="Search"><div class="n5-search-results" data-search-results></div></dialog><script src="/assets/nexa-dashboard.js" defer></script><script src="/assets/nexa-next.js" defer></script>${scrollRestoreScript}</body></html>`;
+${nonSettingsRedesign}
+${require('./dashboard-theme').controlOsOverride()}</style></head><body data-session-user="${escapeHtml(user?.id||'')}" class="nexa-v153 ${ownerView ? 'owner-mode' : ''}${isGuildSettingsPage ? ' nexa-settings-page' : ''}${redesignShell ? ' app-redesign-v26' : ''}${activePage ? ` page-${escapeHtml(activePage)}` : ''}"><header class="topbar${redesignShell ? ' v2-topbar' : ''}"><div class="topbar-inner">${user ? `<button class="sidebar-toggle" type="button" data-sidebar-toggle aria-label="Menu">☰</button>` : ``}<a class="brand" href="${homeUrl}"><span class="brand-mark">N</span><span class="brand-text">Nexa<span>Bot</span></span></a>${redesignShell ? `<div class="v2-top-context"><span>${ownerView ? 'NEXA / OWNER OPERATIONS' : activeGuildId ? 'NEXA / SERVER CONTROL' : 'NEXA / WORKSPACE'}</span><strong>${escapeHtml(currentGuild?.name || (ownerView ? 'Owner Center' : title))}</strong></div>` : ''}<a class="live-pill" href="/health">NEXA · SYSTEM STATUS</a><nav class="navlinks" aria-label="${pageLanguage === 'en' ? 'Main navigation' : 'Fő navigáció'}"><a${navClass('platform')} href="${platformUrl}">${platformLabel}</a><a${navClass('commands')} href="${commandsUrl}">${commandsLabel}</a><a${navClass('subscriptions')} href="${pricingUrl}">${pricingLabel}</a><a${navClass('guide')} href="${guideUrl}">${guideLabel}</a><a${navClass('privacy')} href="${privacyUrl}">${privacyLabel}</a></nav><div class="spacer"></div><button class="btn secondary small" type="button" data-n5-theme-toggle aria-label="Toggle theme">◐</button>${localeSwitcher}${userMenu}</div></header>${user ? (redesignShell ? `<div class="v2-app"><aside class="sidebar v2-sidebar" id="workspace-navigation"><div class="v2-sidebar-head"><span class="v2-sidebar-mark">N</span><div><strong>${ownerView ? 'Owner Operations' : currentGuild?.name || (pageLanguage === 'en' ? 'Workspace' : 'Munkaterület')}</strong><small>${ownerView ? 'SYSTEM CONTROL' : activeGuildId || 'NEXA COMMAND DECK'}</small></div></div><div class="v2-sidebar-nav">${sidebarNavigation}</div><div class="v2-sidebar-foot"><span class="v2-online-indicator"></span><span>${pageLanguage === 'en' ? 'NEXA services operational' : 'NEXA szolgáltatások működnek'}</span></div></aside><main class="workspace-main"><header class="workspace-heading"><div><div class="workspace-overline">${ownerView ? 'OWNER CENTER' : activeGuildId ? 'SERVER WORKSPACE' : 'NEXA DASHBOARD'}</div><h1>${escapeHtml(title)}</h1><p>${ownerView ? (pageLanguage === 'en' ? 'System overview, service health and administration.' : 'Rendszeráttekintés, szolgáltatásállapot és adminisztráció.') : activeGuildId ? (pageLanguage === 'en' ? 'Manage this Discord server from one workspace.' : 'A Discord-szerver kezelése egyetlen munkafelületről.') : (pageLanguage === 'en' ? 'Your servers, account and NEXA tools.' : 'Szervereid, fiókod és NEXA eszközeid.')}</p></div><a class="workspace-status" href="/health"><i></i>${pageLanguage === 'en' ? 'Systems online' : 'Rendszerek online'} <span>↗</span></a></header><div class="workspace-content">${content}</div></main></div>` : `<div class="app"><aside class="sidebar">${sidebarNavigation}<div class="footer-note">${escapeHtml(productName)}<br><span class="footer-release">NEXA 5.0 Next Generation • build 25.8.4</span></div></aside><main><div class="contextbar"><span>NEXA</span><b>›</b><span>${ownerView ? 'OWNER' : 'CONTROL'}</span><b>›</b><strong data-current-location>${escapeHtml(title)}</strong></div>${content}</main></div>`) : `<main class="public-main">${content}</main>`}<dialog id="n5-palette"><div class="n5-tools"><h2>${pageLanguage==='en'?'Find anything':'Keresés'}</h2><button type="button" class="btn secondary" data-n5-search-close>×</button></div><input type="search" aria-label="Search"><div class="n5-search-results" data-search-results></div></dialog><script src="/assets/nexa-dashboard.js" defer></script><script src="/assets/nexa-next.js" defer></script>${scrollRestoreScript}</body></html>`;
 }
 
 function publicLanguage(url, request = null) {
@@ -10665,7 +10860,7 @@ async function ownerTgfForgePage(guild, session, options = {}) {
   ${notice}
   <div class="stats"><div class="stat"><div class="stat-value">${Number(stats.total || 0)}</div><div class="stat-label">Összes TGF</div></div><div class="stat"><div class="stat-value">${Number(stats.pending || 0)}</div><div class="stat-label">Bírálatra vár</div></div><div class="stat"><div class="stat-value">${Number(stats.accepted || 0)}</div><div class="stat-label">Elfogadva</div></div><div class="stat"><div class="stat-value">${Number(stats.average_integrity || 0)}</div><div class="stat-label">Átlag Integrity Pulse</div></div></div>
   <section class="section"><div class="page-head"><div><div class="section-kicker">Élő folyamatok</div><h2>TGF-sablonok</h2></div></div><div class="grid">${cards}</div></section>
-  <section class="card section" style="margin-top:24px"><div class="section-kicker">${selected ? 'Folyamat szerkesztése' : 'Új felvételi folyamat'}</div><h2 class="section-title">TGF Forge</h2><p class="muted">Legfeljebb 15 kérdést adhatsz meg; a bot automatikusan több Discord-oldalra bontja őket. A kérdés elején lévő <strong>?</strong> opcionális választ jelent.</p><form method="post" action="/owner/tgf-forge/${guild.id}/save"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="template_key" value="${escapeHtml(selected?.key || '')}"><div class="field-grid"><div><label>TGF neve *</label><input name="title" maxlength="45" value="${escapeHtml(selected?.title || '')}" placeholder="Például: Staff tagfelvétel" required></div><div><label>Emoji</label><input name="emoji" maxlength="16" value="${escapeHtml(selected?.emoji || '📋')}"></div><div><label>Nyitócsatorna *</label><select name="open_channel_id" required>${channelOptions(guild, selected?.openChannelId)}</select></div><div><label>Bírálati csatorna *</label><select name="review_channel_id" required>${channelOptions(guild, selected?.reviewChannelId)}</select></div><div><label>Eredménycsatorna</label><select name="result_channel_id">${channelOptions(guild, selected?.resultChannelId)}</select></div><div><label>Jelentkezéshez szükséges rang</label><select name="access_role_id">${roleOptions(guild, selected?.accessRoleId, 'Bárki jelentkezhet')}</select></div><div><label>Bírálói rang</label><select name="reviewer_role_id">${roleOptions(guild, selected?.reviewerRoleId, 'Csak adminisztrátor')}</select></div><div><label>Elfogadáskor adott rang</label><select name="accepted_role_id">${roleOptions(guild, selected?.acceptedRoleId, 'Ne adjon rangot')}</select></div><div><label>Új TGF értesítési rang</label><select name="notification_role_id">${roleOptions(guild, selected?.notificationRoleId, 'Ne pingeljen rangot')}</select></div><div><label>Újraküldési várakozás (óra)</label><input type="number" name="cooldown_hours" min="0" max="720" value="${Number(selected?.cooldownHours ?? 24)}"></div></div><div style="margin-top:16px"><label>Panel leírása</label><textarea name="description" maxlength="1000" placeholder="Mit kell tudnia a jelentkezőnek?">${escapeHtml(selected?.description || '')}</textarea></div><div style="margin-top:16px"><label>Kérdések, soronként egy *</label><textarea name="questions" rows="12" maxlength="12000" required placeholder="Miért szeretnél csatlakozni?&#10;Mit tudsz hozzáadni a közösséghez?&#10;? Van korábbi tapasztalatod?">${escapeHtml(questionText)}</textarea></div><div class="module-grid" style="margin:18px 0"><label class="switch"><input type="checkbox" name="blind_review"${selected?.blindReview !== false ? ' checked' : ''}><span><strong>Vak bírálat</strong><br><span class="muted">A bíráló a döntésig nem látja a jelentkező személyét.</span></span></label><label class="switch"><input type="checkbox" name="active"${selected?.active !== false ? ' checked' : ''}><span><strong>Aktív folyamat</strong><br><span class="muted">A panelről azonnal indítható.</span></span></label></div><div class="actions"><button class="btn green" type="submit">${selected ? 'TGF frissítése' : 'TGF létrehozása'}</button>${selected ? `<a class="btn secondary" href="/owner/tgf-forge/${guild.id}">Mégse</a>` : ''}</div></form></section>
+  <section class="card section" style="margin-top:24px"><div class="section-kicker">${selected ? 'Folyamat szerkesztése' : 'Új felvételi folyamat'}</div><h2 class="section-title">TGF Forge</h2><p class="muted">Legfeljebb 25 kérdést adhatsz meg; a bot automatikusan több Discord-oldalra bontja őket. A kérdés elején lévő <strong>?</strong> opcionális választ jelent.</p><form method="post" action="/owner/tgf-forge/${guild.id}/save"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><input type="hidden" name="template_key" value="${escapeHtml(selected?.key || '')}"><div class="field-grid"><div><label>TGF neve *</label><input name="title" maxlength="45" value="${escapeHtml(selected?.title || '')}" placeholder="Például: Staff tagfelvétel" required></div><div><label>Emoji</label><input name="emoji" maxlength="16" value="${escapeHtml(selected?.emoji || '📋')}"></div><div><label>Nyitócsatorna *</label><select name="open_channel_id" required>${channelOptions(guild, selected?.openChannelId)}</select></div><div><label>Bírálati csatorna *</label><select name="review_channel_id" required>${channelOptions(guild, selected?.reviewChannelId)}</select></div><div><label>Eredménycsatorna</label><select name="result_channel_id">${channelOptions(guild, selected?.resultChannelId)}</select></div><div><label>Jelentkezéshez szükséges rang</label><select name="access_role_id">${roleOptions(guild, selected?.accessRoleId, 'Bárki jelentkezhet')}</select></div><div><label>Bírálói rang</label><select name="reviewer_role_id">${roleOptions(guild, selected?.reviewerRoleId, 'Csak adminisztrátor')}</select></div><div><label>Elfogadáskor adott rang</label><select name="accepted_role_id">${roleOptions(guild, selected?.acceptedRoleId, 'Ne adjon rangot')}</select></div><div><label>Új TGF értesítési rang</label><select name="notification_role_id">${roleOptions(guild, selected?.notificationRoleId, 'Ne pingeljen rangot')}</select></div><div><label>Újraküldési várakozás (óra)</label><input type="number" name="cooldown_hours" min="0" max="720" value="${Number(selected?.cooldownHours ?? 24)}"></div></div><div style="margin-top:16px"><label>Panel leírása</label><textarea name="description" maxlength="1000" placeholder="Mit kell tudnia a jelentkezőnek?">${escapeHtml(selected?.description || '')}</textarea></div><div style="margin-top:16px"><label>Kérdések, soronként egy *</label><textarea name="questions" rows="12" maxlength="12000" required placeholder="Miért szeretnél csatlakozni?&#10;Mit tudsz hozzáadni a közösséghez?&#10;? Van korábbi tapasztalatod?">${escapeHtml(questionText)}</textarea></div><div class="module-grid" style="margin:18px 0"><label class="switch"><input type="checkbox" name="blind_review"${selected?.blindReview !== false ? ' checked' : ''}><span><strong>Vak bírálat</strong><br><span class="muted">A bíráló a döntésig nem látja a jelentkező személyét.</span></span></label><label class="switch"><input type="checkbox" name="active"${selected?.active !== false ? ' checked' : ''}><span><strong>Aktív folyamat</strong><br><span class="muted">A panelről azonnal indítható.</span></span></label></div><div class="actions"><button class="btn green" type="submit">${selected ? 'TGF frissítése' : 'TGF létrehozása'}</button>${selected ? `<a class="btn secondary" href="/owner/tgf-forge/${guild.id}">Mégse</a>` : ''}</div></form></section>
   <section class="card section" style="margin-top:24px"><div class="section-kicker">Zero-Form Broadcast</div><h2 class="section-title">Gyors közzététel</h2><p class="muted">Nincs kérdés, nincs ügyszám és nincs jóváhagyás. A NexaBot egyszerűen kiírja az üzenetedet a kiválasztott meglévő csatornába.</p><form method="post" action="/owner/tgf-forge/${guild.id}/publish"><input type="hidden" name="csrf" value="${escapeHtml(session.csrf)}"><div class="field-grid"><div><label>Célcsatorna *</label><select name="publish_channel_id" required>${channelOptions(guild, null)}</select></div><div><label>Pingelendő rang</label><select name="publish_role_id">${roleOptions(guild, null, 'Ne pingeljen rangot')}</select></div><div><label>Cím</label><input name="publish_title" maxlength="256" placeholder="Például: Fontos felhívás"></div><div><label>Megjelenés</label><select name="publish_style"><option value="embed">Prémium beágyazott kártya</option><option value="plain">Egyszerű szöveges üzenet</option></select></div></div><div style="margin-top:16px"><label>Üzenet *</label><textarea name="publish_message" rows="8" maxlength="4000" required placeholder="Írd ide pontosan, amit a bot közzétegyen."></textarea></div><div class="actions"><button class="btn" type="submit">Közzététel a bottal</button></div></form></section>`;
   return layout(`TGF Forge • ${guild.name}`, content, session, config.branding);
 }
@@ -12319,7 +12514,7 @@ async function handleRequest(client, request, response, healthProvider = null) {
             const questions = String(form.get('questions') || '').split(/\r?\n/)
               .map((line) => line.trim())
               .filter(Boolean)
-              .slice(0, 15)
+              .slice(0, 25)
               .map((line, index) => {
                 const optional = /^\?\s*/.test(line);
                 return {
@@ -14476,7 +14671,7 @@ module.exports = {
 },
 "src/events.js": function(module, exports, require) {
 const { Events } = require('discord.js');
-const { recordError } = require('./telemetry');
+const { recordError, recordAudit } = require('./telemetry');
 const { NAMES, COLORS } = require('./constants');
 const { baseEmbed, sendLog } = require('./utils');
 const {
@@ -14537,6 +14732,17 @@ function registerEvents(client) {
   });
 
   listen(Events.GuildCreate, async (guild) => {
+    await recordAudit('bot_guild_joined', {
+      guildId: guild.id,
+      actorId: null,
+      metadata: {
+        guildName: guild.name,
+        ownerId: guild.ownerId || null,
+        memberCount: guild.memberCount || null,
+        shardId: guild.shardId ?? null,
+        attribution: 'Discord GuildCreate event; inviter is not reliably available'
+      }
+    });
     const { syncMdtGuildCommand } = require('./belv-mdt');
     await syncMdtGuildCommand(guild).catch(() => null);
     const owner = await guild.fetchOwner().catch(() => null);
@@ -14549,6 +14755,18 @@ function registerEvents(client) {
     if(primaryOwnerId){const primaryOwner=await guild.client.users.fetch(primaryOwnerId).catch(()=>null);await primaryOwner?.send(`NEXA Bot csatlakozott egy szerverhez / NEXA Bot joined a server\n**Szerver / Server:** ${guild.name}\n**Szerver ID:** ${guild.id}\n**Szervertulajdonos / Server owner:** ${owner?.user?.tag||'unknown'} (${guild.ownerId})\n**Taglétszám / Members:** ${guild.memberCount||'—'}\nBeállítások / Dashboard: ${dashboardUrl(guild.id)}\n\nA szerverhez való csatlakozást a szerver tulajdonosa hagyja jóvá / Server membership must be approved by that server’s owner.`).catch(()=>null);}
   });
 
+  listen(Events.GuildDelete, async (guild) => {
+    await recordAudit('bot_guild_left', {
+      guildId: guild.id,
+      actorId: null,
+      metadata: {
+        guildName: guild.name || null,
+        ownerId: guild.ownerId || null,
+        shardId: guild.shardId ?? null,
+        attribution: 'Discord GuildDelete event; actor and cause are unknown'
+      }
+    });
+  });
   listen(Events.GuildMemberRemove,member=>require('./platform-members').changed(member,true));
   listen(Events.GuildMemberRemove,member=>require('./platform-core').observed(member.guild.id,'leave',member.id+':'+(member.joinedTimestamp||Date.now())));
   listen(Events.GuildMemberRemove, async (member) => {
@@ -15164,6 +15382,9 @@ client.once(Events.ClientReady, async (readyClient) => {
       }
     }
     console.log(`NexaBot elindult: ${readyClient.user.tag}`);
+    await require('./music').ensureMusicPanel(readyClient).catch((error) => {
+      console.error('A zenei panel automatikus közzététele nem sikerült:', error.message);
+    });
     await restoreGiveaways(readyClient);
     console.log('A NEXA Bot 25.0.3 MDT Network • öt frakció és közös RP-nyilvántartás használatra kész.');
   } catch (error) {
@@ -15183,7 +15404,7 @@ client.once(Events.ClientReady, async (readyClient) => {
 });
 
 const {invalidateMember}=require('./mdt-network-auth');
-client.on(Events.GuildMemberUpdate,(_old,member)=>invalidateMember(member.guild.id,member.id));
+client.on(Events.GuildMemberUpdate,(_old,member)=>{invalidateMember(member.guild.id,member.id);require('./belv-legal').syncAttorneyAggregate(member);});
 client.on(Events.GuildMemberRemove,member=>invalidateMember(member.guild.id,member.id));
 client.on(Events.InteractionCreate, handleInteraction);
 registerEvents(client);
@@ -15586,6 +15807,7 @@ async function handleCommand(interaction) {
   if (interaction.commandName === 'szobeli') return require('./belv-oral-exam').handleCommand(interaction);
   if (interaction.commandName === 'mdt') return handleMdtCommand(interaction);
   if (interaction.commandName === 'allomany') return require('./belv-mdt').handleBelvRosterCommand(interaction);
+  if (interaction.commandName === 'unnepi-megjelenes') return require('./holiday-theme').handleCommand(interaction);
   if (interaction.commandName === 'belv-rendszer') return require('./belv-discipline').handleCommand(interaction);
   if (interaction.commandName === 'bomo-setup') return require('./bomo').handleCommand(interaction);
   if (interaction.commandName.startsWith('aktivitas-')) return require('./belv-activity').handleCommand(interaction);
@@ -16478,9 +16700,11 @@ async function handleInteraction(interaction) {
     if (isSupportModerationPaused(interaction.guildId) && /^(?:mod_|moderation_)/.test(String(interaction.customId || ''))) {
       return ephemeralError(interaction, 'A Support moderációja szünetel; ez a moderációs művelet nem hajtható végre.');
     }
+    if (interaction.isChatInputCommand() && String(interaction.commandName || '').startsWith('belv-jogi-')) return await require('./belv-legal').handleInteraction(interaction);
     if(String(interaction.customId||'').startsWith('nt:'))return await require('./next-ticket').handle(interaction);
     if(String(interaction.customId||'').startsWith('nxform:'))return await require('./next-commands').handle(interaction);
     if(String(interaction.customId||'').startsWith('n5:'))return await require('./next-discord').handle(interaction);
+    if ((interaction.isButton() || interaction.isModalSubmit() || interaction.isStringSelectMenu()) && String(interaction.customId || '').startsWith('nexa_music:')) return await require('./music').handleMusicComponent(interaction);
     if (interaction.isChatInputCommand()) { await require('./platform-moderation').commandAccess(interaction);if(await require('./next-commands').handle(interaction))return;return await handleCommand(interaction); }
     if ((interaction.isButton() || interaction.isModalSubmit() || interaction.isStringSelectMenu()) && String(interaction.customId || '').startsWith('eco:')) return await handleEconomyInteraction(interaction);
     if(interaction.isButton()&&['platform_mod_pause','platform_mod_resume'].includes(interaction.customId))return require('./platform-moderation').panel(interaction);
@@ -16500,6 +16724,7 @@ async function handleInteraction(interaction) {
     if (interaction.isModalSubmit() && String(interaction.customId || '').startsWith('belv_activity:')) return await require('./belv-activity').handleModal(interaction);
     if (interaction.isModalSubmit() && String(interaction.customId || '').startsWith('belv_oral_score:')) return await require('./belv-oral-exam').handleModal(interaction);
     if (interaction.isModalSubmit() && String(interaction.customId || '').startsWith('mdt_review:')) return await handleMdtReviewModal(interaction);
+    if ((interaction.isButton() || interaction.isUserSelectMenu() || interaction.isModalSubmit()) && String(interaction.customId || '').startsWith('belv_legal:')) return await require('./belv-legal').handleInteraction(interaction);
     if (interaction.isModalSubmit()) return await handleModal(interaction);
   } catch (error) {
     console.error('Interakciós hiba:', error);
@@ -20085,8 +20310,25 @@ const {
   joinVoiceChannel,
   VoiceConnectionStatus
 } = require('@discordjs/voice');
-const { SlashCommandBuilder, MessageFlags } = require('discord.js');
+const {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ChannelType,
+  EmbedBuilder,
+  ModalBuilder,
+  PermissionFlagsBits,
+  SlashCommandBuilder,
+  StringSelectMenuBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  MessageFlags
+} = require('discord.js');
+const { spawn } = require('node:child_process');
+const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+const youtubeDl = require('youtube-dl-exec');
 
 const ffmpegPath = require('ffmpeg-static');
 if (ffmpegPath) process.env.PATH = `${path.dirname(ffmpegPath)}${path.delimiter}${process.env.PATH || ''}`;
@@ -20097,6 +20339,24 @@ const allowedHosts = new Set(String(process.env.NEXA_MUSIC_ALLOWED_HOSTS || '')
   .split(',').map((host) => host.trim().toLowerCase()).filter(Boolean));
 const sessions = new Map();
 const EPHEMERAL = MessageFlags.Ephemeral;
+const YOUTUBE_DL_PATH = youtubeDl.constants.YOUTUBE_DL_PATH;
+const selectedChannels = new Map();
+const defaultVolumes = new Map();
+const MUSIC_COMPONENT = 'nexa_music:';
+const YOUTUBE_COOKIE_FILE = (() => {
+  const value = process.env.YOUTUBE_COOKIES_BASE64;
+  if (!value) return null;
+  try {
+    const contents = Buffer.from(value, 'base64');
+    if (!contents.length || contents.length > 1024 * 1024) throw new Error('Cookie file must be 1 byte–1 MiB.');
+    const filename = path.join(os.tmpdir(), `nexa-youtube-cookies-${process.pid}.txt`);
+    fs.writeFileSync(filename, contents, { mode: 0o600 });
+    return filename;
+  } catch (error) {
+    console.error('Nexa YouTube cookies could not be loaded:', error.message);
+    return null;
+  }
+})();
 
 function isYouTubeUrl(url) {
   const host = url.hostname.toLowerCase();
@@ -20123,11 +20383,21 @@ function command(name, language) {
   const en = language === 'en';
   const root = new SlashCommandBuilder()
     .setName(name)
-    .setDescription(en ? 'Play licensed audio streams in your voice channel.' : 'Engedélyezett hangfolyam lejátszása voice-csatornán.');
+    .setDescription(en ? 'Play YouTube links and approved audio streams in a voice channel.' : 'YouTube-linkek és engedélyezett hangfolyamok lejátszása voice-csatornán.');
   const sub = (key, label, description) => root.addSubcommand((item) => item.setName(key).setDescription(description));
+  root.addSubcommand((item) => item.setName('panel')
+    .setDescription(en ? 'Post the interactive music panel in this or another text channel.' : 'Interaktív zenei panel küldése ebbe vagy egy másik szöveges csatornába.')
+    .addChannelOption((option) => option.setName(en ? 'channel' : 'csatorna')
+      .setDescription(en ? 'Text channel for the panel; defaults to this channel.' : 'A panel szöveges csatornája; alapból ez a csatorna.')
+      .addChannelTypes(ChannelType.GuildText)
+      .setRequired(false)));
   root.addSubcommand((item) => item.setName(en ? 'play' : 'lejatszas')
-    .setDescription(en ? 'Play an approved direct audio stream URL.' : 'Engedélyezett közvetlen hangfolyam lejátszása.')
-    .addStringOption((option) => option.setName('url').setDescription(en ? 'HTTPS audio stream URL' : 'HTTPS hangfolyam URL').setRequired(true).setMaxLength(500)));
+    .setDescription(en ? 'Play a YouTube link or an approved direct audio stream.' : 'YouTube-link vagy engedélyezett közvetlen hangfolyam lejátszása.')
+    .addStringOption((option) => option.setName('url').setDescription(en ? 'YouTube link or HTTPS audio stream URL' : 'YouTube-link vagy HTTPS hangfolyam URL').setRequired(true).setMaxLength(500))
+    .addChannelOption((option) => option.setName(en ? 'channel' : 'csatorna')
+      .setDescription(en ? 'Choose the voice channel Nexa should join; defaults to your current channel.' : 'Válaszd ki, melyik voice-csatornába lépjen be a Nexa.')
+      .addChannelTypes(ChannelType.GuildVoice)
+      .setRequired(false)));
   sub(en ? 'pause' : 'szunet', '', en ? 'Pause playback.' : 'Lejátszás szüneteltetése.');
   sub(en ? 'resume' : 'folytatas', '', en ? 'Resume playback.' : 'Lejátszás folytatása.');
   sub(en ? 'skip' : 'kihagy', '', en ? 'Skip the current stream.' : 'Aktuális szám kihagyása.');
@@ -20147,18 +20417,114 @@ function actionFor(interaction) {
   const action = interaction.options.getSubcommand();
   const hu = interaction.commandName === 'zene';
   const map = hu
-    ? { lejatszas: 'play', szunet: 'pause', folytatas: 'resume', kihagy: 'skip', lista: 'queue', kilepes: 'leave', hangeroszint: 'volume' }
-    : { play: 'play', pause: 'pause', resume: 'resume', skip: 'skip', queue: 'queue', leave: 'leave', volume: 'volume' };
+    ? { panel: 'panel', lejatszas: 'play', szunet: 'pause', folytatas: 'resume', kihagy: 'skip', lista: 'queue', kilepes: 'leave', hangeroszint: 'volume' }
+    : { panel: 'panel', play: 'play', pause: 'pause', resume: 'resume', skip: 'skip', queue: 'queue', leave: 'leave', volume: 'volume' };
   return map[action];
+}
+
+function musicPanel(guild, language = 'hu') {
+  const hu = language === 'hu';
+  const voiceChannels = [...guild.channels.cache.values()]
+    .filter((channel) => channel.type === ChannelType.GuildVoice)
+    .sort((a, b) => a.position - b.position)
+    .slice(0, 25);
+  const rows = [];
+  if (voiceChannels.length) {
+    const channelMenu = new StringSelectMenuBuilder()
+      .setCustomId(`${MUSIC_COMPONENT}channel:${language}`)
+      .setPlaceholder(hu ? 'Válassz voice-csatornát' : 'Choose a voice channel')
+      .addOptions(voiceChannels.map((channel) => ({ label: channel.name.slice(0, 100), value: channel.id, description: hu ? 'Ide csatlakozzon a Nexa' : 'Nexa will join this channel' })));
+    rows.push(new ActionRowBuilder().addComponents(channelMenu));
+  }
+  rows.push(new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`${MUSIC_COMPONENT}search:${language}`).setLabel(hu ? 'YouTube-keresés' : 'Search YouTube').setEmoji('🔎').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`${MUSIC_COMPONENT}url:${language}`).setLabel(hu ? 'Link megadása' : 'Enter link').setEmoji('🔗').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`${MUSIC_COMPONENT}pause:${language}`).setLabel(hu ? 'Szünet' : 'Pause').setEmoji('⏸️').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`${MUSIC_COMPONENT}resume:${language}`).setLabel(hu ? 'Folytatás' : 'Resume').setEmoji('▶️').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`${MUSIC_COMPONENT}skip:${language}`).setLabel(hu ? 'Kihagyás' : 'Skip').setEmoji('⏭️').setStyle(ButtonStyle.Secondary)
+  ));
+  rows.push(new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`${MUSIC_COMPONENT}volume_down:${language}`).setLabel('−').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`${MUSIC_COMPONENT}volume_up:${language}`).setLabel('+').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`${MUSIC_COMPONENT}queue:${language}`).setLabel(hu ? 'Várólista' : 'Queue').setEmoji('📜').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`${MUSIC_COMPONENT}leave:${language}`).setLabel(hu ? 'Kilépés' : 'Leave').setEmoji('⏹️').setStyle(ButtonStyle.Danger)
+  ));
+  const embed = new EmbedBuilder()
+    .setColor(0x7554e8)
+    .setTitle(hu ? '🎵 NEXA zenevezérlő' : '🎵 NEXA Music Control')
+    .setDescription(hu
+      ? 'Keress zenét YouTube-on, illessz be egy YouTube-linket, válaszd ki a voice-csatornát, és kezeld innen a lejátszást.'
+      : 'Search YouTube, paste a YouTube link, choose a voice channel, and control playback here.')
+    .addFields(
+      { name: hu ? 'Lejátszás' : 'Playback', value: hu ? 'YouTube-keresés vagy link megadása' : 'Search YouTube or paste a link', inline: true },
+      { name: hu ? 'Vezérlés' : 'Controls', value: hu ? 'Szünet · folytatás · kihagyás · várólista' : 'Pause · resume · skip · queue', inline: true },
+      { name: hu ? 'Hangerő' : 'Volume', value: hu ? '− / + gombokkal állítható' : 'Adjust with − / + buttons', inline: true }
+    )
+    .setFooter({ text: hu ? 'A lejátszáshoz a Nexának csatlakozási és beszédjog kell.' : 'Nexa needs Connect and Speak permissions to play audio.' });
+  return { embeds: [embed], components: rows };
+}
+
+async function ensureMusicPanel(client) {
+  const matches = [];
+  for (const guild of client.guilds.cache.values()) {
+    for (const channel of guild.channels.cache.values()) {
+      if (channel.type === ChannelType.GuildText && channel.name === 'zene-parancs') matches.push(channel);
+    }
+  }
+  if (matches.length !== 1) {
+    console.log(matches.length
+      ? `Zenei panel nem került ki: ${matches.length} #zene-parancs nevű csatorna található.`
+      : 'Zenei panel nem került ki: nem található #zene-parancs nevű csatorna.');
+    return false;
+  }
+  const channel = matches[0];
+  const permissions = channel.permissionsFor(client.user);
+  if (!permissions?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks])) {
+    console.warn(`Zenei panel nem került ki: hiányzó csatornajogosultság (${channel.guild.name}/#${channel.name}).`);
+    return false;
+  }
+  const recent = await channel.messages.fetch({ limit: 30 }).catch((error) => {
+    console.error(`Zenei panel üzenetei nem olvashatók (${channel.guild.name}/#${channel.name}):`, error.message);
+    return null;
+  });
+  if (!recent) return false;
+  const existing = recent.find((message) => message.author.id === client.user.id
+    && message.embeds.some((embed) => embed.title === '🎵 NEXA zenevezérlő'));
+  if (existing) {
+    await existing.edit(musicPanel(channel.guild, 'hu'));
+    console.log(`Zenei panel frissítve: ${channel.guild.name}/#${channel.name}`);
+  } else {
+    await channel.send(musicPanel(channel.guild, 'hu'));
+    console.log(`Zenei panel közzétéve: ${channel.guild.name}/#${channel.name}`);
+  }
+  return true;
 }
 
 function sameVoiceChannel(interaction, session) {
   return interaction.member?.voice?.channelId && interaction.member.voice.channelId === session.channelId;
 }
 
-async function createSession(interaction) {
-  const channel = interaction.member?.voice?.channel;
-  if (!channel || !channel.isVoiceBased?.()) throw new Error('Előbb csatlakozz egy voice-csatornához.');
+async function createSession(interaction, selectedChannel) {
+  const channel = selectedChannel || interaction.member?.voice?.channel;
+  if (!channel || !channel.isVoiceBased?.()) {
+    const error = new Error('Előbb csatlakozz egy voice-csatornához, vagy válassz csatornát a parancsnál.');
+    error.userSafe = true;
+    throw error;
+  }
+  if (channel.guildId !== interaction.guildId) {
+    const error = new Error('Csak ezen a szerveren lévő voice-csatornát választhatsz.');
+    error.userSafe = true;
+    throw error;
+  }
+  const botMember = interaction.guild.members.me || await interaction.guild.members.fetchMe();
+  const channelPermissions = channel.permissionsFor(botMember);
+  const missing = [PermissionFlagsBits.Connect, PermissionFlagsBits.Speak]
+    .some((permission) => !channelPermissions?.has(permission));
+  if (missing) {
+    const error = new Error('A Nexának nincs csatlakozási vagy beszédjogosultsága a kiválasztott csatornában.');
+    error.userSafe = true;
+    throw error;
+  }
   const player = createAudioPlayer();
   const connection = joinVoiceChannel({
     channelId: channel.id,
@@ -20166,11 +20532,16 @@ async function createSession(interaction) {
     adapterCreator: interaction.guild.voiceAdapterCreator,
     selfDeaf: true
   });
-  const session = { channelId: channel.id, player, connection, queue: [], current: null, volume: 0.5, advancing: false };
+  const session = { channelId: channel.id, player, connection, queue: [], current: null, volume: defaultVolumes.get(interaction.guildId) ?? 0.5, advancing: false };
   connection.subscribe(player);
-  player.on(AudioPlayerStatus.Idle, () => { void playNext(interaction.guildId, session); });
+  player.on(AudioPlayerStatus.Idle, () => {
+    stopSource(session.current);
+    session.current = null;
+    void playNext(interaction.guildId, session);
+  });
   player.on('error', (error) => {
     console.error('Nexa music player error:', error.message);
+    stopSource(session.current);
     session.current = null;
     session.player.stop(true);
     void playNext(interaction.guildId, session);
@@ -20180,6 +20551,84 @@ async function createSession(interaction) {
   return session;
 }
 
+function stopSource(item) {
+  const process = item?.process;
+  if (process && process.exitCode === null && process.signalCode === null && !process.killed) {
+    process.kill('SIGTERM');
+  }
+}
+
+function createYouTubeStream(item, session) {
+  const args = [
+    '--no-playlist',
+    '--no-progress',
+    '--no-warnings',
+    '--no-update',
+    '--format', 'bestaudio/best',
+    '--output', '-',
+    '--js-runtimes', 'node'
+  ];
+  if (YOUTUBE_COOKIE_FILE) args.push('--cookies', YOUTUBE_COOKIE_FILE);
+  args.push('--', item.url.href);
+  const process = spawn(YOUTUBE_DL_PATH, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+  item.process = process;
+  let stderr = '';
+  process.stderr.setEncoding('utf8');
+  process.stderr.on('data', (chunk) => { stderr = (stderr + chunk).slice(-2500); });
+  process.once('error', (error) => {
+    console.error('Nexa YouTube extractor failed to start:', error.message);
+    if (session.current === item) {
+      void item.notifyFailure?.('A YouTube-lejátszó nem tudott elindulni a Renderen.');
+      session.player.stop(true);
+    }
+  });
+  process.once('close', (code, signal) => {
+    if (code !== 0 && session.current === item) {
+      const details = (stderr.trim() || `exit=${code} signal=${signal}`).slice(-2500);
+      console.error('Nexa YouTube extraction failed:', details);
+      const blocked = /sign in to confirm|not a bot|confirm you.re not a bot/i.test(details);
+      const message = blocked
+        ? 'A YouTube letiltotta a Render kérését, ezért a hangot nem lehetett elindítani. A tulajdonos a Render környezeti változói között állíthat be YouTube-cookie-t YOUTUBE_COOKIES_BASE64 néven.'
+        : 'A YouTube nem adott lejátszható hangfolyamot. Próbálj meg egy másik YouTube-linket.';
+      void item.notifyFailure?.(message);
+      session.player.stop(true);
+    }
+  });
+  return process.stdout;
+}
+
+function runYouTubeDl(args, timeoutMs = 30_000) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(YOUTUBE_DL_PATH, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    let stdout = '';
+    let stderr = '';
+    const timeout = setTimeout(() => child.kill('SIGTERM'), timeoutMs);
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout = (stdout + chunk).slice(0, 1024 * 1024); });
+    child.stderr.on('data', (chunk) => { stderr = (stderr + chunk).slice(-6000); });
+    child.once('error', (error) => { clearTimeout(timeout); reject(error); });
+    child.once('close', (code, signal) => {
+      clearTimeout(timeout);
+      if (code === 0) return resolve(stdout.trim());
+      const error = new Error(stderr.trim().slice(-1200) || `yt-dlp exited with ${code || signal || 'unknown error'}`);
+      error.youtubeBlocked = /sign in to confirm|not a bot|confirm you.re not a bot/i.test(error.message);
+      reject(error);
+    });
+  });
+}
+
+async function searchYouTube(query) {
+  const args = ['--no-playlist', '--no-warnings', '--no-update', '--flat-playlist', '--dump-single-json', '--skip-download'];
+  if (YOUTUBE_COOKIE_FILE) args.push('--cookies', YOUTUBE_COOKIE_FILE);
+  args.push('--', `ytsearch1:${query}`);
+  const output = await runYouTubeDl(args);
+  const result = JSON.parse(output);
+  const item = result.entries?.find((entry) => entry?.id);
+  if (!item) throw new Error('Nem található lejátszható YouTube-találat.');
+  return { url: new URL(`https://www.youtube.com/watch?v=${encodeURIComponent(item.id)}`), title: String(item.title || 'YouTube-találat').slice(0, 180) };
+}
+
 async function playNext(guildId, session) {
   if (session.advancing || session.player.state.status !== AudioPlayerStatus.Idle) return;
   session.advancing = true;
@@ -20187,15 +20636,77 @@ async function playNext(guildId, session) {
     const item = session.queue.shift();
     if (!item) { session.current = null; return; }
     session.current = item;
-    const resource = createAudioResource(item.url, { inputType: StreamType.Arbitrary, inlineVolume: true });
+    const stream = item.youtube ? createYouTubeStream(item, session) : item.url.href;
+    const resource = createAudioResource(stream, { inputType: StreamType.Arbitrary, inlineVolume: true });
     resource.volume?.setVolume(session.volume);
     session.player.play(resource);
   } catch (error) {
     console.error('Nexa music stream error:', error.message);
+    void session.current?.notifyFailure?.('Nem sikerült létrehozni a hangfolyamot. Ellenőrizd a YouTube-linket és próbáld újra.');
+    stopSource(session.current);
     session.current = null;
+    if (session.queue.length) setImmediate(() => { void playNext(guildId, session); });
   } finally {
     session.advancing = false;
   }
+}
+
+async function startPlayback(interaction, rawUrl, { language, selectedChannel, alreadyDeferred = false, title = null } = {}) {
+  const hu = (language || (interaction.commandName === 'zene' ? 'hu' : 'en')) === 'hu';
+  const reply = (text) => alreadyDeferred ? interaction.editReply({ content: text }) : interaction.reply({ content: text, flags: EPHEMERAL });
+  const checked = validateStreamUrl(rawUrl);
+  if (checked.error) return reply(checked.error);
+  if (checked.unconfigured) return reply(hu
+    ? 'A közvetlen hangfolyam domainje nincs engedélyezve a NEXA_MUSIC_ALLOWED_HOSTS beállításban.'
+    : 'This direct audio stream host is not allowed by NEXA_MUSIC_ALLOWED_HOSTS.');
+  if (!alreadyDeferred) await interaction.deferReply({ flags: EPHEMERAL });
+  let session = sessions.get(interaction.guildId);
+  try {
+    const requestedChannel = selectedChannel || selectedChannels.get(interaction.guildId) || interaction.member?.voice?.channel;
+    if (!session) {
+      session = await createSession(interaction, requestedChannel);
+      sessions.set(interaction.guildId, session);
+    } else if (requestedChannel && requestedChannel.id !== session.channelId) {
+      return interaction.editReply(hu ? 'A Nexa már egy másik voice-csatornában van. Előbb állítsd le a `/zene kilepes` paranccsal.' : 'Nexa is already in another voice channel. Use `/music leave` first.');
+    } else if (!sameVoiceChannel(interaction, session)) {
+      return interaction.editReply(hu ? 'A Nexa már egy másik voice-csatornában zenél.' : 'Nexa is already playing in another voice channel.');
+    }
+    session.queue.push({
+      url: checked.url,
+      host: checked.url.hostname,
+      youtube: Boolean(checked.youtube),
+      title,
+      requestedBy: interaction.user.username,
+      notifyFailure: (content) => interaction.followUp({ content, flags: EPHEMERAL }).catch(() => null)
+    });
+    if (session.player.state.status === AudioPlayerStatus.Idle && !session.current) await playNext(interaction.guildId, session);
+    return interaction.editReply(hu
+      ? `🔊 Hozzáadva a várólistához: **${title || (checked.youtube ? 'YouTube-link' : checked.url.hostname)}**\nCsatorna: <#${session.channelId}>`
+      : `🔊 Added to the queue: **${title || (checked.youtube ? 'YouTube link' : checked.url.hostname)}**\nChannel: <#${session.channelId}>`);
+  } catch (error) {
+    if (session && !session.current && !session.queue.length) {
+      session.connection.destroy();
+      sessions.delete(interaction.guildId);
+    }
+    console.error('Nexa music join/play failed:', error.message);
+    return interaction.editReply(error.userSafe ? error.message : (hu
+      ? 'Nem sikerült csatlakozni vagy elindítani a hangfolyamot. Ellenőrizd a voice-jogokat és a linket.'
+      : 'Could not join or start the stream. Check voice permissions and the URL.'));
+  }
+}
+
+async function postMusicPanel(interaction, hu) {
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+    return interaction.reply({ content: hu ? 'A panel létrehozásához Szerver kezelése jogosultság kell.' : 'Manage Server permission is required to post the panel.', flags: EPHEMERAL });
+  }
+  const target = interaction.options.getChannel(hu ? 'csatorna' : 'channel') || interaction.channel;
+  if (!target?.isTextBased?.() || target.guildId !== interaction.guildId) {
+    return interaction.reply({ content: hu ? 'Válassz egy szöveges csatornát ezen a szerveren.' : 'Choose a text channel in this server.', flags: EPHEMERAL });
+  }
+  await interaction.deferReply({ flags: EPHEMERAL });
+  await interaction.guild.channels.fetch().catch(() => null);
+  await target.send(musicPanel(interaction.guild, hu ? 'hu' : 'en'));
+  return interaction.editReply(hu ? `A zenei panel kikerült ide: ${target}` : `Music panel posted in ${target}`);
 }
 
 async function handleMusicCommand(interaction) {
@@ -20205,36 +20716,12 @@ async function handleMusicCommand(interaction) {
   const action = actionFor(interaction);
   let session = sessions.get(interaction.guildId);
 
+  if (action === 'panel') return postMusicPanel(interaction, hu);
   if (action === 'play') {
-    const checked = validateStreamUrl(interaction.options.getString('url', true));
-    if (checked.youtube) {
-      return reply(hu
-        ? `YouTube-linket nem tudok hangként lejátszani. Megnyithatod itt: ${checked.url.href}\nKüldj közvetlen, engedélyezett hangfolyam-linket.`
-        : `YouTube links cannot be streamed as audio here. Open it: ${checked.url.href}\nSend a direct, approved audio stream URL instead.`);
-    }
-    if (checked.error) return reply(checked.error);
-    if (checked.unconfigured) return reply(hu
-      ? 'A zenelejátszás még nincs beállítva: a Renderen add meg a NEXA_MUSIC_ALLOWED_HOSTS változóban az engedélyezett hangfolyam-domain nevét.'
-      : 'Music is not configured yet: set the approved stream domain in the NEXA_MUSIC_ALLOWED_HOSTS Render variable.');
-    await interaction.deferReply({ flags: EPHEMERAL });
-    try {
-      if (!session) {
-        session = await createSession(interaction);
-        sessions.set(interaction.guildId, session);
-      } else if (!sameVoiceChannel(interaction, session)) {
-        return interaction.editReply(hu ? 'A Nexa már egy másik voice-csatornában zenél.' : 'Nexa is already playing in another voice channel.');
-      }
-      session.queue.push({ url: checked.url.href, host: checked.url.hostname, requestedBy: interaction.user.username });
-      if (session.player.state.status === AudioPlayerStatus.Idle && !session.current) await playNext(interaction.guildId, session);
-      return interaction.editReply(hu ? `🔊 Hozzáadva a várólistához: **${checked.url.hostname}**` : `🔊 Added to the queue: **${checked.url.hostname}**`);
-    } catch (error) {
-      if (session && !session.current && !session.queue.length) {
-        session.connection.destroy();
-        sessions.delete(interaction.guildId);
-      }
-      console.error('Nexa music join/play failed:', error.message);
-      return interaction.editReply(hu ? 'Nem sikerült csatlakozni vagy elindítani a hangfolyamot. Ellenőrizd a voice-jogokat és a stream linket.' : 'Could not join or start the stream. Check voice permissions and the stream URL.');
-    }
+    return startPlayback(interaction, interaction.options.getString('url', true), {
+      language: hu ? 'hu' : 'en',
+      selectedChannel: interaction.options.getChannel(hu ? 'csatorna' : 'channel')
+    });
   }
 
   if (!session) return reply(hu ? 'Most nincs aktív zenelejátszás.' : 'There is no active music session.');
@@ -20253,17 +20740,20 @@ async function handleMusicCommand(interaction) {
     return reply(hu ? '⏭️ Kihagytam.' : '⏭️ Skipped.');
   }
   if (action === 'queue') {
-    const lines = [session.current && `▶️ **Most szól:** ${session.current.host}`, ...session.queue.slice(0, 10).map((item, index) => `${index + 1}. ${item.host}`)].filter(Boolean);
+    const sourceName = (item) => item.youtube ? 'YouTube' : item.host;
+    const lines = [session.current && `▶️ **Most szól:** ${sourceName(session.current)}`, ...session.queue.slice(0, 10).map((item, index) => `${index + 1}. ${sourceName(item)}`)].filter(Boolean);
     return reply(lines.length ? lines.join('\n') : (hu ? 'A várólista üres.' : 'The queue is empty.'));
   }
   if (action === 'volume') {
     const volume = interaction.options.getInteger(hu ? 'szazalek' : 'percent', true);
     session.volume = volume / 100;
+    defaultVolumes.set(interaction.guildId, session.volume);
     session.player.state.resource?.volume?.setVolume(session.volume);
     return reply(hu ? `🔉 Hangerő: ${volume}%.` : `🔉 Volume: ${volume}%.`);
   }
   if (action === 'leave') {
     session.queue.length = 0;
+    stopSource(session.current);
     session.player.stop(true);
     session.connection.destroy();
     sessions.delete(interaction.guildId);
@@ -20272,7 +20762,112 @@ async function handleMusicCommand(interaction) {
   return reply(hu ? 'Ismeretlen zeneparancs.' : 'Unknown music command.');
 }
 
-module.exports = { buildMusicCommands, handleMusicCommand };
+function showMusicModal(interaction, action, language) {
+  const hu = language === 'hu';
+  const searching = action === 'search';
+  const input = new TextInputBuilder()
+    .setCustomId('value')
+    .setLabel(searching ? (hu ? 'Mit keressek YouTube-on?' : 'Search YouTube for') : (hu ? 'YouTube-link' : 'YouTube URL'))
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(searching ? 160 : 500)
+    .setPlaceholder(searching ? (hu ? 'Előadó – szám címe' : 'Artist – song title') : 'https://youtu.be/...');
+  return interaction.showModal(new ModalBuilder()
+    .setCustomId(`${MUSIC_COMPONENT}${searching ? 'submit_search' : 'submit_url'}:${language}`)
+    .setTitle(searching ? (hu ? 'YouTube-keresés' : 'Search YouTube') : (hu ? 'YouTube-link lejátszása' : 'Play a YouTube link'))
+    .addComponents(new ActionRowBuilder().addComponents(input)));
+}
+
+async function handleMusicComponent(interaction) {
+  if (!String(interaction.customId || '').startsWith(MUSIC_COMPONENT)) return false;
+  const [action, language = 'hu'] = interaction.customId.slice(MUSIC_COMPONENT.length).split(':');
+  const hu = language === 'hu';
+  if (!interaction.guildId || !interaction.guild) {
+    await interaction.reply({ content: hu ? 'Ez a panel csak szerveren használható.' : 'This panel only works in a server.', flags: EPHEMERAL });
+    return true;
+  }
+  if (interaction.isStringSelectMenu() && action === 'channel') {
+    const channel = await interaction.guild.channels.fetch(interaction.values[0]).catch(() => null);
+    if (!channel || channel.type !== ChannelType.GuildVoice) {
+      await interaction.reply({ content: hu ? 'A kiválasztott voice-csatorna már nem érhető el.' : 'That voice channel is no longer available.', flags: EPHEMERAL });
+      return true;
+    }
+    selectedChannels.set(interaction.guildId, channel);
+    await interaction.reply({ content: hu ? `A Nexa ehhez a csatornához csatlakozik: ${channel}` : `Nexa will join ${channel}.`, flags: EPHEMERAL });
+    return true;
+  }
+  if (interaction.isModalSubmit() && (action === 'submit_search' || action === 'submit_url')) {
+    await interaction.deferReply({ flags: EPHEMERAL });
+    try {
+      let item;
+      if (action === 'submit_search') {
+        const query = interaction.fields.getTextInputValue('value').trim();
+        item = await searchYouTube(query);
+      } else {
+        item = { url: interaction.fields.getTextInputValue('value').trim(), title: null };
+      }
+      await startPlayback(interaction, item.url.href || item.url, { language, alreadyDeferred: true, title: item.title });
+    } catch (error) {
+      console.error('Nexa YouTube search failed:', error.message);
+      const text = error.youtubeBlocked
+        ? (hu ? 'A YouTube letiltotta a Render keresését. A tulajdonos állítson be YouTube-cookie-t a Render YOUTUBE_COOKIES_BASE64 változójában.' : 'YouTube blocked the Render search. The owner must set YOUTUBE_COOKIES_BASE64 in Render.')
+        : (hu ? 'Nem sikerült YouTube-találatot keresni. Próbálj másik keresést vagy illessz be egy linket.' : 'YouTube search failed. Try another query or paste a link.');
+      await interaction.editReply({ content: text });
+    }
+    return true;
+  }
+  if (!interaction.isButton()) return true;
+  if (action === 'search' || action === 'url') {
+    await showMusicModal(interaction, action, language);
+    return true;
+  }
+  if (action === 'volume_down' || action === 'volume_up') {
+    const session = sessions.get(interaction.guildId);
+    const previous = session?.volume ?? defaultVolumes.get(interaction.guildId) ?? 0.5;
+    const volume = Math.max(0.1, Math.min(1, previous + (action === 'volume_up' ? 0.1 : -0.1)));
+    defaultVolumes.set(interaction.guildId, volume);
+    if (session) {
+      session.volume = volume;
+      session.player.state.resource?.volume?.setVolume(volume);
+    }
+    await interaction.reply({ content: `${hu ? 'Hangerő' : 'Volume'}: ${Math.round(volume * 100)}%.`, flags: EPHEMERAL });
+    return true;
+  }
+  const session = sessions.get(interaction.guildId);
+  if (!session) {
+    await interaction.reply({ content: hu ? 'Még nincs aktív zenelejátszás. Használd előbb a YouTube-keresést vagy a link gombot.' : 'No active session. Start music with Search YouTube or Enter link first.', flags: EPHEMERAL });
+    return true;
+  }
+  if (!sameVoiceChannel(interaction, session)) {
+    await interaction.reply({ content: hu ? 'A vezérléshez lépj be ugyanabba a voice-csatornába, mint a Nexa.' : 'Join the same voice channel as Nexa to control playback.', flags: EPHEMERAL });
+    return true;
+  }
+  if (action === 'pause') {
+    const ok = session.player.pause();
+    await interaction.reply({ content: ok ? (hu ? '⏸️ Szüneteltetve.' : '⏸️ Paused.') : (hu ? 'Most nem szüneteltethető.' : 'Playback cannot be paused right now.'), flags: EPHEMERAL });
+  } else if (action === 'resume') {
+    const ok = session.player.unpause();
+    await interaction.reply({ content: ok ? (hu ? '▶️ Folytatva.' : '▶️ Resumed.') : (hu ? 'A lejátszás nincs szüneteltetve.' : 'Playback is not paused.'), flags: EPHEMERAL });
+  } else if (action === 'skip') {
+    if (!session.current) await interaction.reply({ content: hu ? 'Nincs kihagyható szám.' : 'There is nothing to skip.', flags: EPHEMERAL });
+    else { session.player.stop(true); await interaction.reply({ content: hu ? '⏭️ Kihagytam.' : '⏭️ Skipped.', flags: EPHEMERAL }); }
+  } else if (action === 'queue') {
+    const lines = [session.current && `▶️ **${session.current.title || (session.current.youtube ? 'YouTube' : session.current.host)}**`, ...session.queue.slice(0, 10).map((item, index) => `${index + 1}. ${item.title || (item.youtube ? 'YouTube' : item.host)}`)].filter(Boolean);
+    await interaction.reply({ content: lines.length ? lines.join('\n') : (hu ? 'A várólista üres.' : 'The queue is empty.'), flags: EPHEMERAL });
+  } else if (action === 'leave') {
+    session.queue.length = 0;
+    stopSource(session.current);
+    session.player.stop(true);
+    session.connection.destroy();
+    sessions.delete(interaction.guildId);
+    await interaction.reply({ content: hu ? '👋 Leállítottam a zenét és kiléptem.' : '👋 Stopped playback and left.', flags: EPHEMERAL });
+  } else {
+    await interaction.reply({ content: hu ? 'Ismeretlen zenevezérlő.' : 'Unknown music control.', flags: EPHEMERAL });
+  }
+  return true;
+}
+
+module.exports = { buildMusicCommands, handleMusicCommand, handleMusicComponent, musicPanel, ensureMusicPanel };
 
 },
 "src/cia-content.js": function(module, exports, require) {
@@ -22358,8 +22953,36 @@ const memory = {
   audit: []
 };
 
+const SECRET_FIELD = /(?:token|secret|password|passwd|api[_-]?key|authorization|cookie)/i;
+const SECRET_ASSIGNMENT = /([A-Za-z0-9_.-]*(?:token|secret|password|passwd|api[_-]?key|authorization|cookie)[A-Za-z0-9_.-]*\s*[:=]\s*)(?:Bearer\s+)?(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi;
+const DISCORD_TOKEN = /(?:mfa\.)?[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{20,}/g;
+const BEARER_TOKEN = /\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi;
+
+function redactLogText(value) {
+  return String(value ?? '')
+    .replace(DISCORD_TOKEN, '[REDACTED_DISCORD_TOKEN]')
+    .replace(SECRET_ASSIGNMENT, (match) => {
+      const separator = match.match(/[:=]\s*/)?.[0] || '=';
+      const label = match.slice(0, match.indexOf(separator));
+      return label + separator + '[REDACTED]';
+    })
+    .replace(BEARER_TOKEN, 'Bearer [REDACTED]');
+}
+
 function clean(value, max = 1000) {
-  return String(value ?? '').slice(0, max);
+  return redactLogText(value).slice(0, max);
+}
+
+function safeMetadata(value, seen = new WeakSet()) {
+  if (typeof value === 'string') return redactLogText(value).slice(0, 4000);
+  if (!value || typeof value !== 'object') return value;
+  if (seen.has(value)) return '[Circular]';
+  seen.add(value);
+  if (Array.isArray(value)) return value.slice(0, 100).map((item) => safeMetadata(item, seen));
+  return Object.fromEntries(Object.entries(value).slice(0, 100).map(([key, item]) => [
+    clean(key, 100),
+    SECRET_FIELD.test(key) ? '[REDACTED]' : safeMetadata(item, seen)
+  ]));
 }
 
 function pushMemory(type, value) {
@@ -22373,7 +22996,7 @@ async function recordUsage(eventType, context = {}) {
     guildId: context.guildId ? clean(context.guildId, 22) : null,
     userId: context.userId ? clean(context.userId, 22) : null,
     name: context.name ? clean(context.name, 100) : null,
-    metadata: context.metadata && typeof context.metadata === 'object' ? context.metadata : {},
+    metadata: context.metadata && typeof context.metadata === 'object' ? safeMetadata(context.metadata) : {},
     createdAt: new Date()
   };
   pushMemory('usage', item);
@@ -22537,6 +23160,8 @@ module.exports = {
   recordUsage,
   recordAudit,
   recordError,
+  redactLogText,
+  safeMetadata,
   recentEvents,
   recentGuildEvents,
   usageSummary,
@@ -23130,7 +23755,7 @@ async function ensureCategoryUnlocked(guild,{preferredId=null,excludeId=null}={}
   const channels=await guild.channels.fetch(),config=getGuildConfig(guild.id);
   const valid=channel=>channel&&channel.type===ChannelType.GuildCategory&&channel.id!==excludeId&&[...channels.values()].filter(c=>c.parentId===channel.id).length<50;
   const candidates=[preferredId,config.channels.ticketCategory,config.tickets.fallbackCategoryId].filter(Boolean).map(id=>channels.get(id));
-  candidates.push(...[...channels.values()].filter(c=>c.name===NAMES.ticketCategory||c.name===TEMP_NAME||/TICKETS|TICKETEK/i.test(c.name)));
+  candidates.push(...[...channels.values()].filter(c=>c&&(c.name===NAMES.ticketCategory||c.name===TEMP_NAME||/TICKETS|TICKETEK/i.test(c.name))));
   const existing=candidates.find(valid);if(existing)return existing;
   const bot=guild.members.me||await guild.members.fetchMe();
   if(!bot.permissions.has(PermissionFlagsBits.ManageChannels))throw new Error('A ticketkategória pótlásához a botnak Csatornák kezelése jog kell.');
@@ -25385,6 +26010,741 @@ module.exports = {
   releaseCaseDecision,
   setCaseStatus
 };
+
+},
+"src/belv-legal.js": function(module, exports, require) {
+'use strict';
+const {ActionRowBuilder,ButtonBuilder,ButtonStyle,ChannelType,EmbedBuilder,MessageFlags,ModalBuilder,PermissionFlagsBits,SlashCommandBuilder,TextInputBuilder,TextInputStyle,UserSelectMenuBuilder}=require('discord.js');
+const {dbQuery,getGuildConfig,isPersistentStore,setGuildConfig}=require('./config');
+const {applicationPanel,findApplicationTemplate}=require('./applications');
+const {classifyBelvRole,configuredRankRoleMap}=require('./belv-roster-rules');
+const {recordAudit,recordError}=require('./telemetry');
+const BELV_GUILD_ID='1517509643734221030',LAWYER_ROLE='Ügyvédek',LEGAL_APPLICATION_TEMPLATE_KEY='tgf_belv_jogi';
+const ROLES=[
+ {name:'⚖️ Jogi osztályvezető',color:0x8E2430},{name:'⚖️ Jogi osztályvezető-helyettes',color:0xA66A24},
+ {name:'⭐ Vezető ügyvéd',color:0x183B66},{name:'⚖️ Ügyvéd',color:0x244F7A},
+ {name:'📚 Ügyvédjelölt',color:0x79B8E5},{name:'📝 Gyakornok',color:0x9ACBEA}
+];
+const LEGAL_LEADS=ROLES.slice(0,3).map(x=>x.name),ATTORNEY_RANKS=ROLES.slice(0,4).map(x=>x.name);
+const legalIntakeDrafts=new Map();
+const CATS=[
+ {key:'main',name:'⚖️・BELV | JOGI ÉS ÜGYVÉDI OSZTÁLY',channels:[['announcements','📢・jogi-közlemények'],['rules','📜・osztályszabályzat'],['chat','💬・jogi-osztály-chat'],['presence','📅・jelenlét-és-időpontok'],['application','📨・jogi-jelentkezés']]},
+ {key:'legal',name:'📂・BELV | JOGI ÜGYINTÉZÉS',channels:[['intake','📥・új-megkeresések'],['assignment','🗂️・ügyelosztás'],['status','📋・ügyállapotok'],['templates','📄・iratminták'],['leadership','🔒・vezetőségi-egyeztetés']]},
+ {key:'training',name:'🎓・BELV | JOGI KÉPZÉS',channels:[['materials','📚・tananyag'],['practice','🧪・próbaügyek'],['exams','📝・vizsgák']]}
+];
+const SEEDS={
+ announcements:['BELV Jogi és Ügyvédi Osztály','A BELV-en belüli Jogi és Ügyvédi Osztály megkezdte működését. A részleget a BELV vezetősége felügyeli. Az ügykezelés a szerveren belüli RP keretei között történik.'],
+ chat:['Jogi osztály – belső kommunikáció','Üdvözlünk a BELV Jogi és Ügyvédi Osztályának belső chatjében. Általános egyeztetésre használd; konkrét ügyféladatot, bizonyítékot vagy bizalmas iratot csak az adott privát ügycsatornában ossz meg. Tartsd be az osztály szabályzatát és kommunikálj tárgyszerűen.'],
+ presence:['Jelenlét- és időpont-egyeztetés','A **Jogi időpont megadása** gombbal jelezheted az elérhetőségedet vagy javasolhatsz egyeztetési időpontot. A beküldést a bot a jogi osztály csatornájában rögzíti. Ne adj meg ügyfélre vonatkozó bizalmas adatot.'],
+ rules:['Osztályszabályzat','• Az osztály a BELV belső szervezeti része, a BELV vezetőségének felügyelete alatt.\n• Kizárólag szerveren belüli RP-ügyeket kezelünk; ez nem valós jogi tanácsadás.\n• Ügyféladatot, bizonyítékot és ügyiratot nyilvános csatornába tilos küldeni.\n• Minden ügyhöz kijelölt ügyvéd és ügyszám tartozik.\n• Összeférhetetlenséget jelezni kell a vezetőségnek.\n• Lezáráskor az ügycsatorna megmarad és csak olvasható lesz.'],
+ intake:['Új megkeresések','Ügyféladatot és bizonyítékot ne küldj ebbe a csatornába. A **BELV jogi ügy indítása** gombbal válaszd ki az ügyfelet és az ügyvédet, majd töltsd ki a privát ügyűrlapot. A /belv-jogi-ugy parancs továbbra is használható.'],
+ applications:['Jogi osztály jelentkezés','A gombbal nyisd meg a NEXA űrlapját. Kizárólag RP-adatokat adj meg; valódi személyes vagy érzékeny adatot ne küldj. A beküldés az Ügyvédek ranggal rendelkező jogi osztálytagokhoz kerül.'],
+ assignment:['Ügyelosztás','A vezetőség vagy jogi osztályvezető rögzíti az ügyszámot és a kijelölt ügyvédet. Ügyféladat kizárólag az adott ügy privát csatornájába kerülhet.'],
+ status:['Ügyállapotok','Állapotok: **Új megkeresés → Ügyvéd kijelölve → Folyamatban → Vezetői felülvizsgálat → Lezárva / Archiválva.** Bizalmas adatot ne tegyetek ide.'],
+ templates:['Iratminták','Csak jóváhagyott, RP-célú iratmintát tegyetek közzé. Személyes vagy konkrét ügyadatot ne másoljatok ide.'],
+ leadership:['Vezetőségi egyeztetés','Ez a csatorna a BELV vezetősége és a jogi osztály vezetői számára fenntartott.'],
+ materials:['Jogi tananyag','A vezetőség által közzétett, BELV-en belüli RP-ügyintézéshez készült tananyag.'],
+ practice:['Próbaügyek','Kizárólag kitalált, képzési célú RP-eseteket használjatok.'],
+ exams:['Vizsgák','A vezetőség itt teszi közzé a képzési alkalmak és vizsgák tudnivalóit.']
+};
+async function ensureLegalApplicationTemplate(guild,channelIds,roleIds){
+ const current=getGuildConfig(guild.id),templates=current.applications?.templates||[];
+ const template={
+  key:LEGAL_APPLICATION_TEMPLATE_KEY,title:'BELV jogi osztály jelentkezés',emoji:'⚖️',
+  description:'Az írásbeli felvételi 25 kérdésből, 5 részből áll. Minden kérdésre saját szavaiddal, részletesen válaszolj; a szituációknál indokold a döntésedet és a következő lépéseket. Kizárólag RP-adatokat írj, valódi személyes vagy érzékeny adatot ne adj meg. A jelentkezéseket legfeljebb 48 órán belül bíráljuk el; a hiányos, komolytalan vagy másolt válasz elutasítható. A válaszokat csak a jogi osztály bírálói látják.',
+  openChannelId:channelIds.application,reviewChannelId:channelIds.leadership,resultChannelId:channelIds.application,
+  accessRoleId:null,reviewerRoleId:roleIds[ROLES[0].name],
+  reviewerRoleIds:[roleIds[ROLES[1].name],roleIds[ROLES[2].name]].filter(Boolean),
+  acceptedRoleId:null,notificationRoleId:null,blindReview:false,active:true,cooldownHours:24,
+  questions:[
+   {label:'1. 🎯 Szerepkör — A jogi osztály a BELV vezetőségének felügyelete alatt működik, és kizárólag RP-ügyeket kezel. Mit jelent ez a gyakorlatban, és hol húzódik a feladatköröd határa?',placeholder:'Válaszd külön a szerveren belüli RP-feladatot és a valós életet.',maxLength:1000},
+   {label:'2. 🧭 Motiváció — Miért ezt az osztályt választod? Ne általánosságban válaszolj: nevezz meg három olyan készséget vagy munkamódszert, amellyel érdemben segítenéd a csapatot.',placeholder:'Indokold meg konkrét példákkal.',maxLength:1000},
+   {label:'3. ⚖️ Ügyvédi szerep — Az ügyfeled azt várja, hogy mindenáron „nyerd meg” az ügyét. Mi az ügyvéd feladata ilyen helyzetben, és milyen szakmai határokat tartanál be?',placeholder:'Térj ki a tisztességes eljárásra és a szabályok betartására.',maxLength:1000},
+   {label:'4. 🏛️ Ártatlanság vélelme — A közösségi chatben már bűnösnek nevezik az ügyfeledet, mielőtt az ügyét érdemben megvizsgálták volna. Hogyan reagálnál, és miért fontos ez az alapelv?',placeholder:'Írd le a nyilvános és az ügykezelési lépéseidet.',maxLength:1000},
+   {label:'5. 🔐 Bizalmas adatok — Milyen adatot vagy bizonyítékot nem tennél nyilvános csatornába? Írd le, hol és kikkel osztanád meg az ügyhöz tartozó információt.',placeholder:'Vedd figyelembe az ügycsatorna hozzáférését.',maxLength:1000},
+   {label:'6. 📁 Ügyindítás — Új RP-megkeresés érkezik, de még nincs kijelölt ügyvéd és ügyszám. Mi a szabályos ügyelosztási rend, és mit rögzítenél az ügyben?',placeholder:'Térj ki a kijelölt ügyvédre és az ügyszámra.',maxLength:1000},
+   {label:'7. 🔎 Bizonyítékértékelés — A vád egy képernyőképet mutat be, de nem ismert, ki készítette, mikor készült, és teljes-e a beszélgetés. Milyen kérdésekkel ellenőriznéd a bizonyíték megbízhatóságát?',placeholder:'Ne dönts előre; sorold fel az ellenőrzés lépéseit.',maxLength:1000},
+   {label:'8. 🚓 Szabálytalan intézkedés gyanúja — Ügyfeled szerint egy rendvédelmi tag szabálytalanul intézkedett, de egyelőre csak az ő beszámolója áll rendelkezésedre. Hogyan járnál el úgy, hogy az állítást kivizsgálják, de ne kezeld bizonyított tényként?',placeholder:'Írd le az adatgyűjtést, dokumentálást és megfelelő jelzést.',maxLength:1000},
+   {label:'9. 🧪 Hamis bizonyíték — Az ügyfél beismeri, hogy módosított egy képet, és arra kér, add be eredetiként. Mit teszel azonnal, mit dokumentálsz, és kinek jelzed?',placeholder:'Indokold a döntést; ne használj fel hamis bizonyítékot.',maxLength:1000},
+   {label:'10. 🤝 Összeférhetetlenség — Egy közeli barátod ügyében téged jelölnének ki ügyvédnek. Milyen kockázatot látsz, kinek szólsz, és hogyan biztosítod a pártatlan ügyelosztást?',placeholder:'Az összeférhetetlenséget jelezni kell a vezetőségnek.',maxLength:1000},
+   {label:'11. 🤫 Titoktartási próba — Egy másik osztály vezetője privát üzenetben kéri az ügyfél vallomását, mert „csak gyorsan ellenőrizné”. Mit válaszolsz, és milyen szabályos csatornát vagy engedélyezési lépést használsz?',placeholder:'A bizalmas ügyiratot csak jogosultak láthatják.',maxLength:1000},
+   {label:'12. 🗣️ Tárgyalási fegyelem — A tárgyaláson az ellenérdekű fél provokál, az ügyfél pedig közbevágással fenyegetőzik. Hogyan tartod fenn a tárgyszerű és tiszteletteljes eljárást?',placeholder:'Írd le, mit mondanál és hogyan folytatnád az ügyet.',maxLength:1000},
+   {label:'13. 📢 Nyilvános megkeresés — Valaki a nyilvános csatornában ügyszámot és bizonyítékot kér tőled. Mit teszel az üzenettel és az információval?',placeholder:'Ne ossz meg bizalmas ügyadatot nyilvánosan.',maxLength:1000},
+   {label:'14. 🧾 Hiányos bizonyíték — Két tanú beszámolója ellentmond egymásnak, és egyikük sem tudja megadni az esemény pontos idejét. Hogyan rögzíted az eltérést, és milyen további adatot kérsz be?',placeholder:'Különítsd el a tényt, az állítást és a még tisztázatlan részt.',maxLength:1000},
+   {label:'15. 🧑‍⚖️ Szerephatár — Egy ügyfél valós, játékon kívüli jogi tanácsot kér tőled. Hogyan válaszolsz úgy, hogy egyértelmű maradjon a BELV jogi osztály RP-s feladatköre?',placeholder:'A részleg nem nyújt valós jogi tanácsadást.',maxLength:1000},
+   {label:'16. 🗂️ Eljárási sorrend — A BELV fegyelmi szabályzatban a bejelentést előzetes ellenőrzés, vizsgálat, meghallgatás, jelentés, vezetői döntés, határozat és felülvizsgálati lehetőség követi. Tedd sorrendbe ezeket, és magyarázd el, miért nem ugorható át a vizsgálat.',placeholder:'Válaszodban szerepeljen a teljes folyamat.',maxLength:1000},
+   {label:'17. ⏱️ Felülvizsgálat — Egy érintett vitatja a fegyelmi határozatot. Milyen határidőről és milyen eljárási lehetőségről tájékoztatnád a szabályzat alapján?',placeholder:'A felülvizsgálati kérelmet legfeljebb 72 órán belül lehet benyújtani.',maxLength:1000},
+   {label:'18. 🚫 Nincs automatikus büntetés — Egy vezető azonnali büntetést követel, miközben a tényeket még nem ellenőrizték. Mit teszel, és ki hozhatja meg a döntést?',placeholder:'A bejelentés önmagában nem bizonyíték és nem automatikus büntetés.',maxLength:1000},
+   {label:'19. 🏢 Más frakció érintett — Egy másik frakció tagjával szemben merül fel szabályszegés gyanúja. Milyen korlátot kell figyelembe venned a BELV intézkedési jogkörével kapcsolatban?',placeholder:'Írd le, mikor csak javaslatot lehet tenni.',maxLength:1000},
+   {label:'20. 🧷 Bizonyíték megőrzése — A vizsgálat alatt valaki azt kéri, töröld a terhelő képet, mert „úgysem fontos”. Hogyan biztosítod a bizonyíték eredetiségének és megőrzésének nyomon követhetőségét?',placeholder:'Dokumentáld a forrást, időpontot és hozzáférést; ne módosíts bizonyítékot.',maxLength:1000},
+   {label:'21. ⚠️ Fegyelmi tényállás — A szabályzatban a bizonyíték meghamisítása V–VI., a bizalmas információ kiadása IV–VI. fokozatú következménnyel szerepel. Hogyan ismertetnéd ezt egy ügyben úgy, hogy ne te szabj ki automatikusan büntetést?',placeholder:'Hivatkozz az ellenőrzésre és a vezetői döntésre.',maxLength:1000},
+   {label:'22. 📝 Fegyelmi fokozatok — Nevezd meg a szabályzatban felsorolt I–VI. fokozatú intézkedéseket sorrendben, és magyarázd el, miért nem választható ki a legsúlyosabb fokozat pusztán egy bejelentés alapján.',placeholder:'A fokozatok: szóbeli figyelmeztetéstől az állományból törlésig.',maxLength:1000},
+   {label:'23. 🔒 Lezárt ügy — Az ügyet lezárták, majd valaki új információt küld az ügycsatornába. Hogyan kezeled a csatornát és az új információt a megőrzési és hozzáférési szabályok szerint?',placeholder:'A lezárt ügycsatorna megmarad, de csak olvasható.',maxLength:1000},
+   {label:'24. 🧩 Összetett eset — Egy ügyfél titoktartást kér, miközben új bizonyíték látszik hamisítottnak, és az ügyben a barátod is érintett. Sorold fel a helyes lépéseidet sorrendben, és indokold mindet.',placeholder:'Térj ki a hozzáférésre, bizonyítékra, összeférhetetlenségre és jelzésre.',maxLength:1000},
+   {label:'25. ✅ Alkalmasság — Milyen konkrét módszerrel biztosítanád, hogy az általad kezelt ügyek pontosak, bizalmasak, pártatlanok és visszakövethetők legyenek? Térj ki az aktivitásodra is.',placeholder:'Adj ellenőrizhető munkamódszert és reális heti vállalást.',maxLength:1000}
+  ]
+ };
+ const remaining=templates.filter(item=>item.key!==LEGAL_APPLICATION_TEMPLATE_KEY);
+ await setGuildConfig(guild.id,{...current,applications:{...current.applications,templates:[...remaining,template]}});
+ const saved=findApplicationTemplate(guild.id,LEGAL_APPLICATION_TEMPLATE_KEY);
+ if(!saved?.active||!saved.openChannelId||!saved.reviewChannelId||!saved.resultChannelId)throw new Error('A jogi jelentkezési űrlap beállítása nem mentődött el.');
+ return saved;
+}
+function commands(){
+ const setup=new SlashCommandBuilder().setName('belv-jogi-setup').setDescription('Létrehozza a BELV Jogi és Ügyvédi Osztály hiányzó elemeit.').setDMPermission(false).setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
+ const open=new SlashCommandBuilder().setName('belv-jogi-ugy').setDescription('Privát BELV jogi ügycsatornát nyitó űrlap.').setDMPermission(false)
+  .addUserOption(o=>o.setName('ugyfel').setDescription('Az érintett Discord-tag').setRequired(true))
+  .addUserOption(o=>o.setName('ugyved').setDescription('A kijelölt ügyvéd').setRequired(true));
+  const close=new SlashCommandBuilder().setName('belv-jogi-lezaras').setDescription('Megnyitja az ügy lezáró űrlapját.').setDMPermission(false);
+  return [setup.toJSON(),open.toJSON(),close.toJSON()];
+}
+function rankMap(){return configuredRankRoleMap(process.env.BELV_RANK_ROLE_IDS);}
+function isLegalLead(m){return Boolean(m?.roles?.cache?.some(r=>LEGAL_LEADS.includes(r.name)));}
+function isLegalMember(m){return Boolean(m?.roles?.cache?.some(r=>r.name===LAWYER_ROLE));}
+function role(g,n){return g.roles.cache.find(r=>r.name===n)||null;}
+function reply(i,text){return i.reply({content:text,flags:MessageFlags.Ephemeral});}
+function admin(i){return i.user.id===i.guild.ownerId||i.memberPermissions?.has(PermissionFlagsBits.Administrator);}
+function audit(action,i,metadata){return recordAudit(action,{guildId:i.guildId,actorId:i.user.id,metadata:metadata||{}});}
+function embed(title,description){return new EmbedBuilder().setColor(0x193B35).setTitle(title).setDescription(description).setFooter({text:'NEXA • BELV Jogi és Ügyvédi Osztály • RP'});}
+function overwrites(g,allowed,writers=allowed){
+ const out=[{id:g.roles.everyone.id,deny:[PermissionFlagsBits.ViewChannel]}];
+ for(const name of allowed){const r=role(g,name);if(!r)continue;const allow=[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory];if(writers.includes(name))allow.push(PermissionFlagsBits.SendMessages);out.push({id:r.id,allow});}
+ return out;
+}
+function applicationOverwrites(g){
+ const out=[{id:g.roles.everyone.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory],deny:[PermissionFlagsBits.SendMessages,PermissionFlagsBits.AddReactions]}];
+ for(const r of g.roles.cache.values()){const rank=classifyBelvRole(r,rankMap());if(rank&&['foosztalyvezeto','muveleti-vezeto'].includes(rank.key))out.push({id:r.id,deny:[PermissionFlagsBits.ViewChannel]});}
+ const bot=g.members.me;if(bot)out.push({id:bot.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages,PermissionFlagsBits.EmbedLinks]});
+ return out;
+}
+function caseOverwrites(g,clientId,lawyerId,closed=false){
+ const out=[{id:g.roles.everyone.id,deny:[PermissionFlagsBits.ViewChannel]}];
+ for(const id of [clientId,lawyerId]){if(!/^\d{16,22}$/.test(String(id||'')))continue;const allow=[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory];if(!closed)allow.push(PermissionFlagsBits.SendMessages);out.push({id:String(id),allow});}
+ const bot=g.members.me;if(bot)out.push({id:bot.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,...(closed?[]:[PermissionFlagsBits.SendMessages]),PermissionFlagsBits.ManageChannels]});
+ return out;
+}
+function access(g,key){return overwrites(g,[LAWYER_ROLE]);}
+async function syncAttorneyMemberships(g,groupRole,errors){
+ const members=await g.members.fetch();
+ for(const member of members.values()){
+  const shouldHave=member.roles.cache.some(r=>ATTORNEY_RANKS.includes(r.name)),has=member.roles.cache.has(groupRole.id);
+  if(shouldHave===has)continue;
+  try{if(shouldHave)await member.roles.add(groupRole,'BELV jogi ügyvédcsoport automatikus hozzárendelése');else await member.roles.remove(groupRole,'BELV jogi ügyvédcsoport szinkronizálása');}
+  catch(e){errors.push('Ügyvédek rang szinkronja ('+member.user.tag+'): '+e.message);}
+ }
+}
+async function schema(){
+ if(!isPersistentStore())throw new Error('A jogi ügykezeléshez tartós adatbázis szükséges.');
+ const sql=[
+ 'CREATE TABLE IF NOT EXISTS nexabot_belv_legal_setup (guild_id TEXT PRIMARY KEY,status TEXT NOT NULL,resources JSONB NOT NULL DEFAULT \'{}\'::jsonb,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())',
+ 'CREATE TABLE IF NOT EXISTS nexabot_belv_legal_sequence (guild_id TEXT PRIMARY KEY,next_number INTEGER NOT NULL DEFAULT 1)',
+ 'CREATE TABLE IF NOT EXISTS nexabot_belv_legal_cases (guild_id TEXT NOT NULL,case_number INTEGER NOT NULL,channel_id TEXT NOT NULL,client_id TEXT NOT NULL,lawyer_id TEXT NOT NULL,created_by TEXT NOT NULL,status TEXT NOT NULL,summary TEXT,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),closed_at TIMESTAMPTZ,PRIMARY KEY(guild_id,case_number),UNIQUE(guild_id,channel_id))'
+ ];
+ for(const q of sql)await dbQuery(q);
+}
+async function setup(i){
+ if(i.guildId!==BELV_GUILD_ID)return reply(i,'Ez a parancs kizárólag a BELV Discord-szerveren használható.');
+ if(!admin(i))return reply(i,'Csak a BELV szerver tulajdonosa vagy rendszergazdája telepítheti.');
+ const g=i.guild,bot=g.members.me||await g.members.fetchMe().catch(()=>null),missing=[];
+ if(!bot?.permissions.has(PermissionFlagsBits.ManageRoles))missing.push('Szerepkörök kezelése');
+ if(!bot?.permissions.has(PermissionFlagsBits.ManageChannels))missing.push('Csatornák kezelése');
+ if(!bot?.permissions.has(PermissionFlagsBits.ViewChannel)||!bot?.permissions.has(PermissionFlagsBits.SendMessages)||!bot?.permissions.has(PermissionFlagsBits.ReadMessageHistory))missing.push('Csatorna megtekintése, üzenetküldés, előzmények olvasása');
+ if(missing.length)return reply(i,'A bot jogosultságai hiányoznak: '+missing.join(', ')+'.');
+ await i.deferReply({flags:MessageFlags.Ephemeral});
+ const created=[],existing=[],errors=[],roleIds={},categoryIds={},channelIds={};
+ try{
+  await schema();await dbQuery('INSERT INTO nexabot_belv_legal_setup(guild_id,status) VALUES($1,$2) ON CONFLICT(guild_id) DO UPDATE SET status=$2,updated_at=NOW()',[g.id,'installing']);
+  for(const item of ROLES){let r=role(g,item.name);if(!r){r=await g.roles.create({name:item.name,color:item.color,permissions:[],hoist:false,mentionable:false,reason:'BELV belső jogi osztály'});created.push('rang: '+item.name);}else existing.push('rang: '+item.name);roleIds[item.name]=r.id;}
+  let lawyerGroup=role(g,LAWYER_ROLE);if(!lawyerGroup){lawyerGroup=await g.roles.create({name:LAWYER_ROLE,color:0x244F7A,permissions:[],hoist:false,mentionable:false,reason:'BELV jogi ügyvéd-hozzáférési csoport'});created.push('rang: '+LAWYER_ROLE);}else existing.push('rang: '+LAWYER_ROLE);roleIds[LAWYER_ROLE]=lawyerGroup.id;
+  const movableRoles=[...g.roles.cache.values()].filter(r=>!r.managed&&r.id!==g.roles.everyone.id&&r.position<(bot.roles?.highest?.position||Infinity));
+  const roleRank=r=>classifyBelvRole(r,rankMap());
+  const leaders=movableRoles.map(r=>({r,rank:roleRank(r)})).filter(x=>x.rank&&x.rank.min<=19).sort((a,b)=>a.rank.min-b.rank.min||b.r.position-a.r.position);
+  const normalizedRoleName=value=>[...String(value||'').normalize('NFD')].filter(ch=>{const cp=ch.codePointAt(0);return cp<0x300||cp>0x36f;}).join('').toLowerCase();
+  const roleGroupOrder=(roles,keys)=>roles.sort((a,b)=>{
+   const ai=keys.findIndex(key=>normalizedRoleName(a.name).includes(key));
+   const bi=keys.findIndex(key=>normalizedRoleName(b.name).includes(key));
+   return (ai<0?keys.length:ai)-(bi<0?keys.length:bi)||b.position-a.position;
+  });
+  const separatorMarks=new Set(['-','—','_','─','━']),separatorSymbols=new Set(['|','•','·','…']);
+  const separators=roleGroupOrder(movableRoles.filter(r=>{
+   const chars=[...String(r.name||'').trim()],count=chars.filter(ch=>separatorMarks.has(ch)).length;
+   return count>=4&&chars.every(ch=>separatorMarks.has(ch)||separatorSymbols.has(ch)||ch.trim()==='');
+  }),[]);
+  const separatorIds=new Set(separators.map(r=>r.id));
+  const used=new Set([...leaders.map(x=>x.r.id),...separatorIds]);
+  const take=(predicate,sorter=(a,b)=>b.position-a.position)=>{
+   const found=movableRoles.filter(r=>!used.has(r.id)&&predicate(r)).sort(sorter);
+   for(const r of found)used.add(r.id);
+   return found;
+  };
+  const adminRoles=take(r=>r.permissions.has(PermissionFlagsBits.Administrator));
+  const bomoRoles=take(r=>normalizedRoleName(r.name).includes('bomo'),(a,b)=>{
+   const order=['parancsnok','parancsnokhelyettes','vezeto operativ','operativ tiszt','fedett ugynok','jelolt'];
+   const ai=order.findIndex(key=>normalizedRoleName(a.name).includes(key)),bi=order.findIndex(key=>normalizedRoleName(b.name).includes(key));
+   return (ai<0?order.length:ai)-(bi<0?order.length:bi)||b.position-a.position;
+  });
+  const legalOrder=[ROLES[0].name,ROLES[1].name,ROLES[2].name,ROLES[3].name,LAWYER_ROLE,ROLES[4].name,ROLES[5].name]
+   .map(name=>role(g,name)).filter(r=>r&&!used.has(r.id));
+  for(const r of legalOrder)used.add(r.id);
+  const belvStaffRoles=take(r=>{const rank=roleRank(r);return Boolean(rank&&rank.min>=20);},(a,b)=>(roleRank(a)?.min||999)-(roleRank(b)?.min||999)||b.position-a.position);
+  const disciplineRoles=take(r=>['figyelmeztet','fegyelmi','warn','strike','buntet'].some(key=>normalizedRoleName(r.name).includes(key)));
+  const trainingRoles=take(r=>['kikepzo','kikepzes','tananyag','vizsga','gyakornok'].some(key=>normalizedRoleName(r.name).includes(key)));
+  const otherRoles=take(()=>true);
+  const groups=[
+   {name:'Adminisztráció',roles:adminRoles},
+   {name:'BELV vezetőség',roles:leaders.map(x=>x.r)},
+   {name:'BOMO',roles:bomoRoles},
+   {name:'Jogi osztály',roles:legalOrder},
+   {name:'BELV állomány',roles:belvStaffRoles},
+   {name:'Figyelmeztetések és fegyelem',roles:disciplineRoles},
+   {name:'Képzés',roles:trainingRoles},
+   {name:'Egyéb rangok',roles:otherRoles}
+  ].filter(group=>group.roles.length);
+  const colorUpdates=new Map();
+  const setColor=(r,color)=>{if(r)colorUpdates.set(r.id,{role:r,color});};
+  for(const {r,rank} of leaders){
+   const color=rank.min<=1?0x812A38:rank.min<=2?0x963B45:rank.min<=3?0x825E39:rank.min<=9?0x96682F:rank.min<=14?0x8B7736:0x4D5F70;
+   setColor(r,color);
+  }
+  for(const r of bomoRoles){
+   const name=normalizedRoleName(r.name);
+   const color=name.includes('parancsnokhelyettes')?0x963B45:name.includes('parancsnok')?0x812A38:name.includes('vezeto operativ')?0x8C5A24:name.includes('operativ tiszt')?0x225C50:name.includes('fedett ugynok')?0x29445D:0x687783;
+   setColor(r,color);
+  }
+  const legalColors=[0x812A38,0x96612F,0x27465F,0x315B78,0x315B78,0x719BB7,0x91B2C3];
+  legalOrder.forEach((r,index)=>setColor(r,legalColors[index]||0x315B78));
+  const staffColors=[
+   [20,24,0x67517D],[25,34,0x555D75],[35,39,0x2D536D],[40,49,0x355D73],
+   [50,59,0x2F665E],[60,69,0x3D615D],[70,89,0x4E6E69],[90,99,0x778D8D]
+  ];
+  for(const r of belvStaffRoles){
+   const rank=roleRank(r),range=staffColors.find(([min,max])=>rank&&rank.min>=min&&rank.min<=max);
+   if(range)setColor(r,range[2]);
+  }
+  for(const r of disciplineRoles)setColor(r,0x913844);
+  for(const r of trainingRoles)setColor(r,0x718DA1);
+  let recolored=0;
+  for(const {role:target,color} of colorUpdates.values()){
+   if(target.color===color)continue;
+   try{await target.edit({color,reason:'BELV rangok egységes, komoly színpalettája'});recolored++;}
+   catch(e){errors.push('Rang színe ('+target.name+'): '+e.message);}
+  }
+  const orderedRoles=[];
+  let separatorIndex=0;
+  for(let index=0;index<groups.length;index++){
+   if(index>0&&separatorIndex<separators.length)orderedRoles.push(separators[separatorIndex++]);
+   orderedRoles.push(...groups[index].roles);
+  }
+  while(separatorIndex<separators.length)orderedRoles.push(separators[separatorIndex++]);
+  const orderedUnique=[...new Map(orderedRoles.map(r=>[r.id,r])).values()];
+  if(orderedUnique.length){
+   const topPosition=Math.max(...adminRoles.map(r=>r.position),...leaders.map(x=>x.r.position));
+   if(!Number.isFinite(topPosition)||topPosition-orderedUnique.length+1<1)errors.push('A BELV rangcsoportok elrendezéséhez nincs elég biztonságos rangpozíció.');
+   else{
+    const positions=orderedUnique.map((r,index)=>({role:r.id,position:topPosition-index}));
+    try{await g.roles.setPositions(positions);}
+    catch(e){errors.push('BELV kategóriás rangsorrend: '+e.message);}
+   }
+  }else errors.push('Nem találtam átrendezhető BELV-rangokat.');
+  try{await syncAttorneyMemberships(g,lawyerGroup,errors);}catch(e){errors.push('Ügyvédek rang szinkronja: '+e.message);}
+  const initial=await g.channels.fetch();
+  for(const cat of CATS){
+   let parent=initial.find(c=>c?.type===ChannelType.GuildCategory&&c.name===cat.name);
+   if(!parent){parent=await g.channels.create({name:cat.name,type:ChannelType.GuildCategory,permissionOverwrites:[{id:g.roles.everyone.id,deny:[PermissionFlagsBits.ViewChannel]}],reason:'BELV jogi osztály'});created.push('kategória: '+cat.name);}else existing.push('kategória: '+cat.name);
+   categoryIds[cat.key]=parent.id;
+   for(const [key,name] of cat.channels){
+    const all=await g.channels.fetch();let c=all.find(x=>x?.type===ChannelType.GuildText&&x.name===name);
+    if(c&&c.parentId!==parent.id){errors.push('Más kategóriában már létezik, nem módosítottam: '+name);continue;}
+    if(!c){c=await g.channels.create({name,type:ChannelType.GuildText,parent:parent.id,permissionOverwrites:key==='application'?applicationOverwrites(g):access(g,key),reason:'BELV jogi osztály'});created.push('csatorna: '+name);}else existing.push('csatorna: '+name);
+    channelIds[key]=c.id;
+   }
+  }
+  const caseRows=await dbQuery('SELECT case_number,channel_id,client_id,lawyer_id,status FROM nexabot_belv_legal_cases WHERE guild_id=$1',[g.id]);
+  for(const row of caseRows?.rows||[]){
+   const c=await g.channels.fetch(String(row.channel_id)).catch(()=>null);
+   if(!c||c.type!==ChannelType.GuildText||!String(c.topic||'').startsWith('nexa-belv-legal|')){errors.push('Ügycsatorna nem található vagy nem ellenőrizhető: BELV-JOGI-'+String(row.case_number).padStart(3,'0'));continue;}
+   try{await c.permissionOverwrites.set(caseOverwrites(g,row.client_id,row.lawyer_id,row.status==='closed'),'BELV jogi ügy hozzáférések frissítése');}
+   catch(e){errors.push('Ügycsatorna jogosultsága ('+c.name+'): '+e.message);}
+  }
+  let legalApplicationTemplate=null;
+  try{legalApplicationTemplate=await ensureLegalApplicationTemplate(g,channelIds,roleIds);}
+  catch(e){errors.push('Jogi jelentkezési űrlap beállítása: '+e.message);}
+  for(const cat of CATS)for(const [key] of cat.channels){
+   const c=g.channels.cache.get(channelIds[key]);if(!c)continue;
+   try{
+    await c.permissionOverwrites.set(key==='application'?applicationOverwrites(g):access(g,key),'BELV jogi osztály jogosultság');
+    const seedKey=key==='application'?'applications':key,seed=SEEDS[seedKey];if(!seed)continue;
+    const marker='NEXA_BELV_LEGAL:'+seedKey,appFooter='NexaBot • TGF Forge • '+LEGAL_APPLICATION_TEMPLATE_KEY;
+    const msgs=await c.messages.fetch({limit:50}).catch(()=>null);
+    const existingSeed=msgs?.find(m=>m.author.id===g.client.user.id&&(String(m.embeds[0]?.footer?.text||'').includes(marker)||(seedKey==='applications'&&String(m.embeds[0]?.footer?.text||'').startsWith(appFooter))));
+    let payload={embeds:[embed(seed[0],seed[1]).setFooter({text:marker+' • BELV'})],components:key==='intake'?[intakeButtonRow()]:key==='application'?[applicationButtonRow()]:key==='presence'?[presenceButtonRow()]:[]};
+    if(seedKey==='applications'&&legalApplicationTemplate)payload=applicationPanel(legalApplicationTemplate);
+    if(existingSeed){if(key==='intake'||seedKey==='applications')await existingSeed.edit(payload);continue;}
+    await c.send(payload);created.push('kezdőüzenet: '+c.name);
+   }catch(e){errors.push('Csatorna '+c.name+': '+e.message);}
+  }
+  const expected=CATS.reduce((a,c)=>a+c.channels.length,0),complete=errors.length===0&&Object.keys(channelIds).length===expected;
+  await dbQuery('UPDATE nexabot_belv_legal_setup SET status=$2,resources=$3::jsonb,updated_at=NOW() WHERE guild_id=$1',[g.id,complete?'completed':'partial',JSON.stringify({roles:roleIds,categories:categoryIds,channels:channelIds})]);
+  await audit(complete?'belv_legal_setup_completed':'belv_legal_setup_partial',i,{created:created.length,existing:existing.length,recolored,errors});
+  const lines=['**BELV Jogi és Ügyvédi Osztály '+(complete?'telepítve':'részben telepítve')+'.**','**Létrehozva:** '+(created.join(' • ')||'semmi új'),'**Már létezett:** '+(existing.join(' • ')||'nincs'),'**Rangszínek frissítve:** '+recolored];
+  if(errors.length)lines.push('**Ellenőrizendő:** '+errors.join(' • '));return i.editReply(lines.join('\n').slice(0,1950));
+ }catch(e){
+  await dbQuery('UPDATE nexabot_belv_legal_setup SET status=$2,updated_at=NOW() WHERE guild_id=$1',[g.id,'partial']).catch(()=>null);
+  await recordError(e,{command:'belv-jogi-setup',guildId:g.id,userId:i.user.id});await audit('belv_legal_setup_failed',i,{error:e.message,created:created.length});
+  return i.editReply('A telepítés részben sikerült; a már létrejött elemeket megtartottam. Futtasd újra.\n'+(errors.join('\n')||e.message).slice(0,1400));
+ }
+}
+async function isInstalled(id){if(!isPersistentStore())return false;await schema();const r=await dbQuery('SELECT status FROM nexabot_belv_legal_setup WHERE guild_id=$1',[id]);return ['completed','partial'].includes(r?.rows?.[0]?.status);}
+function safeName(s){return String(s||'ugy').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,55)||'ugy';}
+function intakeDraftKey(i){return i.guildId+':'+i.user.id;}
+function intakeButtonRow(){return new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('belv_legal:intake').setLabel('BELV jogi ügy indítása').setStyle(ButtonStyle.Primary));}
+function applicationButtonRow(){return new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('belv_legal:application').setLabel('Jelentkezés a jogi osztályba').setStyle(ButtonStyle.Success));}
+function presenceButtonRow(){return new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('belv_legal:presence').setLabel('Jogi időpont megadása').setEmoji('📅').setStyle(ButtonStyle.Primary));}
+async function startPresenceForm(i){
+ if(i.guildId!==BELV_GUILD_ID)return reply(i,'Ez az űrlap kizárólag a BELV Discord-szerveren használható.');
+ if(!isLegalMember(i.member))return reply(i,'Ezt az űrlapot csak a jogi osztály Ügyvédek ranggal rendelkező tagjai használhatják.');
+ const modal=new ModalBuilder().setCustomId('belv_legal:presence-submit').setTitle('Jogi időpont-egyeztetés')
+  .addComponents(
+   caseModalInput('topic','Egyeztetés témája',TextInputStyle.Short,100,'Például: heti jogi megbeszélés'),
+   caseModalInput('time','Javasolt időpont',TextInputStyle.Short,100,'Dátum és idő, például: 2026.11.22. 18:00'),
+   caseModalInput('duration','Várható időtartam',TextInputStyle.Short,80,'Például: 30 perc'),
+   new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('participants').setLabel('Résztvevők').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500).setPlaceholder('Megjelölések vagy szerepkörök, ha ismertek')),
+   new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('notes').setLabel('Megjegyzés').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(800).setPlaceholder('Opcionális, bizalmas ügyadat nélkül'))
+  );
+ return i.showModal(modal);
+}
+async function submitPresenceForm(i){
+ if(i.guildId!==BELV_GUILD_ID)return reply(i,'Ez az űrlap kizárólag a BELV Discord-szerveren használható.');
+ if(!isLegalMember(i.member))return reply(i,'Ezt az űrlapot csak a jogi osztály tagjai küldhetik be.');
+ if(i.channel?.name!=='📅・jelenlét-és-időpontok')return reply(i,'Az időpontűrlap csak a BELV jogi jelenléti csatornájában használható.');
+ await i.deferReply({flags:MessageFlags.Ephemeral});
+ const topic=i.fields.getTextInputValue('topic').trim(),time=i.fields.getTextInputValue('time').trim(),duration=i.fields.getTextInputValue('duration').trim();
+ const participants=i.fields.getTextInputValue('participants').trim(),notes=i.fields.getTextInputValue('notes').trim();
+ const fields=[{name:'Téma',value:topic},{name:'Javasolt időpont',value:time},{name:'Várható időtartam',value:duration}];
+ if(participants)fields.push({name:'Résztvevők',value:participants});
+ if(notes)fields.push({name:'Megjegyzés',value:notes});
+ const message=await i.channel.send({
+  content:'📅 Időpont-egyeztetési javaslat • '+i.user,
+  embeds:[embed('Jogi időpont-egyeztetés','Beküldő: <@'+i.user.id+'>').addFields(fields).setTimestamp()],
+  allowedMentions:{users:[i.user.id]}
+ });
+ await audit('belv_legal_presence_submitted',i,{messageId:message.id,topic,time});
+ return i.editReply('✅ Az időpont-egyeztetési javaslatot rögzítettem: '+message.url);
+}
+function intakeFormRows(){
+ return [
+  new ActionRowBuilder().addComponents(new UserSelectMenuBuilder().setCustomId('belv_legal:select-client').setPlaceholder('Ügyfél kiválasztása').setMinValues(1).setMaxValues(1)),
+  new ActionRowBuilder().addComponents(new UserSelectMenuBuilder().setCustomId('belv_legal:select-lawyer').setPlaceholder('Kijelölt ügyvéd kiválasztása').setMinValues(1).setMaxValues(1)),
+  new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('belv_legal:intake-next').setLabel('Tovább az űrlaphoz').setStyle(ButtonStyle.Success))
+ ];
+}
+async function startApplication(i){
+ if(i.guildId!==BELV_GUILD_ID)return reply(i,'Ez az űrlap kizárólag a BELV Discord-szerveren használható.');
+ if(isLegalMember(i.member))return reply(i,'Már a jogi osztály tagja vagy.');
+ const modal=new ModalBuilder().setCustomId('belv_legal:application-submit').setTitle('Jogi osztály jelentkezés')
+  .addComponents(
+   caseModalInput('rp_name','RP-neved',TextInputStyle.Short,100,'A BELV-szerveren használt RP-neved'),
+   caseModalInput('desired_rank','Megpályázott jogi rang',TextInputStyle.Short,100,'Például ügyvédjelölt vagy gyakornok'),
+   caseModalInput('motivation','Miért jelentkezel?',TextInputStyle.Paragraph,800,'Röviden írd le a motivációdat'),
+   caseModalInput('experience','Korábbi RP- vagy ügyintézési tapasztalat',TextInputStyle.Paragraph,800,'RP-tapasztalat; ha nincs, írd be: nincs'),
+   caseModalInput('availability','Heti elérhetőség',TextInputStyle.Short,100,'Például hétköznap esténként')
+  );
+ return i.showModal(modal);
+}
+async function submitApplication(i){
+ if(i.guildId!==BELV_GUILD_ID)return reply(i,'Ez az űrlap kizárólag a BELV Discord-szerveren használható.');
+ await i.deferReply({flags:MessageFlags.Ephemeral});
+ try{
+  const inbox=(await i.guild.channels.fetch()).find(c=>c?.type===ChannelType.GuildText&&c.name==='🔒・vezetőségi-egyeztetés'&&c.parent?.name===CATS[1].name);
+  if(!inbox)return i.editReply('Nem találom a jogi jelentkezések fogadására használt belső csatornát; értesítsd a BELV rendszergazdáját.');
+  const fields=[
+   {name:'Jelentkező',value:'<@'+i.user.id+'>',inline:true},
+   {name:'RP-név',value:i.fields.getTextInputValue('rp_name').trim(),inline:true},
+   {name:'Megpályázott rang',value:i.fields.getTextInputValue('desired_rank').trim(),inline:true},
+   {name:'Motiváció',value:i.fields.getTextInputValue('motivation').trim()},
+   {name:'Tapasztalat',value:i.fields.getTextInputValue('experience').trim()},
+   {name:'Elérhetőség',value:i.fields.getTextInputValue('availability').trim()}
+  ];
+  await inbox.send({embeds:[embed('Új jogi osztály jelentkezés','Beküldő: <@'+i.user.id+'>').addFields(fields).setTimestamp()]});
+  await audit('belv_legal_application_submitted',i,{reviewChannelId:inbox.id});
+  return i.editReply('✅ A jelentkezésedet elküldtem a jogi osztály elbírálására.');
+ }catch(error){
+  await recordError(error,{command:'belv_legal_application',guildId:i.guildId,userId:i.user.id}).catch(()=>null);
+  return i.editReply('A jelentkezést nem sikerült továbbítani. Próbáld meg később, vagy szólj a jogi osztály egyik tagjának.');
+ }
+}
+async function startIntake(i){
+ if(i.guildId!==BELV_GUILD_ID)return reply(i,'Ez az űrlap kizárólag a BELV Discord-szerveren használható.');
+ if(!isLegalMember(i.member))return reply(i,'Ezt az ügyindító űrlapot csak BELV vezető vagy jogi osztálytag használhatja.');
+ legalIntakeDrafts.set(intakeDraftKey(i),{updatedAt:Date.now()});
+ return i.reply({content:'Válaszd ki az ügyfelet és a kijelölt ügyvédet. Ezután nyomd meg a **Tovább az űrlaphoz** gombot. A részleteket privát űrlapon kéred be.',components:intakeFormRows(),flags:MessageFlags.Ephemeral});
+}
+async function selectIntakeParty(i){
+ if(i.guildId!==BELV_GUILD_ID||!isLegalMember(i.member))return reply(i,'Ezt az űrlapot csak BELV vezető vagy jogi osztálytag használhatja.');
+ const key=intakeDraftKey(i),draft=legalIntakeDrafts.get(key);
+ if(!draft||Date.now()-draft.updatedAt>10*60*1000){legalIntakeDrafts.delete(key);return reply(i,'Az űrlap lejárt. Kattints újra a **BELV jogi ügy indítása** gombra.');}
+ const selected=i.values?.[0];if(!/^\d{16,22}$/.test(String(selected||'')))return reply(i,'Nem sikerült kiolvasni a kiválasztott Discord-tagot.');
+ if(i.customId.endsWith('select-client'))draft.clientId=selected;else draft.lawyerId=selected;
+ draft.updatedAt=Date.now();legalIntakeDrafts.set(key,draft);
+ const status=['Ügyfél: '+(draft.clientId?'<@'+draft.clientId+'>':'nincs kiválasztva'),'Ügyvéd: '+(draft.lawyerId?'<@'+draft.lawyerId+'>':'nincs kiválasztva')].join(' • ');
+ return i.update({content:status+'\nVálaszd ki mindkettőt, majd folytasd az űrlappal.',components:intakeFormRows()});
+}
+function buildCaseModal(clientId,lawyerId){
+ return new ModalBuilder().setCustomId('belv_legal:open:'+clientId+':'+lawyerId).setTitle('BELV jogi ügy űrlap')
+  .addComponents(
+   caseModalInput('client_name','Ügyfél RP-neve',TextInputStyle.Short,100,'Az ügyfél RP-ben használt neve'),
+   caseModalInput('summary_time','Rövid leírás és eset időpontja',TextInputStyle.Paragraph,700,'Mi történt, és mikor?'),
+   caseModalInput('involved','Érintettek',TextInputStyle.Paragraph,500,'Az RP-esetben érintett személyek'),
+   caseModalInput('evidence','Bizonyítékok vagy tanúk',TextInputStyle.Paragraph,700,'RP-bizonyítékok, tanúk vagy hivatkozások'),
+   caseModalInput('requested_help','Kért segítség és egyeztetési időpont',TextInputStyle.Paragraph,650,'Milyen segítség kell, és mikor érhető el az ügyfél?')
+  );
+}
+async function continueIntake(i){
+ if(i.guildId!==BELV_GUILD_ID||!isLegalMember(i.member))return reply(i,'Ezt az űrlapot csak BELV vezető vagy jogi osztálytag használhatja.');
+ const key=intakeDraftKey(i),draft=legalIntakeDrafts.get(key);
+ if(!draft||Date.now()-draft.updatedAt>10*60*1000){legalIntakeDrafts.delete(key);return reply(i,'Az űrlap lejárt. Kattints újra a **BELV jogi ügy indítása** gombra.');}
+ if(!draft.clientId||!draft.lawyerId)return reply(i,'Előbb válaszd ki az ügyfelet és a kijelölt ügyvédet.');
+ const parties=await validateCaseParties(i,draft.clientId,draft.lawyerId);
+ if(typeof parties==='string')return reply(i,parties);
+ legalIntakeDrafts.delete(key);
+ return i.showModal(buildCaseModal(draft.clientId,draft.lawyerId));
+}
+function caseModalInput(id,label,style,maxLength,placeholder){
+ return new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(id).setLabel(label).setStyle(style).setRequired(true).setMinLength(1).setMaxLength(maxLength).setPlaceholder(placeholder));
+}
+async function validateCaseParties(i,clientId,lawyerId){
+ if(i.guildId!==BELV_GUILD_ID)return 'Ez a parancs kizárólag a BELV Discord-szerveren használható.';
+ if(!await isInstalled(i.guildId))return 'A jogi osztály nincs telepítve. Előbb futtasd a /belv-jogi-setup parancsot.';
+ if(!isLegalMember(i.member))return 'Ügyet csak az Ügyvédek ranggal lehet indítani.';
+ const [client,lawyer]=await Promise.all([i.guild.members.fetch(clientId).catch(()=>null),i.guild.members.fetch(lawyerId).catch(()=>null)]);
+ if(!client||!lawyer||client.user.bot||lawyer.user.bot)return 'Az ügyfélnek és a kijelölt ügyvédnek is valódi BELV-szervertagnak kell lennie.';
+ const lawyerRole=role(i.guild,LAWYER_ROLE),lawyerOK=Boolean(lawyerRole&&lawyer.roles.cache.has(lawyerRole.id));
+ if(!lawyerOK)return 'A kijelölt személynek az Ügyvédek ranggal kell rendelkeznie.';
+ return {client,lawyer};
+}
+async function openCase(i){
+ const clientUser=i.options.getUser('ugyfel'),lawyerUser=i.options.getUser('ugyved');
+ const parties=await validateCaseParties(i,clientUser.id,lawyerUser.id);
+ if(typeof parties==='string')return reply(i,parties);
+ return i.showModal(buildCaseModal(clientUser.id,lawyerUser.id));
+}
+async function openCaseFromModal(i,clientId,lawyerId){
+ const parties=await validateCaseParties(i,clientId,lawyerId);
+ if(typeof parties==='string')return reply(i,parties);
+ const {lawyer}=parties;
+ await i.deferReply({flags:MessageFlags.Ephemeral});await schema();
+ const parent=(await i.guild.channels.fetch()).find(c=>c?.type===ChannelType.GuildCategory&&c.name===CATS[1].name);
+ if(!parent)return i.editReply('Jogi ügyintézési kategória nem található. Futtasd újra a telepítőt.');
+ const seq=await dbQuery('INSERT INTO nexabot_belv_legal_sequence(guild_id,next_number) VALUES($1,2) ON CONFLICT(guild_id) DO UPDATE SET next_number=nexabot_belv_legal_sequence.next_number+1 RETURNING next_number-1 AS case_number',[i.guildId]);
+ const n=Number(seq?.rows?.[0]?.case_number);
+ if(!Number.isInteger(n)||n<1)return i.editReply('Nem sikerült ügyszámot kiosztani. Próbáld újra.');
+ const perms=caseOverwrites(i.guild,clientId,lawyer.id,false);
+ const clientName=i.fields.getTextInputValue('client_name').trim(),summaryTime=i.fields.getTextInputValue('summary_time').trim(),
+  involved=i.fields.getTextInputValue('involved').trim(),evidence=i.fields.getTextInputValue('evidence').trim(),
+  requestedHelp=i.fields.getTextInputValue('requested_help').trim();
+ const num=String(n).padStart(3,'0'),channel=await i.guild.channels.create({name:'belv-ugy-'+num+'-'+safeName(clientName),type:ChannelType.GuildText,parent:parent.id,topic:'nexa-belv-legal|'+i.guildId+'|'+n+'|'+clientId+'|'+lawyer.id,permissionOverwrites:perms,reason:'Privát BELV RP jogi ügy'});
+ try{
+  await dbQuery('INSERT INTO nexabot_belv_legal_cases(guild_id,case_number,channel_id,client_id,lawyer_id,created_by,status) VALUES($1,$2,$3,$4,$5,$6,$7)',[i.guildId,n,channel.id,clientId,lawyer.id,i.user.id,'open']);
+  const text=['**Ügyszám:** BELV-JOGI-'+num,'**Ügyfél Discord-tag:** <@'+clientId+'>','**Kijelölt ügyvéd:** <@'+lawyer.id+'>','**Ügyfél RP-neve:** '+clientName,'**Rövid leírás és eset időpontja:** '+summaryTime,'**Érintettek:** '+involved,'**Bizonyítékok vagy tanúk:** '+evidence,'**Kért segítség és egyeztetési időpont:** '+requestedHelp].join('\n');
+  await channel.send({embeds:[embed('BELV jogi ügy • '+num,text+'\n\nCsak szerveren belüli RP-ügyet kezeljetek; valós személyes adatot ne osszatok meg.')]});
+  await audit('belv_legal_case_opened',i,{caseNumber:n,channelId:channel.id,clientId,lawyerId:lawyer.id});
+  return i.editReply('Privát ügycsatorna létrejött: <#'+channel.id+'>');
+ }catch(e){await recordError(e,{command:'belv-jogi-ugy',guildId:i.guildId,userId:i.user.id});return i.editReply('A csatornát megtartottam, de az ügy mentése hibázott: '+e.message.slice(0,600));}
+}
+async function closeCase(i){
+ if(i.guildId!==BELV_GUILD_ID)return reply(i,'Ez a parancs kizárólag a BELV Discord-szerveren használható.');
+ const c=i.channel;if(!c?.topic?.startsWith('nexa-belv-legal|'))return reply(i,'Ezt a parancsot az ügy privát csatornájában használd.');
+ const p=c.topic.split('|'),lawyerId=p[4];
+ if(i.user.id!==lawyerId&&!isLegalLead(i.member))return reply(i,'Csak a kijelölt ügyvéd vagy a jogi osztály vezetője zárhatja le.');
+ if(c.topic.endsWith('|closed'))return reply(i,'Ez az ügy már le van zárva.');
+ const modal=new ModalBuilder().setCustomId('belv_legal:close:'+c.id).setTitle('Ügy lezárása és archiválása')
+  .addComponents(caseModalInput('closing_summary','Rövid záró összefoglaló',TextInputStyle.Paragraph,900,'RP-ügy lezárásának rövid összefoglalója'));
+ return i.showModal(modal);
+}
+async function closeCaseFromModal(i,expectedChannelId){
+ if(i.guildId!==BELV_GUILD_ID||i.channelId!==expectedChannelId)return reply(i,'A lezáró űrlap csak az eredeti BELV ügycsatornában használható.');
+ const c=i.channel;if(!c?.topic?.startsWith('nexa-belv-legal|')||c.topic.endsWith('|closed'))return reply(i,'Az ügy nem található, vagy már lezárták.');
+ const p=c.topic.split('|'),n=Number(p[2]),lawyerId=p[4];
+ if(i.user.id!==lawyerId&&!isLegalLead(i.member))return reply(i,'Csak a kijelölt ügyvéd vagy a jogi osztály vezetője zárhatja le.');
+ const summary=i.fields.getTextInputValue('closing_summary').trim();
+ if(!summary)return reply(i,'A záró összefoglaló nem lehet üres.');
+ await i.deferReply({flags:MessageFlags.Ephemeral});await schema();
+ const marker='NEXA_BELV_LEGAL_CLOSED:'+n;
+ const recent=await c.messages.fetch({limit:50}).catch(()=>null);
+ if(!recent?.some(m=>m.author.id===i.client.user.id&&String(m.embeds[0]?.footer?.text||'').includes(marker))){
+  await c.send({embeds:[embed('Lezárt ügy • BELV-JOGI-'+String(n).padStart(3,'0'),summary+'\n\nA csatorna megmarad és csak olvasható.').setFooter({text:marker})]});
+ }
+ const res=await dbQuery('UPDATE nexabot_belv_legal_cases SET status=$3,summary=$4,closed_at=NOW() WHERE guild_id=$1 AND case_number=$2 AND status=$5 RETURNING case_number',[i.guildId,n,'closed',summary,'open']);
+ if(!res?.rowCount)return i.editReply('Az ügy nem található, vagy már lezárták.');
+ for(const ow of c.permissionOverwrites.cache.values())await c.permissionOverwrites.edit(ow.id,{SendMessages:false,AddReactions:false}).catch(()=>null);
+ await c.setTopic(c.topic+'|closed').catch(()=>null);
+ await audit('belv_legal_case_closed',i,{caseNumber:n,channelId:c.id});return i.editReply('Az ügy lezárult és archiválva lett; a csatornát nem töröltem.');
+}
+async function syncGuildCommands(guild){
+ if(!guild?.commands||guild.id!==BELV_GUILD_ID)return;
+ const current=await guild.commands.fetch();
+ for(const payload of commands()){
+  const match=current.find(command=>command.name===payload.name);
+  if(match)await match.edit(payload);else await guild.commands.create(payload);
+ }
+}
+async function handleInteraction(i){
+ if(i.isButton?.()&&i.customId==='belv_legal:presence')return startPresenceForm(i);
+ if(i.isButton?.()&&i.customId==='belv_legal:application')return startApplication(i);
+ if(i.isButton?.()&&i.customId==='belv_legal:intake')return startIntake(i);
+ if(i.isButton?.()&&i.customId==='belv_legal:intake-next')return continueIntake(i);
+ if(i.isUserSelectMenu?.()&&String(i.customId||'').startsWith('belv_legal:select-'))return selectIntakeParty(i);
+ if(i.isModalSubmit?.()&&String(i.customId||'').startsWith('belv_legal:')){
+  const parts=i.customId.split(':');
+  if(parts[1]==='application-submit'&&parts.length===2)return submitApplication(i);
+  if(parts[1]==='presence-submit'&&parts.length===2)return submitPresenceForm(i);
+  if(parts[1]==='open'&&parts.length===4&&/^\d{16,22}$/.test(parts[2])&&/^\d{16,22}$/.test(parts[3]))return openCaseFromModal(i,parts[2],parts[3]);
+  if(parts[1]==='close'&&parts.length===3&&/^\d{16,22}$/.test(parts[2]))return closeCaseFromModal(i,parts[2]);
+  return reply(i,'Érvénytelen vagy lejárt jogi űrlap.');
+ }
+ if(!i.isChatInputCommand?.())return false;
+ if(i.commandName==='belv-jogi-setup')return setup(i);
+ if(i.commandName==='belv-jogi-ugy')return openCase(i);
+ if(i.commandName==='belv-jogi-lezaras')return closeCase(i);
+ return false;
+}
+async function syncAttorneyAggregate(member){
+ if(!member||member.guild?.id!==BELV_GUILD_ID)return;
+ const groupRole=role(member.guild,LAWYER_ROLE);if(!groupRole)return;
+ const shouldHave=member.roles.cache.some(r=>ATTORNEY_RANKS.includes(r.name)),has=member.roles.cache.has(groupRole.id);
+ if(shouldHave===has)return;
+ try{if(shouldHave)await member.roles.add(groupRole,'BELV jogi ügyvédcsoport automatikus hozzárendelése');else await member.roles.remove(groupRole,'BELV jogi ügyvédcsoport szinkronizálása');}
+ catch(error){await recordError(error,{command:'belv_legal_attorney_role_sync',guildId:member.guild.id,userId:member.id}).catch(()=>null);}
+}
+module.exports={buildCommands:commands,syncGuildCommands,handleInteraction,BELV_GUILD_ID,CLASS_ROLES:ROLES,CATEGORIES:CATS,isLegalMember,syncAttorneyAggregate};
+
+},
+"src/holiday-theme.js": function(module, exports, require) {
+'use strict';
+
+const { MessageFlags, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
+const { dbQuery, isPersistentStore } = require('./config');
+const { recordAudit, recordError } = require('./telemetry');
+
+const BELV_GUILD_ID = '1517509643734221030';
+const locks = new Set();
+const THEMES = Object.freeze({
+  karacsony: { label: 'Karácsony', emojis: ['🎄', '🎁', '✨', '❄️', '🕯️', '🔔'] },
+  uj_ev: { label: 'Újév', emojis: ['🎆', '🥂', '🎇', '✨', '🪩', '🎉'] },
+  valentin: { label: 'Valentin-nap', emojis: ['💌', '🌹', '💝', '🩷', '💘', '❤️'] },
+  husvet: { label: 'Húsvét', emojis: ['🐣', '🐰', '🥚', '🌷', '🌼', '🪻'] },
+  halloween: { label: 'Halloween', emojis: ['🎃', '🦇', '👻', '🕸️', '🕯️', '🌙'] },
+  mikulas: { label: 'Mikulás', emojis: ['🎅', '🛷', '🎁', '🔔', '🍪', '❄️'] },
+  farsang: { label: 'Farsang', emojis: ['🎭', '🥳', '🎊', '🎈', '🎶', '🎉'] },
+  marcius15: { label: 'Március 15.', emojis: ['🇭🇺', '🪶', '📜', '⭐', '🟥', '🟩'] },
+  augusztus20: { label: 'Augusztus 20.', emojis: ['🇭🇺', '👑', '🌾', '⛪', '🎆', '✨'] },
+  mindenszentek: { label: 'Mindenszentek', emojis: ['🕯️', '🕊️', '🤍', '🌹', '🍂', '🙏'] },
+  anyak_napja: { label: 'Anyák napja', emojis: ['💐', '🌷', '🩷', '🌸', '🌼', '💝'] },
+  gyereknap: { label: 'Gyereknap', emojis: ['🎈', '🧸', '🪁', '🎨', '🌈', '🎁'] }
+});
+
+function buildCommand() {
+  return new SlashCommandBuilder()
+    .setName('unnepi-megjelenes')
+    .setDescription('Ünnepi emojik beállítása a BELV Discordon és a NexaBot becenevén.')
+    .setDMPermission(false)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addStringOption(option => option.setName('tema').setDescription('Válassz ünnepet; a visszaállítás az eredeti emojikat állítja vissza.').setRequired(true)
+      .addChoices(
+        ...Object.entries(THEMES).map(([value, theme]) => ({ name: theme.label, value })),
+        { name: 'Egyedi ünnep', value: 'egyedi' },
+        { name: 'Eredeti megjelenés visszaállítása', value: 'visszaallitas' }
+      ))
+    .addStringOption(option => option.setName('emoji').setDescription('Egyedi ünnepnél kötelező emoji; választható témánál mindent felülír.').setRequired(false).setMaxLength(16));
+}
+
+async function syncGuildCommand(guild) {
+  if (!guild?.commands || guild.id !== BELV_GUILD_ID) return;
+  const current = await guild.commands.fetch();
+  const payload = buildCommand().toJSON();
+  const existing = current.find(command => command.name === payload.name);
+  if (existing) await existing.edit(payload);
+  else await guild.commands.create(payload);
+}
+
+async function ensureSchema() {
+  if (!isPersistentStore()) throw new Error('Az ünnepi megjelenéshez tartós adatbázis szükséges.');
+  await dbQuery(`CREATE TABLE IF NOT EXISTS nexabot_belv_holiday_appearance (
+    guild_id TEXT PRIMARY KEY,
+    original_roles JSONB NOT NULL,
+    original_channels JSONB NOT NULL,
+    original_nickname TEXT,
+    theme TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+}
+
+function objectValue(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+  try { return JSON.parse(String(value || '{}')); } catch { return {}; }
+}
+function firstGrapheme(value) {
+  return [...new Intl.Segmenter('hu', { granularity: 'grapheme' }).segment(String(value || ''))][0]?.segment || '';
+}
+function looksLikeEmoji(value) {
+  return [...String(value || '')].some(char => {
+    const cp = char.codePointAt(0);
+    return (cp >= 0x1f000 && cp <= 0x1faff) || (cp >= 0x2600 && cp <= 0x27ff) || (cp >= 0x1f1e6 && cp <= 0x1f1ff);
+  });
+}
+function replaceLeadingEmoji(original, emoji) {
+  const source = String(original || '');
+  const grapheme = firstGrapheme(source);
+  const emojiStart = looksLikeEmoji(grapheme);
+  const result = emojiStart ? emoji + source.slice(grapheme.length) : emoji + source;
+  if (result.length > 100) throw new Error('A név az emoji cseréje után túllépné a Discord 100 karakteres korlátját.');
+  return result;
+}
+function separatorRole(name) {
+  const marks = new Set(['-', '—', '_', '─', '━']);
+  const symbols = new Set(['|', '┃', '•', '·', '…']);
+  const chars = [...String(name || '').trim()];
+  return chars.filter(char => marks.has(char)).length >= 4
+    && chars.every(char => marks.has(char) || symbols.has(char) || char.trim() === '');
+}
+function emojiFor(theme, original, override) {
+  if (override) return override;
+  const value = String(original || '');
+  let hash = 0;
+  for (const char of value) hash = (hash * 31 + char.codePointAt(0)) % 100000;
+  return theme.emojis[hash % theme.emojis.length];
+}
+function actorCanManage(interaction) {
+  return Boolean(interaction.guild && (
+    interaction.user.id === interaction.guild.ownerId
+    || interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)
+  ));
+}
+function botPermissions(guild, bot) {
+  const missing = [];
+  if (!bot?.permissions.has(PermissionFlagsBits.ManageRoles)) missing.push('Szerepkörök kezelése');
+  if (!bot?.permissions.has(PermissionFlagsBits.ManageChannels)) missing.push('Csatornák kezelése');
+  if (!bot?.permissions.has(PermissionFlagsBits.ManageNicknames)) missing.push('Becenevek kezelése');
+  return missing;
+}
+async function loadState(guildId) {
+  const result = await dbQuery('SELECT original_roles,original_channels,original_nickname,theme FROM nexabot_belv_holiday_appearance WHERE guild_id=$1', [guildId]);
+  const row = result?.rows?.[0];
+  if (!row) return null;
+  return {
+    roles: objectValue(row.original_roles),
+    channels: objectValue(row.original_channels),
+    nickname: row.original_nickname,
+    theme: row.theme
+  };
+}
+async function saveState(guildId, state, theme) {
+  await dbQuery(
+    'INSERT INTO nexabot_belv_holiday_appearance(guild_id,original_roles,original_channels,original_nickname,theme) VALUES($1,$2::jsonb,$3::jsonb,$4,$5) ON CONFLICT(guild_id) DO UPDATE SET original_roles=EXCLUDED.original_roles,original_channels=EXCLUDED.original_channels,theme=EXCLUDED.theme,updated_at=NOW()',
+    [guildId, JSON.stringify(state.roles), JSON.stringify(state.channels), state.nickname, theme]
+  );
+}
+async function captureOriginals(guild, bot, existing) {
+  const state = existing || { roles: {}, channels: {}, nickname: bot.nickname ?? null, theme: '' };
+  for (const role of guild.roles.cache.values()) {
+    if (role.id === guild.roles.everyone.id || role.managed || separatorRole(role.name)) continue;
+    if (!(role.id in state.roles)) state.roles[role.id] = role.name;
+  }
+  for (const channel of guild.channels.cache.values()) {
+    if (channel.isThread?.()) continue;
+    if (!(channel.id in state.channels)) state.channels[channel.id] = channel.name;
+  }
+  return state;
+}
+async function applyNames(guild, bot, state, theme, override, restoring) {
+  const errors = [];
+  let rolesChanged = 0, channelsChanged = 0;
+  const roleEntries = Object.entries(state.roles);
+  for (const [id, originalName] of roleEntries) {
+    const target = guild.roles.cache.get(id);
+    if (!target || target.managed || target.id === guild.roles.everyone.id || separatorRole(originalName)) continue;
+    if (target.position >= (bot.roles?.highest?.position || 0)) {
+      errors.push('Nem kezelhető ranghierarchia miatt: ' + originalName);
+      continue;
+    }
+    const nextName = restoring ? originalName : replaceLeadingEmoji(originalName, emojiFor(theme, originalName, override));
+    if (target.name === nextName) continue;
+    try { await target.edit({ name: nextName, reason: restoring ? 'BELV ünnepi megjelenés visszaállítása' : 'BELV ünnepi rangemoji' }); rolesChanged++; }
+    catch (error) { errors.push('Rang ' + originalName + ': ' + String(error.message || error)); }
+  }
+  for (const [id, originalName] of Object.entries(state.channels)) {
+    const target = guild.channels.cache.get(id);
+    if (!target || target.isThread?.()) continue;
+    const nextName = restoring ? originalName : replaceLeadingEmoji(originalName, emojiFor(theme, originalName, override));
+    if (target.name === nextName) continue;
+    try { await target.setName(nextName, restoring ? 'BELV ünnepi megjelenés visszaállítása' : 'BELV ünnepi csatornaemoji'); channelsChanged++; }
+    catch (error) { errors.push('Csatorna ' + originalName + ': ' + String(error.message || error)); }
+  }
+  const nextNickname = restoring
+    ? state.nickname
+    : replaceLeadingEmoji(state.nickname || 'NexaBot', emojiFor(theme, 'NexaBot', override));
+  if ((bot.nickname ?? null) !== nextNickname) {
+    try { await bot.setNickname(nextNickname, restoring ? 'BELV ünnepi megjelenés visszaállítása' : 'BELV ünnepi NexaBot-becenév'); }
+    catch (error) { errors.push('NexaBot becenév: ' + String(error.message || error)); }
+  }
+  return { rolesChanged, channelsChanged, errors };
+}
+
+async function handleCommand(interaction) {
+  if (!interaction.guild || interaction.guildId !== BELV_GUILD_ID) {
+    return interaction.reply({ content: 'Ez a parancs kizárólag a BELV Discord-szerveren használható.', flags: MessageFlags.Ephemeral });
+  }
+  if (!actorCanManage(interaction)) {
+    return interaction.reply({ content: 'Az ünnepi megjelenést csak a BELV szerver tulajdonosa vagy adminisztrátora állíthatja.', flags: MessageFlags.Ephemeral });
+  }
+  if (locks.has(interaction.guildId)) {
+    return interaction.reply({ content: 'Már folyamatban van egy ünnepi megjelenés módosítása. Próbáld újra később.', flags: MessageFlags.Ephemeral });
+  }
+  const themeKey = interaction.options.getString('tema', true);
+  const override = interaction.options.getString('emoji');
+  if (themeKey === 'egyedi' && !looksLikeEmoji(override)) {
+    return interaction.reply({ content: 'Egyedi témához adj meg egy Unicode emojit az emoji mezőben.', flags: MessageFlags.Ephemeral });
+  }
+  if (override && !looksLikeEmoji(override)) {
+    return interaction.reply({ content: 'Az emoji mezőbe egy érvényes Unicode emojit írj.', flags: MessageFlags.Ephemeral });
+  }
+  locks.add(interaction.guildId);
+  try {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    await ensureSchema();
+    const guild = interaction.guild;
+    const bot = guild.members.me || await guild.members.fetchMe();
+    const missing = botPermissions(guild, bot);
+    if (missing.length) throw new Error('A NexaBot jogosultságai hiányoznak: ' + missing.join(', ') + '.');
+    await guild.roles.fetch();
+    await guild.channels.fetch();
+    const current = await loadState(guild.id);
+    if (themeKey === 'visszaallitas') {
+      if (!current) return interaction.editReply('Nincs elmentett ünnepi BELV-megjelenés, amit vissza lehetne állítani.');
+      const result = await applyNames(guild, bot, current, null, null, true);
+      if (!result.errors.length) await dbQuery('DELETE FROM nexabot_belv_holiday_appearance WHERE guild_id=$1', [guild.id]);
+      await recordAudit('belv_holiday_appearance_restored', { guildId: guild.id, actorId: interaction.user.id, metadata: { roles: result.rolesChanged, channels: result.channelsChanged, errors: result.errors.length } }).catch(() => null);
+      return interaction.editReply('🔄 **Eredeti BELV-megjelenés visszaállítva.**\nRangok: ' + result.rolesChanged + ' · csatornák: ' + result.channelsChanged + ' · NexaBot-becenév: ' + (result.errors.some(item => item.startsWith('NexaBot')) ? 'hiba' : 'visszaállítva') + (result.errors.length ? '\nEllenőrizendő: ' + result.errors.slice(0, 8).join(' • ') : ''));
+    }
+    const theme = THEMES[themeKey];
+    if (!theme) throw new Error('Ismeretlen ünnepi téma.');
+    const state = await captureOriginals(guild, bot, current);
+    await saveState(guild.id, state, themeKey);
+    const result = await applyNames(guild, bot, state, theme, override, false);
+    await dbQuery('UPDATE nexabot_belv_holiday_appearance SET theme=$2,updated_at=NOW() WHERE guild_id=$1', [guild.id, override ? themeKey + ':custom' : themeKey]);
+    await recordAudit('belv_holiday_appearance_applied', { guildId: guild.id, actorId: interaction.user.id, metadata: { theme: themeKey, roles: result.rolesChanged, channels: result.channelsChanged, errors: result.errors.length } }).catch(() => null);
+    const summary = '🎉 **BELV ünnepi megjelenés beállítva: ' + theme.label + '**\nRangok: ' + result.rolesChanged + ' · kategóriák/csatornák: ' + result.channelsChanged + ' · NexaBot-becenév frissítve.';
+    return interaction.editReply((summary + (result.errors.length ? '\n\n⚠️ Nem sikerült minden elem: ' + result.errors.slice(0, 8).join(' • ') : '\nCsak az emojik változtak; az eredeti nevek mentve vannak az egyparancsos visszaállításhoz.')).slice(0, 1950));
+  } catch (error) {
+    await recordError(error, { command: 'unnepi-megjelenes', guildId: interaction.guildId, userId: interaction.user.id }).catch(() => null);
+    const message = error.status ? error.message : 'Az ünnepi megjelenés módosítása nem sikerült: ' + String(error.message || error);
+    return interaction.editReply('❌ ' + message.slice(0, 1700));
+  } finally {
+    locks.delete(interaction.guildId);
+  }
+}
+
+module.exports = { buildCommand, syncGuildCommand, handleCommand };
 
 }
 };

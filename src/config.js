@@ -531,7 +531,7 @@ function sanitizeConfig(guildId, input = {}) {
     .map((item) => {
       const key = String(item?.key || '').trim().toLowerCase();
       const questions = (Array.isArray(item?.questions) ? item.questions : [])
-        .slice(0, 15)
+        .slice(0, 25)
         .map((question, index) => ({
           id: `question_${index + 1}`,
           label: String(question?.label || '').trim().slice(0, 200),
