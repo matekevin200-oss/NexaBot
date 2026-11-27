@@ -148,7 +148,7 @@ async function syncApplicationPanel(guild, botUser) {
 async function retireBelvApplicationPanels(guild, botUser) {
   let removed = 0;
   for (const channel of [...guild.channels.cache.values()].filter((item) =>
-    item?.isTextBased?.() && !item.isThread?.() && /belv|jelentkez|tgf|application/i.test(item.name)
+    item?.isTextBased?.() && !item.isThread?.()
   )) {
     const messages = await channel.messages.fetch({ limit: 50 }).catch(() => null);
     for (const message of messages?.values?.() || []) {
@@ -156,7 +156,8 @@ async function retireBelvApplicationPanels(guild, botUser) {
       const embed = message.embeds[0];
       const text = `${embed?.title || ''}\n${embed?.description || ''}\n${embed?.footer?.text || ''}`.toLocaleLowerCase('hu-HU');
       const isBelvTgf = text.includes('belvédelmi igazgatóság') && text.includes('tgf') ||
-        String(embed?.footer?.text || '').startsWith('NexaBot • BELV írásbeli');
+        String(embed?.footer?.text || '').startsWith('NexaBot • BELV írásbeli') ||
+        message.components?.some((component) => component.components?.some((button) => button.customId === 'application_open'));
       if (!isBelvTgf) continue;
       try { await message.delete(); removed += 1; }
       catch (error) { console.warn(`Másik szerveren lévő BELV TGF-panel törlése sikertelen (${guild.id}/${channel.id}):`, error.message); }
