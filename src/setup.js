@@ -115,4 +115,20 @@ async function setupServer(guild, botUser) {
   };
 }
 
-module.exports = { setupServer };
+async function syncApplicationPanel(guild, botUser) {
+  const channel = byName(guild.channels.cache, NAMES.applicationChannel);
+  if (!channel?.isTextBased?.()) throw new Error('A BELV TGF csatornája nem található vagy nem írható.');
+  const payload = applicationPanel();
+  const footer = payload.embeds[0]?.toJSON?.().footer?.text || '';
+  const messages = await channel.messages.fetch({ limit: 50 }).catch(() => null);
+  const existing = messages?.find((message) => message.author.id === botUser.id && (
+    message.components?.some((component) => component.components?.some((button) => button.customId === 'application_open')) ||
+    String(message.embeds[0]?.footer?.text || '').startsWith('NexaBot • BELV írásbeli')
+  ));
+  const needsUpdate = Boolean(existing && String(existing.embeds[0]?.footer?.text || '') !== footer);
+  if (needsUpdate) await existing.edit(payload);
+  else if (!existing) await channel.send(payload);
+  return { channelId: channel.id, updated: needsUpdate, created: !existing };
+}
+
+module.exports = { setupServer, syncApplicationPanel };

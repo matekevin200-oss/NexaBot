@@ -17,7 +17,6 @@ const {
   applicationContinue,
   orderModal,
   applicationModal,
-  applicationModalPart2,
   moderationModal,
   moderationActionRows,
   timeoutChoices,
@@ -26,7 +25,8 @@ const {
   unbanPicker,
   staffPanel,
   channelModal,
-  TGF_QUESTIONS
+  TGF_QUESTIONS,
+  TGF_SECTIONS
 } = require('./panels');
 const {
   byName,
@@ -679,14 +679,17 @@ async function handleButton(interaction) {
     return interaction.showModal(applicationModal());
   }
   if (id.startsWith('application_continue:')) {
-    const applicantId = id.split(':')[1];
+    const [, applicantId, pageText] = id.split(':');
+    const page = Number.parseInt(pageText || '1', 10);
     if (applicantId !== interaction.user.id) {
       return ephemeralError(interaction, 'Ezt a TGF-et csak a jelentkező folytathatja.');
     }
-    if (!applicationDrafts.has(applicationDraftKey(interaction))) {
-      return ephemeralError(interaction, 'Az első rész lejárt. Kezdd újra a TGF-et a jelentkezési csatornában.');
+    const draft = applicationDrafts.get(applicationDraftKey(interaction));
+    if (!draft || Date.now() - draft.createdAt > 30 * 60 * 1000 || draft.nextPage !== page || page < 1 || page > 4) {
+      applicationDrafts.delete(applicationDraftKey(interaction));
+      return ephemeralError(interaction, 'A jelentkezési rész lejárt vagy már beküldted. Kezdd újra a TGF-panelről.');
     }
-    return interaction.showModal(applicationModalPart2());
+    return interaction.showModal(applicationModal(page));
   }
 
   if (id === 'staff_channel') {
@@ -930,54 +933,52 @@ async function handleOrderSubmit(interaction) {
   return createTicket(interaction, 'order', details);
 }
 
-async function handleApplicationPart1(interaction) {
+async function handleApplicationPart(interaction, page) {
   if (!isBviGuild(interaction.guildId) || !moduleEnabled(interaction.guildId, 'bvi')) {
     return ephemeralError(interaction, 'Az RP jelentkezési rendszer jelenleg nem használható.');
   }
-  const answers = TGF_QUESTIONS.slice(0, 5).map((_question, index) =>
-    getText(interaction, `app_q${index + 1}`)
-  );
-  applicationDrafts.set(applicationDraftKey(interaction), {
-    answers,
-    createdAt: Date.now()
-  });
-  return interaction.reply({
-    content: '✅ Az első 5 válaszodat elmentettem. Nyomd meg a **Folytatás** gombot a 6–10. kérdéshez.',
-    components: [applicationContinue(interaction.user.id)],
-    flags: EPHEMERAL
-  });
-}
-
-async function handleApplicationPart2(interaction) {
-  await interaction.deferReply({ flags: EPHEMERAL });
-  if (!isBviGuild(interaction.guildId) || !moduleEnabled(interaction.guildId, 'bvi')) {
-    return interaction.editReply('❌ Az RP jelentkezési rendszer jelenleg nem használható.');
+  const key = applicationDraftKey(interaction);
+  let draft = applicationDrafts.get(key);
+  if (page === 0) {
+    draft = { answers: [], createdAt: Date.now(), nextPage: 0 };
+  } else if (!draft || Date.now() - draft.createdAt > 30 * 60 * 1000 || draft.nextPage !== page) {
+    applicationDrafts.delete(key);
+    return ephemeralError(interaction, 'Ez a jelentkezési rész lejárt vagy nem a megfelelő sorrendben érkezett. Kezdd újra a TGF-panelről.');
   }
+  const start = page * 5;
+  const answers = [...draft.answers, ...TGF_QUESTIONS.slice(start, start + 5).map((_question, offset) => getText(interaction, `app_q${start + offset + 1}`))];
+  const nextPage = page + 1;
+  if (nextPage < 5) {
+    applicationDrafts.set(key, { answers, createdAt: draft.createdAt, nextPage });
+    const first = nextPage * 5 + 1;
+    const last = Math.min(first + 4, TGF_QUESTIONS.length);
+    return interaction.reply({
+      content: `✅ **${(page + 1) * 5}/25 válasz** elmentve. A következő rész a **${first}–${last}. kérdéseket** tartalmazza.`,
+      components: [applicationContinue(interaction.user.id, nextPage)],
+      flags: EPHEMERAL
+    });
+  }
+
+  await interaction.deferReply({ flags: EPHEMERAL });
   const reviewChannel = byName(interaction.guild.channels.cache, NAMES.applicationReviewChannel);
   if (!reviewChannel?.isTextBased()) {
     return interaction.editReply('A jelentkezési csatorna még nincs beállítva. Egy admin használja a **/telepites** parancsot.');
   }
-
-  const key = applicationDraftKey(interaction);
-  const draft = applicationDrafts.get(key);
-  if (!draft) {
-    return interaction.editReply('❌ Az első rész nem található. Kezdd újra a TGF-et a jelentkezési csatornában.');
-  }
-  const answers = [
-    ...draft.answers,
-    ...TGF_QUESTIONS.slice(5).map((_question, index) => getText(interaction, `app_q${index + 6}`))
-  ];
-
-  const embed = baseEmbed('🎭 Új RP jelentkezés', `${interaction.user} új RP jelentkezést küldött.`)
+  const summary = baseEmbed('🏛️ BELV • ÍRÁSBELI TGF', `${interaction.user} beküldte a **25 kérdéses** felvételi jelentkezést.`)
     .setThumbnail(interaction.user.displayAvatarURL())
     .addFields(
-      ...TGF_QUESTIONS.map((question, index) => ({
-        name: `${index + 1}. ${question}`,
-        value: answers[index]
-      })),
-      { name: 'Discord-felhasználó', value: `${interaction.user.tag} (${interaction.user.id})` }
+      { name: 'Jelentkező', value: `${interaction.user.tag} (${interaction.user.id})` },
+      { name: 'Írásbeli felépítése', value: '5 szakasz • szakaszonként 5 kérdés', inline: true },
+      { name: 'Adatkezelés', value: 'A jelentkezést csak a vezetőség és a Staff bírálja el.', inline: true }
     );
-  await reviewChannel.send({ embeds: [embed], components: [applicationControls(interaction.user.id)] });
+  const answerEmbeds = Array.from({ length: 5 }, (_unused, section) => baseEmbed(
+    TGF_SECTIONS[section],
+    `Válaszok • ${section * 5 + 1}–${section * 5 + 5}. kérdés`
+  ).addFields(TGF_QUESTIONS.slice(section * 5, section * 5 + 5).map((_question, offset) => ({
+    name: `${String(section * 5 + offset + 1).padStart(2, '0')}. válasz`,
+    value: String(answers[section * 5 + offset] || '—').slice(0, 1000)
+  }))));
+  await reviewChannel.send({ embeds: [summary, ...answerEmbeds], components: [applicationControls(interaction.user.id)] });
   applicationDrafts.delete(key);
   await sendLog(interaction.guild, baseEmbed('📨 RP jelentkezés érkezett', `${interaction.user.tag} jelentkezést küldött.`, COLORS.success));
   return interaction.editReply('✅ Az RP jelentkezésedet elküldtük a vezetőségnek.');
@@ -1138,10 +1139,10 @@ async function handleModal(interaction) {
   if (interaction.customId.startsWith('mod_submit:')) {
     return handleModerationSubmit(interaction);
   }
+  const applicationPart = interaction.customId.match(/^application_submit_part([1-5])$/);
+  if (applicationPart) return handleApplicationPart(interaction, Number(applicationPart[1]) - 1);
   const handlers = {
     order_submit: handleOrderSubmit,
-    application_submit_part1: handleApplicationPart1,
-    application_submit_part2: handleApplicationPart2,
     channel_submit: handleChannelSubmit
   };
   return handlers[interaction.customId]?.(interaction);

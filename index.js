@@ -15407,6 +15407,10 @@ client.once(Events.ClientReady, async (readyClient) => {
     await require('./music').ensureMusicPanel(readyClient).catch((error) => {
       console.error('A zenei panel automatikus közzététele nem sikerült:', error.message);
     });
+    const belvGuild = readyClient.guilds.cache.get(require('./belv-legal').BELV_GUILD_ID);
+    if (belvGuild) await require('./setup').syncApplicationPanel(belvGuild, readyClient.user).then(({ updated, created }) => {
+      console.log(`BELV fő írásbeli TGF-panel: ${updated ? 'frissítve' : created ? 'közzétéve' : 'már naprakész'}.`);
+    }).catch((error) => recordError(error, { command: 'belv_main_written_panel_sync', guildId: belvGuild.id }));
     await require('./belv-legal').migrateWrittenApplication(readyClient).then((migrated) => {
       if (migrated) console.log('A BELV írásbeli jelentkezési űrlap 25 kérdésre frissült, a panel megjelenése szinkronizálva.');
     }).catch((error) => recordError(error, { command: 'belv_written_application_migration', guildId: require('./belv-legal').BELV_GUILD_ID }));
@@ -15572,7 +15576,6 @@ const {
   applicationContinue,
   orderModal,
   applicationModal,
-  applicationModalPart2,
   moderationModal,
   moderationActionRows,
   timeoutChoices,
@@ -15581,7 +15584,8 @@ const {
   unbanPicker,
   staffPanel,
   channelModal,
-  TGF_QUESTIONS
+  TGF_QUESTIONS,
+  TGF_SECTIONS
 } = require('./panels');
 const {
   byName,
@@ -16234,14 +16238,17 @@ async function handleButton(interaction) {
     return interaction.showModal(applicationModal());
   }
   if (id.startsWith('application_continue:')) {
-    const applicantId = id.split(':')[1];
+    const [, applicantId, pageText] = id.split(':');
+    const page = Number.parseInt(pageText || '1', 10);
     if (applicantId !== interaction.user.id) {
       return ephemeralError(interaction, 'Ezt a TGF-et csak a jelentkező folytathatja.');
     }
-    if (!applicationDrafts.has(applicationDraftKey(interaction))) {
-      return ephemeralError(interaction, 'Az első rész lejárt. Kezdd újra a TGF-et a jelentkezési csatornában.');
+    const draft = applicationDrafts.get(applicationDraftKey(interaction));
+    if (!draft || Date.now() - draft.createdAt > 30 * 60 * 1000 || draft.nextPage !== page || page < 1 || page > 4) {
+      applicationDrafts.delete(applicationDraftKey(interaction));
+      return ephemeralError(interaction, 'A jelentkezési rész lejárt vagy már beküldted. Kezdd újra a TGF-panelről.');
     }
-    return interaction.showModal(applicationModalPart2());
+    return interaction.showModal(applicationModal(page));
   }
 
   if (id === 'staff_channel') {
@@ -16485,54 +16492,52 @@ async function handleOrderSubmit(interaction) {
   return createTicket(interaction, 'order', details);
 }
 
-async function handleApplicationPart1(interaction) {
+async function handleApplicationPart(interaction, page) {
   if (!isBviGuild(interaction.guildId) || !moduleEnabled(interaction.guildId, 'bvi')) {
     return ephemeralError(interaction, 'Az RP jelentkezési rendszer jelenleg nem használható.');
   }
-  const answers = TGF_QUESTIONS.slice(0, 5).map((_question, index) =>
-    getText(interaction, `app_q${index + 1}`)
-  );
-  applicationDrafts.set(applicationDraftKey(interaction), {
-    answers,
-    createdAt: Date.now()
-  });
-  return interaction.reply({
-    content: '✅ Az első 5 válaszodat elmentettem. Nyomd meg a **Folytatás** gombot a 6–10. kérdéshez.',
-    components: [applicationContinue(interaction.user.id)],
-    flags: EPHEMERAL
-  });
-}
-
-async function handleApplicationPart2(interaction) {
-  await interaction.deferReply({ flags: EPHEMERAL });
-  if (!isBviGuild(interaction.guildId) || !moduleEnabled(interaction.guildId, 'bvi')) {
-    return interaction.editReply('❌ Az RP jelentkezési rendszer jelenleg nem használható.');
+  const key = applicationDraftKey(interaction);
+  let draft = applicationDrafts.get(key);
+  if (page === 0) {
+    draft = { answers: [], createdAt: Date.now(), nextPage: 0 };
+  } else if (!draft || Date.now() - draft.createdAt > 30 * 60 * 1000 || draft.nextPage !== page) {
+    applicationDrafts.delete(key);
+    return ephemeralError(interaction, 'Ez a jelentkezési rész lejárt vagy nem a megfelelő sorrendben érkezett. Kezdd újra a TGF-panelről.');
   }
+  const start = page * 5;
+  const answers = [...draft.answers, ...TGF_QUESTIONS.slice(start, start + 5).map((_question, offset) => getText(interaction, `app_q${start + offset + 1}`))];
+  const nextPage = page + 1;
+  if (nextPage < 5) {
+    applicationDrafts.set(key, { answers, createdAt: draft.createdAt, nextPage });
+    const first = nextPage * 5 + 1;
+    const last = Math.min(first + 4, TGF_QUESTIONS.length);
+    return interaction.reply({
+      content: `✅ **${(page + 1) * 5}/25 válasz** elmentve. A következő rész a **${first}–${last}. kérdéseket** tartalmazza.`,
+      components: [applicationContinue(interaction.user.id, nextPage)],
+      flags: EPHEMERAL
+    });
+  }
+
+  await interaction.deferReply({ flags: EPHEMERAL });
   const reviewChannel = byName(interaction.guild.channels.cache, NAMES.applicationReviewChannel);
   if (!reviewChannel?.isTextBased()) {
     return interaction.editReply('A jelentkezési csatorna még nincs beállítva. Egy admin használja a **/telepites** parancsot.');
   }
-
-  const key = applicationDraftKey(interaction);
-  const draft = applicationDrafts.get(key);
-  if (!draft) {
-    return interaction.editReply('❌ Az első rész nem található. Kezdd újra a TGF-et a jelentkezési csatornában.');
-  }
-  const answers = [
-    ...draft.answers,
-    ...TGF_QUESTIONS.slice(5).map((_question, index) => getText(interaction, `app_q${index + 6}`))
-  ];
-
-  const embed = baseEmbed('🎭 Új RP jelentkezés', `${interaction.user} új RP jelentkezést küldött.`)
+  const summary = baseEmbed('🏛️ BELV • ÍRÁSBELI TGF', `${interaction.user} beküldte a **25 kérdéses** felvételi jelentkezést.`)
     .setThumbnail(interaction.user.displayAvatarURL())
     .addFields(
-      ...TGF_QUESTIONS.map((question, index) => ({
-        name: `${index + 1}. ${question}`,
-        value: answers[index]
-      })),
-      { name: 'Discord-felhasználó', value: `${interaction.user.tag} (${interaction.user.id})` }
+      { name: 'Jelentkező', value: `${interaction.user.tag} (${interaction.user.id})` },
+      { name: 'Írásbeli felépítése', value: '5 szakasz • szakaszonként 5 kérdés', inline: true },
+      { name: 'Adatkezelés', value: 'A jelentkezést csak a vezetőség és a Staff bírálja el.', inline: true }
     );
-  await reviewChannel.send({ embeds: [embed], components: [applicationControls(interaction.user.id)] });
+  const answerEmbeds = Array.from({ length: 5 }, (_unused, section) => baseEmbed(
+    TGF_SECTIONS[section],
+    `Válaszok • ${section * 5 + 1}–${section * 5 + 5}. kérdés`
+  ).addFields(TGF_QUESTIONS.slice(section * 5, section * 5 + 5).map((_question, offset) => ({
+    name: `${String(section * 5 + offset + 1).padStart(2, '0')}. válasz`,
+    value: String(answers[section * 5 + offset] || '—').slice(0, 1000)
+  }))));
+  await reviewChannel.send({ embeds: [summary, ...answerEmbeds], components: [applicationControls(interaction.user.id)] });
   applicationDrafts.delete(key);
   await sendLog(interaction.guild, baseEmbed('📨 RP jelentkezés érkezett', `${interaction.user.tag} jelentkezést küldött.`, COLORS.success));
   return interaction.editReply('✅ Az RP jelentkezésedet elküldtük a vezetőségnek.');
@@ -16693,10 +16698,10 @@ async function handleModal(interaction) {
   if (interaction.customId.startsWith('mod_submit:')) {
     return handleModerationSubmit(interaction);
   }
+  const applicationPart = interaction.customId.match(/^application_submit_part([1-5])$/);
+  if (applicationPart) return handleApplicationPart(interaction, Number(applicationPart[1]) - 1);
   const handlers = {
     order_submit: handleOrderSubmit,
-    application_submit_part1: handleApplicationPart1,
-    application_submit_part2: handleApplicationPart2,
     channel_submit: handleChannelSubmit
   };
   return handlers[interaction.customId]?.(interaction);
@@ -17052,16 +17057,39 @@ const {
 const { COLORS } = require('./constants');
 
 const TGF_QUESTIONS = Object.freeze([
-  'Miért szeretnél csatlakozni ehhez az RP szervezethez?',
-  'Mit gondolsz, mi az RP szervezet legfontosabb feladata?',
-  'Mit tennél, ha szolgálat közben azt látnád, hogy egy rendvédelmi dolgozó visszaél a jogkörével?',
-  'Mit tennél, ha egy nálad magasabb rangú személy olyan utasítást adna, amely szerinted szabályellenes?',
-  'Mit jelent számodra a szolgálati hierarchia, és miért fontos annak betartása?',
-  'Mit tennél, ha egy másik szervezeti tag bizalmas információt adna ki illetéktelen személynek?',
-  'Hogyan járnál el, ha egy ellenőrzés során szabálytalanságot észlelnél egy másik rendvédelmi szervezetnél?',
-  'Mit jelent a jogkörrel való visszaélés? Írj rá egy példát!',
-  'Miért fontos a bizonyítékok és a szolgálati intézkedések megfelelő dokumentálása?',
-  'Miért gondolod úgy, hogy alkalmas lennél az RP szervezet tagjának?'
+  'A BELV a szerveren belüli rendvédelmi RP része. Foglald össze a feladatkörét, a vezetőségi felügyelet jelentését és azt, milyen valós életbeli adatot vagy ügyet nem kezelhet.',
+  'Egy másik frakció tagjával szemben szabályszegés gyanúja merül fel. Mi a BELV jogköre ebben az esetben, mit dokumentálsz, és milyen döntést nem hozhatsz meg helyette?',
+  'Egy magasabb rangú vezető szóban olyan utasítást ad, amely szerinted szabályellenes. Hogyan tisztázod az utasítást, hogyan őrzöd meg a szolgálati rendet, és kinek jelzed az aggályodat?',
+  'Magyarázd el az ártatlanság vélelmét egy folyamatban lévő fegyelmi ügy példáján. Mit mondanál azoknak, akik a vizsgálat lezárása előtt már büntetést követelnek?',
+  'Egy bejelentéshez képernyőképet csatolnak, de nem látszik rajta a dátum, az eredeti üzenet vagy a teljes beszélgetés. Sorold fel, mit ellenőriznél, mielőtt tényként hivatkoznál rá.',
+  'A §7 a hatáskörrel való visszaélést III–VI. fokozatú következménnyel jelöli. Írj egy konkrét RP-példát, és különítsd el a bizonyított tényt a bejelentő állításától.',
+  'Egy tag bizalmas adatot küld egy nyilvános csatornába. A §11 IV–VI. fokozatot jelöl. Mi az első három intézkedésed az adat további terjedésének megállítására és a szabályos vizsgálat biztosítására?',
+  'A §12 a bizonyíték meghamisítására V–VI., a §13 a hamis jelentésre III–VI. fokozatot jelöl. Mi a különbség a két eset között, és hogyan őriznéd meg az eredeti bizonyítékot?',
+  'Egy intézkedés során indokolatlan erő alkalmazásának gyanúja merül fel (§14: IV–VI.). Milyen adatokat rögzítenél, kit hallgatnál meg, és miért nem dönthetsz büntetésről a vizsgálat előtt?',
+  'Egy beosztott szerint a vezetője korrupciót követett el (§15: V–VI.). Hogyan kezeled az összeférhetetlenséget, a bizalmas adatokat és a vezetői érintettséget?',
+  'A §16 a vezetői visszaélést IV–VI. fokozattal jelöli. Mit teszel, ha maga a vizsgálatot irányító vezető is érintett az ügyben?',
+  'A §18 ismételt súlyos szabályszegésre V–VI. fokozatot jelöl. Milyen dokumentumok alapján lehet megállapítani az ismétlődést, és hogyan akadályozod meg, hogy régi, lezárt ügyet bizonyíték nélkül újra felhasználjanak?',
+  'Sorold fel a fegyelmi eljárás szabályos sorrendjét a bejelentéstől az ügy lezárásáig. Melyik lépés biztosít lehetőséget az érintett meghallgatására és a vezetői döntésre?',
+  'Egy bejelentés részletes és hihető, de még nincs hozzá bizonyíték. Hogyan indítasz előzetes ellenőrzést úgy, hogy közben ne kezeld bizonyítottként az állítást?',
+  'A vizsgálat során két tanú ellentmondó vallomást tesz, a videó pedig csak az esemény végét mutatja. Hogyan rögzíted az eltéréseket, és milyen további ellenőrzést kérsz?',
+  'Az érintett a te közeli barátod, és te kapnád az ügyet. Mit teszel az összeférhetetlenség miatt, és hogyan biztosítható a pártatlan ügyelosztás?',
+  'Nevezd meg az I–VI. fegyelmi fokozatokat sorrendben. Miért nem választható ki a legsúlyosabb fokozat pusztán a bejelentés vagy egy vezető kérése alapján?',
+  'A szabályzat szerint nincs automatikus büntetés, és a vezetőség hagyja jóvá a döntést. Mit teszel, ha egy vezető a vizsgálat befejezése előtt azonnali lefokozást követel?',
+  'A felülvizsgálati kérelmet legfeljebb 72 órán belül lehet benyújtani. Hogyan tájékoztatod erről az érintettet, és milyen iratokat teszel elérhetővé a felülvizsgálathoz?',
+  'Egy másik szervezet tagjának ügyében a BELV csak javaslatot tehet közvetlen szankció helyett. Milyen formában továbbítanád a megállapításokat, és mit hagynál az illetékes vezetőség döntésére?',
+  'A vizsgálat közben egy stafftag azt kéri, hogy töröld a terhelő üzenetet, mert „csak bonyolítja az ügyet”. Hogyan reagálsz, és miként biztosítod a bizonyíték változatlanságát és visszakövethetőségét?',
+  'Lezártak egy ügyet, és a csatorna csak olvasható maradt. Új bizonyíték érkezik. Hogyan kezeled úgy, hogy megőrizd az eredeti ügyiratot, és az új információ megfelelő felülvizsgálatot kapjon?',
+  'Egy jelentésben biztos tényként szerepel valami, amit csak egy tanú állít; egy képernyőképről pedig kiderül, hogy módosították. Mely részeket jelölöd át, mit teszel a bizonyítékkal, és kinek jelented az esetet?',
+  'Összetett eset: a bejelentő a vizsgáló barátja, a vezető érintett, és a bizonyíték hiányos. Írd le az eljárásod a bejelentéstől a felülvizsgálatig.',
+  'A bejelentő a legsúlyosabb szankciót követeli. Milyen tények alapján teszel arányos javaslatot, és ki hagyja jóvá a végleges döntést?'
+]);
+
+const TGF_SECTIONS = Object.freeze([
+  'I. Alapelvek és hatáskör',
+  'II. Bizonyítékok és adatvédelem',
+  'III. Fegyelmi eljárás',
+  'IV. Döntések és felülvizsgálat',
+  'V. Összetett helyzetgyakorlatok'
 ]);
 
 function row(...components) {
@@ -17156,13 +17184,14 @@ function supportTicketPanel(language = 'en') {
 function applicationPanel() {
   const embed = new EmbedBuilder()
     .setColor(COLORS.primary)
-    .setTitle('🎭 RP szervezeti jelentkezés')
-    .setDescription(
-      '**Szeretnél csatlakozni az RP szervezethez?**\n\n' +
-      TGF_QUESTIONS.map((question, index) => `**${index + 1}.** ${question}`).join('\n\n') +
-      '\n\nA TGF két, egyenként 5 kérdéses részből áll. Írj komoly, őszinte és részletes válaszokat — ezeket csak a vezetőség és a staff látja.'
-    )
-    .setFooter({ text: 'NexaBot • RP jelentkezési rendszer' });
+    .setAuthor({ name: 'NEXA • HIVATALOS BELV-FELVÉTELI' })
+    .setTitle('🏛️ Belvédelmi Igazgatóság • ÍRÁSBELI TGF')
+    .setDescription('**25 kérdés · 5 szakasz · saját szavas, indokolt válaszok**\n\nA jelentkezés kizárólag szerveren belüli RP-ismeretet mér. Valós személyes adatot ne írj be. A vezetőség a válaszokat a szabályzat alapján bírálja el.')
+    .addFields(TGF_SECTIONS.map((section, page) => ({
+      name: section,
+      value: TGF_QUESTIONS.slice(page * 5, page * 5 + 5).map((question, offset) => `**${String(page * 5 + offset + 1).padStart(2, '0')}.** ${question}`).join('\n')
+    })))
+    .setFooter({ text: 'NexaBot • BELV írásbeli alkalmassági • 5 × 5 kérdés • Panel v2' });
 
   const buttons = row(
     new ButtonBuilder().setCustomId('application_open').setLabel('RP jelentkezés megkezdése').setEmoji('📝').setStyle(ButtonStyle.Primary)
@@ -17310,11 +17339,13 @@ function applicationControls(userId) {
   );
 }
 
-function applicationContinue(userId) {
+function applicationContinue(userId, page = 1) {
+  const first = page * 5 + 1;
+  const last = Math.min(first + 4, TGF_QUESTIONS.length);
   return row(
     new ButtonBuilder()
-      .setCustomId(`application_continue:${userId}`)
-      .setLabel('Folytatás: 6–10. kérdés')
+      .setCustomId(`application_continue:${userId}:${page}`)
+      .setLabel(`Folytatás: ${first}–${last}. kérdés`)
       .setEmoji('➡️')
       .setStyle(ButtonStyle.Primary)
   );
@@ -17332,30 +17363,18 @@ function orderModal() {
     );
 }
 
-function applicationModal() {
+function applicationModal(page = 0) {
+  const start = page * 5;
   return new ModalBuilder()
-    .setCustomId('application_submit_part1')
-    .setTitle('RP jelentkezés • 1/2')
-    .addComponents(
-      row(input('app_q1', '1. Csatlakozási motivációd', TextInputStyle.Paragraph, 'Miért szeretnél csatlakozni?', true, 350)),
-      row(input('app_q2', '2. Az RP szervezet feladata', TextInputStyle.Paragraph, 'Mi az RP szervezet legfontosabb feladata?', true, 350)),
-      row(input('app_q3', '3. Jogkörrel való visszaélés', TextInputStyle.Paragraph, 'Mit tennél, ha visszaélést látnál?', true, 350)),
-      row(input('app_q4', '4. Szabályellenes utasítás', TextInputStyle.Paragraph, 'Mit tennél szabályellenes utasítás esetén?', true, 350)),
-      row(input('app_q5', '5. Szolgálati hierarchia', TextInputStyle.Paragraph, 'Mit jelent, és miért fontos betartani?', true, 350))
-    );
+    .setCustomId(`application_submit_part${page + 1}`)
+    .setTitle(`BELV írásbeli • ${TGF_SECTIONS[page]?.split('. ')[0] || `V${page + 1}`}/V`)
+    .addComponents(TGF_QUESTIONS.slice(start, start + 5).map((_question, offset) =>
+      row(input(`app_q${start + offset + 1}`, `${String(start + offset + 1).padStart(2, '0')}. válasz`, TextInputStyle.Paragraph, 'A teljes kérdés a jelentkezési kártyán látható.', true, 1000))
+    ));
 }
 
-function applicationModalPart2() {
-  return new ModalBuilder()
-    .setCustomId('application_submit_part2')
-    .setTitle('RP jelentkezés • 2/2')
-    .addComponents(
-      row(input('app_q6', '6. Bizalmas információ kiadása', TextInputStyle.Paragraph, 'Mit tennél információ kiszivárogtatásakor?', true, 350)),
-      row(input('app_q7', '7. Más szervezet szabálytalansága', TextInputStyle.Paragraph, 'Hogyan járnál el az ellenőrzés során?', true, 350)),
-      row(input('app_q8', '8. Jogkörrel való visszaélés példája', TextInputStyle.Paragraph, 'Írd le a jelentését és egy példát!', true, 350)),
-      row(input('app_q9', '9. Dokumentálás fontossága', TextInputStyle.Paragraph, 'Miért fontos mindent megfelelően dokumentálni?', true, 350)),
-      row(input('app_q10', '10. Miért lennél alkalmas?', TextInputStyle.Paragraph, 'Miért lennél alkalmas az RP szervezetbe?', true, 350))
-    );
+function applicationModalPart2(page = 1) {
+  return applicationModal(page);
 }
 
 function moderationModal(action, targetId, extraId = null) {
@@ -17424,7 +17443,8 @@ module.exports = {
   rolePicker,
   unbanPicker,
   channelModal,
-  TGF_QUESTIONS
+  TGF_QUESTIONS,
+  TGF_SECTIONS
 };
 
 },
@@ -19558,7 +19578,23 @@ async function setupServer(guild, botUser) {
   };
 }
 
-module.exports = { setupServer };
+async function syncApplicationPanel(guild, botUser) {
+  const channel = byName(guild.channels.cache, NAMES.applicationChannel);
+  if (!channel?.isTextBased?.()) throw new Error('A BELV TGF csatornája nem található vagy nem írható.');
+  const payload = applicationPanel();
+  const footer = payload.embeds[0]?.toJSON?.().footer?.text || '';
+  const messages = await channel.messages.fetch({ limit: 50 }).catch(() => null);
+  const existing = messages?.find((message) => message.author.id === botUser.id && (
+    message.components?.some((component) => component.components?.some((button) => button.customId === 'application_open')) ||
+    String(message.embeds[0]?.footer?.text || '').startsWith('NexaBot • BELV írásbeli')
+  ));
+  const needsUpdate = Boolean(existing && String(existing.embeds[0]?.footer?.text || '') !== footer);
+  if (needsUpdate) await existing.edit(payload);
+  else if (!existing) await channel.send(payload);
+  return { channelId: channel.id, updated: needsUpdate, created: !existing };
+}
+
+module.exports = { setupServer, syncApplicationPanel };
 
 },
 "src/shifts.js": function(module, exports, require) {

@@ -13,16 +13,39 @@ const {
 const { COLORS } = require('./constants');
 
 const TGF_QUESTIONS = Object.freeze([
-  'Miért szeretnél csatlakozni ehhez az RP szervezethez?',
-  'Mit gondolsz, mi az RP szervezet legfontosabb feladata?',
-  'Mit tennél, ha szolgálat közben azt látnád, hogy egy rendvédelmi dolgozó visszaél a jogkörével?',
-  'Mit tennél, ha egy nálad magasabb rangú személy olyan utasítást adna, amely szerinted szabályellenes?',
-  'Mit jelent számodra a szolgálati hierarchia, és miért fontos annak betartása?',
-  'Mit tennél, ha egy másik szervezeti tag bizalmas információt adna ki illetéktelen személynek?',
-  'Hogyan járnál el, ha egy ellenőrzés során szabálytalanságot észlelnél egy másik rendvédelmi szervezetnél?',
-  'Mit jelent a jogkörrel való visszaélés? Írj rá egy példát!',
-  'Miért fontos a bizonyítékok és a szolgálati intézkedések megfelelő dokumentálása?',
-  'Miért gondolod úgy, hogy alkalmas lennél az RP szervezet tagjának?'
+  'A BELV a szerveren belüli rendvédelmi RP része. Foglald össze a feladatkörét, a vezetőségi felügyelet jelentését és azt, milyen valós életbeli adatot vagy ügyet nem kezelhet.',
+  'Egy másik frakció tagjával szemben szabályszegés gyanúja merül fel. Mi a BELV jogköre ebben az esetben, mit dokumentálsz, és milyen döntést nem hozhatsz meg helyette?',
+  'Egy magasabb rangú vezető szóban olyan utasítást ad, amely szerinted szabályellenes. Hogyan tisztázod az utasítást, hogyan őrzöd meg a szolgálati rendet, és kinek jelzed az aggályodat?',
+  'Magyarázd el az ártatlanság vélelmét egy folyamatban lévő fegyelmi ügy példáján. Mit mondanál azoknak, akik a vizsgálat lezárása előtt már büntetést követelnek?',
+  'Egy bejelentéshez képernyőképet csatolnak, de nem látszik rajta a dátum, az eredeti üzenet vagy a teljes beszélgetés. Sorold fel, mit ellenőriznél, mielőtt tényként hivatkoznál rá.',
+  'A §7 a hatáskörrel való visszaélést III–VI. fokozatú következménnyel jelöli. Írj egy konkrét RP-példát, és különítsd el a bizonyított tényt a bejelentő állításától.',
+  'Egy tag bizalmas adatot küld egy nyilvános csatornába. A §11 IV–VI. fokozatot jelöl. Mi az első három intézkedésed az adat további terjedésének megállítására és a szabályos vizsgálat biztosítására?',
+  'A §12 a bizonyíték meghamisítására V–VI., a §13 a hamis jelentésre III–VI. fokozatot jelöl. Mi a különbség a két eset között, és hogyan őriznéd meg az eredeti bizonyítékot?',
+  'Egy intézkedés során indokolatlan erő alkalmazásának gyanúja merül fel (§14: IV–VI.). Milyen adatokat rögzítenél, kit hallgatnál meg, és miért nem dönthetsz büntetésről a vizsgálat előtt?',
+  'Egy beosztott szerint a vezetője korrupciót követett el (§15: V–VI.). Hogyan kezeled az összeférhetetlenséget, a bizalmas adatokat és a vezetői érintettséget?',
+  'A §16 a vezetői visszaélést IV–VI. fokozattal jelöli. Mit teszel, ha maga a vizsgálatot irányító vezető is érintett az ügyben?',
+  'A §18 ismételt súlyos szabályszegésre V–VI. fokozatot jelöl. Milyen dokumentumok alapján lehet megállapítani az ismétlődést, és hogyan akadályozod meg, hogy régi, lezárt ügyet bizonyíték nélkül újra felhasználjanak?',
+  'Sorold fel a fegyelmi eljárás szabályos sorrendjét a bejelentéstől az ügy lezárásáig. Melyik lépés biztosít lehetőséget az érintett meghallgatására és a vezetői döntésre?',
+  'Egy bejelentés részletes és hihető, de még nincs hozzá bizonyíték. Hogyan indítasz előzetes ellenőrzést úgy, hogy közben ne kezeld bizonyítottként az állítást?',
+  'A vizsgálat során két tanú ellentmondó vallomást tesz, a videó pedig csak az esemény végét mutatja. Hogyan rögzíted az eltéréseket, és milyen további ellenőrzést kérsz?',
+  'Az érintett a te közeli barátod, és te kapnád az ügyet. Mit teszel az összeférhetetlenség miatt, és hogyan biztosítható a pártatlan ügyelosztás?',
+  'Nevezd meg az I–VI. fegyelmi fokozatokat sorrendben. Miért nem választható ki a legsúlyosabb fokozat pusztán a bejelentés vagy egy vezető kérése alapján?',
+  'A szabályzat szerint nincs automatikus büntetés, és a vezetőség hagyja jóvá a döntést. Mit teszel, ha egy vezető a vizsgálat befejezése előtt azonnali lefokozást követel?',
+  'A felülvizsgálati kérelmet legfeljebb 72 órán belül lehet benyújtani. Hogyan tájékoztatod erről az érintettet, és milyen iratokat teszel elérhetővé a felülvizsgálathoz?',
+  'Egy másik szervezet tagjának ügyében a BELV csak javaslatot tehet közvetlen szankció helyett. Milyen formában továbbítanád a megállapításokat, és mit hagynál az illetékes vezetőség döntésére?',
+  'A vizsgálat közben egy stafftag azt kéri, hogy töröld a terhelő üzenetet, mert „csak bonyolítja az ügyet”. Hogyan reagálsz, és miként biztosítod a bizonyíték változatlanságát és visszakövethetőségét?',
+  'Lezártak egy ügyet, és a csatorna csak olvasható maradt. Új bizonyíték érkezik. Hogyan kezeled úgy, hogy megőrizd az eredeti ügyiratot, és az új információ megfelelő felülvizsgálatot kapjon?',
+  'Egy jelentésben biztos tényként szerepel valami, amit csak egy tanú állít; egy képernyőképről pedig kiderül, hogy módosították. Mely részeket jelölöd át, mit teszel a bizonyítékkal, és kinek jelented az esetet?',
+  'Összetett eset: a bejelentő a vizsgáló barátja, a vezető érintett, és a bizonyíték hiányos. Írd le az eljárásod a bejelentéstől a felülvizsgálatig.',
+  'A bejelentő a legsúlyosabb szankciót követeli. Milyen tények alapján teszel arányos javaslatot, és ki hagyja jóvá a végleges döntést?'
+]);
+
+const TGF_SECTIONS = Object.freeze([
+  'I. Alapelvek és hatáskör',
+  'II. Bizonyítékok és adatvédelem',
+  'III. Fegyelmi eljárás',
+  'IV. Döntések és felülvizsgálat',
+  'V. Összetett helyzetgyakorlatok'
 ]);
 
 function row(...components) {
@@ -117,13 +140,14 @@ function supportTicketPanel(language = 'en') {
 function applicationPanel() {
   const embed = new EmbedBuilder()
     .setColor(COLORS.primary)
-    .setTitle('🎭 RP szervezeti jelentkezés')
-    .setDescription(
-      '**Szeretnél csatlakozni az RP szervezethez?**\n\n' +
-      TGF_QUESTIONS.map((question, index) => `**${index + 1}.** ${question}`).join('\n\n') +
-      '\n\nA TGF két, egyenként 5 kérdéses részből áll. Írj komoly, őszinte és részletes válaszokat — ezeket csak a vezetőség és a staff látja.'
-    )
-    .setFooter({ text: 'NexaBot • RP jelentkezési rendszer' });
+    .setAuthor({ name: 'NEXA • HIVATALOS BELV-FELVÉTELI' })
+    .setTitle('🏛️ Belvédelmi Igazgatóság • ÍRÁSBELI TGF')
+    .setDescription('**25 kérdés · 5 szakasz · saját szavas, indokolt válaszok**\n\nA jelentkezés kizárólag szerveren belüli RP-ismeretet mér. Valós személyes adatot ne írj be. A vezetőség a válaszokat a szabályzat alapján bírálja el.')
+    .addFields(TGF_SECTIONS.map((section, page) => ({
+      name: section,
+      value: TGF_QUESTIONS.slice(page * 5, page * 5 + 5).map((question, offset) => `**${String(page * 5 + offset + 1).padStart(2, '0')}.** ${question}`).join('\n')
+    })))
+    .setFooter({ text: 'NexaBot • BELV írásbeli alkalmassági • 5 × 5 kérdés • Panel v2' });
 
   const buttons = row(
     new ButtonBuilder().setCustomId('application_open').setLabel('RP jelentkezés megkezdése').setEmoji('📝').setStyle(ButtonStyle.Primary)
@@ -271,11 +295,13 @@ function applicationControls(userId) {
   );
 }
 
-function applicationContinue(userId) {
+function applicationContinue(userId, page = 1) {
+  const first = page * 5 + 1;
+  const last = Math.min(first + 4, TGF_QUESTIONS.length);
   return row(
     new ButtonBuilder()
-      .setCustomId(`application_continue:${userId}`)
-      .setLabel('Folytatás: 6–10. kérdés')
+      .setCustomId(`application_continue:${userId}:${page}`)
+      .setLabel(`Folytatás: ${first}–${last}. kérdés`)
       .setEmoji('➡️')
       .setStyle(ButtonStyle.Primary)
   );
@@ -293,30 +319,18 @@ function orderModal() {
     );
 }
 
-function applicationModal() {
+function applicationModal(page = 0) {
+  const start = page * 5;
   return new ModalBuilder()
-    .setCustomId('application_submit_part1')
-    .setTitle('RP jelentkezés • 1/2')
-    .addComponents(
-      row(input('app_q1', '1. Csatlakozási motivációd', TextInputStyle.Paragraph, 'Miért szeretnél csatlakozni?', true, 350)),
-      row(input('app_q2', '2. Az RP szervezet feladata', TextInputStyle.Paragraph, 'Mi az RP szervezet legfontosabb feladata?', true, 350)),
-      row(input('app_q3', '3. Jogkörrel való visszaélés', TextInputStyle.Paragraph, 'Mit tennél, ha visszaélést látnál?', true, 350)),
-      row(input('app_q4', '4. Szabályellenes utasítás', TextInputStyle.Paragraph, 'Mit tennél szabályellenes utasítás esetén?', true, 350)),
-      row(input('app_q5', '5. Szolgálati hierarchia', TextInputStyle.Paragraph, 'Mit jelent, és miért fontos betartani?', true, 350))
-    );
+    .setCustomId(`application_submit_part${page + 1}`)
+    .setTitle(`BELV írásbeli • ${TGF_SECTIONS[page]?.split('. ')[0] || `V${page + 1}`}/V`)
+    .addComponents(TGF_QUESTIONS.slice(start, start + 5).map((_question, offset) =>
+      row(input(`app_q${start + offset + 1}`, `${String(start + offset + 1).padStart(2, '0')}. válasz`, TextInputStyle.Paragraph, 'A teljes kérdés a jelentkezési kártyán látható.', true, 1000))
+    ));
 }
 
-function applicationModalPart2() {
-  return new ModalBuilder()
-    .setCustomId('application_submit_part2')
-    .setTitle('RP jelentkezés • 2/2')
-    .addComponents(
-      row(input('app_q6', '6. Bizalmas információ kiadása', TextInputStyle.Paragraph, 'Mit tennél információ kiszivárogtatásakor?', true, 350)),
-      row(input('app_q7', '7. Más szervezet szabálytalansága', TextInputStyle.Paragraph, 'Hogyan járnál el az ellenőrzés során?', true, 350)),
-      row(input('app_q8', '8. Jogkörrel való visszaélés példája', TextInputStyle.Paragraph, 'Írd le a jelentését és egy példát!', true, 350)),
-      row(input('app_q9', '9. Dokumentálás fontossága', TextInputStyle.Paragraph, 'Miért fontos mindent megfelelően dokumentálni?', true, 350)),
-      row(input('app_q10', '10. Miért lennél alkalmas?', TextInputStyle.Paragraph, 'Miért lennél alkalmas az RP szervezetbe?', true, 350))
-    );
+function applicationModalPart2(page = 1) {
+  return applicationModal(page);
 }
 
 function moderationModal(action, targetId, extraId = null) {
@@ -385,5 +399,6 @@ module.exports = {
   rolePicker,
   unbanPicker,
   channelModal,
-  TGF_QUESTIONS
+  TGF_QUESTIONS,
+  TGF_SECTIONS
 };
