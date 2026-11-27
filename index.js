@@ -4097,6 +4097,7 @@ const EPHEMERAL = MessageFlags.Ephemeral;
 const QUESTIONS_PER_PAGE = 5;
 const BELV_LEGAL_GUILD_ID = '1517509643734221030';
 const BELV_LEGAL_TEMPLATE_KEY = 'tgf_belv_jogi';
+const APPLICATION_PANEL_LAYOUT_VERSION = 'UI-2';
 
 function templatesForGuild(guildId) {
   return getGuildConfig(guildId).applications?.templates || [];
@@ -4145,7 +4146,7 @@ function applicationPanel(template) {
       { name: 'Folyamat', value: `${Math.ceil(template.questions.length / QUESTIONS_PER_PAGE)} lépés`, inline: true },
       { name: 'Adatvédelem', value: template.blindReview ? 'Vak bírálat aktív' : 'Normál bírálat', inline: true }
     )
-    .setFooter({ text: `NexaBot • TGF Forge • ${template.key} • ${version}` });
+    .setFooter({ text: `NexaBot • TGF Forge • ${template.key} • ${APPLICATION_PANEL_LAYOUT_VERSION} • ${version}` });
   const button = new ButtonBuilder()
     .setCustomId(`tgf_start:${template.key}`)
     .setLabel('Jelentkezés indítása')
@@ -4160,9 +4161,29 @@ async function installApplicationPanel(guild, template, botUser) {
   const marker = `NexaBot • TGF Forge • ${template.key}`;
   const messages = await channel.messages.fetch({ limit: 50 }).catch(() => null);
   const existing = messages?.find((message) => message.author.id === botUser.id && message.embeds[0]?.footer?.text?.startsWith(marker));
-  if (existing) await existing.edit(applicationPanel(template));
-  else await channel.send(applicationPanel(template));
+  const payload = applicationPanel(template);
+  const nextFooter = payload.embeds[0]?.footer?.text;
+  if (existing && existing.embeds[0]?.footer?.text !== nextFooter) await existing.edit(payload);
+  else if (!existing) await channel.send(payload);
   return channel;
+}
+
+async function syncApplicationPanels(client) {
+  let checked = 0;
+  let failed = 0;
+  for (const guild of client?.guilds?.cache?.values?.() || []) {
+    for (const template of templatesForGuild(guild.id)) {
+      if (!template.openChannelId) continue;
+      try {
+        await installApplicationPanel(guild, template, client.user);
+        checked += 1;
+      } catch (error) {
+        failed += 1;
+        console.warn(`TGF-panel frissítése sikertelen (${guild.id}/${template.key}):`, error.message);
+      }
+    }
+  }
+  return { checked, failed };
 }
 
 function applicationModal(template, page) {
@@ -4552,6 +4573,7 @@ module.exports = {
   questionPrompt,
   beginRow,
   installApplicationPanel,
+  syncApplicationPanels,
   handleApplicationButton,
   handleApplicationModal,
   applicationStats
@@ -15388,6 +15410,9 @@ client.once(Events.ClientReady, async (readyClient) => {
     await require('./belv-legal').migrateWrittenApplication(readyClient).then((migrated) => {
       if (migrated) console.log('A BELV írásbeli jelentkezési űrlap 25 kérdésre frissült, a panel megjelenése szinkronizálva.');
     }).catch((error) => recordError(error, { command: 'belv_written_application_migration', guildId: require('./belv-legal').BELV_GUILD_ID }));
+    await require('./applications').syncApplicationPanels(readyClient).then(({ checked, failed }) => {
+      console.log(`TGF-panelek megjelenésének szinkronja: ${checked} ellenőrizve, ${failed} hibás.`);
+    }).catch((error) => recordError(error, { command: 'application_panel_sync' }));
     await restoreGiveaways(readyClient);
     console.log('A NEXA Bot 25.0.3 MDT Network • öt frakció és közös RP-nyilvántartás használatra kész.');
   } catch (error) {
