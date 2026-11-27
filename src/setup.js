@@ -1,5 +1,5 @@
 const { ChannelType, PermissionFlagsBits } = require('discord.js');
-const { NAMES, COLORS } = require('./constants');
+const { NAMES, COLORS, BELV_GUILD_ID } = require('./constants');
 const { getOwnerSettings } = require('./config');
 const { byName } = require('./utils');
 const { ticketPanel, applicationPanel, staffPanel } = require('./panels');
@@ -92,14 +92,12 @@ async function setupServer(guild, botUser) {
   await ensureTextChannel(guild, NAMES.warningsChannel, staffCategory);
   await ensureTextChannel(guild, NAMES.applicationReviewChannel, staffCategory);
 
-  await Promise.all([
-    clearOldPanels(service, botUser.id),
-    clearOldPanels(application, botUser.id),
-    clearOldPanels(staffPanelChannel, botUser.id)
-  ]);
+  const panelCleanup = [clearOldPanels(service, botUser.id), clearOldPanels(staffPanelChannel, botUser.id)];
+  if (guild.id === BELV_GUILD_ID) panelCleanup.push(clearOldPanels(application, botUser.id));
+  await Promise.all(panelCleanup);
 
   await service.send(ticketPanel());
-  await application.send(applicationPanel());
+  if (guild.id === BELV_GUILD_ID) await application.send(applicationPanel());
   await staffPanelChannel.send(staffPanel());
 
   return {
@@ -117,6 +115,7 @@ async function setupServer(guild, botUser) {
 }
 
 async function syncApplicationPanel(guild, botUser) {
+  if (guild.id !== BELV_GUILD_ID) throw new Error('A BELV jelentkezési panel kizárólag a kijelölt BELV-szerveren telepíthető.');
   const preferred = byName(guild.channels.cache, NAMES.applicationChannel);
   const candidates = [...guild.channels.cache.values()].filter((channel) =>
     channel?.isTextBased?.() && !channel.isThread?.() &&
@@ -146,20 +145,45 @@ async function syncApplicationPanel(guild, botUser) {
   return { channelId: channel.id, updated: needsUpdate, created: !existing };
 }
 
+async function retireBelvApplicationPanels(guild, botUser) {
+  let removed = 0;
+  for (const channel of [...guild.channels.cache.values()].filter((item) =>
+    item?.isTextBased?.() && !item.isThread?.() && /belv|jelentkez|tgf|application/i.test(item.name)
+  )) {
+    const messages = await channel.messages.fetch({ limit: 50 }).catch(() => null);
+    for (const message of messages?.values?.() || []) {
+      if (message.author.id !== botUser.id) continue;
+      const embed = message.embeds[0];
+      const text = `${embed?.title || ''}\n${embed?.description || ''}\n${embed?.footer?.text || ''}`.toLocaleLowerCase('hu-HU');
+      const isBelvTgf = text.includes('belvédelmi igazgatóság') && text.includes('tgf') ||
+        String(embed?.footer?.text || '').startsWith('NexaBot • BELV írásbeli');
+      if (!isBelvTgf) continue;
+      try { await message.delete(); removed += 1; }
+      catch (error) { console.warn(`Másik szerveren lévő BELV TGF-panel törlése sikertelen (${guild.id}/${channel.id}):`, error.message); }
+    }
+  }
+  return removed;
+}
+
 async function syncRpApplicationPanels(client) {
-  const summary = { updated: 0, created: 0, unchanged: 0, missing: 0, failed: 0 };
+  const summary = { updated: 0, created: 0, unchanged: 0, removedElsewhere: 0, missing: 0, failed: 0 };
   for (const guildId of getOwnerSettings().rpGuilds) {
     const guild = client?.guilds?.cache?.get(guildId);
     if (!guild) { summary.missing += 1; continue; }
-    try {
-      const result = await syncApplicationPanel(guild, client.user);
-      if (result.updated) summary.updated += 1;
-      else if (result.created) summary.created += 1;
-      else summary.unchanged += 1;
-    } catch (error) {
-      summary.failed += 1;
-      console.warn(`BELV TGF-panel frissítése sikertelen (${guildId}):`, error.message);
+    if (guildId === BELV_GUILD_ID) {
+      try {
+        const result = await syncApplicationPanel(guild, client.user);
+        if (result.updated) summary.updated += 1;
+        else if (result.created) summary.created += 1;
+        else summary.unchanged += 1;
+      } catch (error) {
+        summary.failed += 1;
+        console.warn(`BELV TGF-panel frissítése sikertelen (${guildId}):`, error.message);
+      }
+      continue;
     }
+    try { summary.removedElsewhere += await retireBelvApplicationPanels(guild, client.user); }
+    catch (error) { summary.failed += 1; console.warn(`BELV TGF-panel eltávolítása sikertelen (${guildId}):`, error.message); }
   }
   return summary;
 }

@@ -26,5 +26,6 @@ const COLORS = Object.freeze({
 });
 
 const SUPPORT_GUILD_ID = '1556219615858655254';
+const BELV_GUILD_ID = '1517509643734221030';
 
-module.exports = { NAMES, COLORS, SUPPORT_GUILD_ID };
+module.exports = { NAMES, COLORS, SUPPORT_GUILD_ID, BELV_GUILD_ID };

@@ -6,7 +6,7 @@ const {
   MessageFlags,
   PermissionFlagsBits
 } = require('discord.js');
-const { NAMES, COLORS, SUPPORT_GUILD_ID } = require('./constants');
+const { NAMES, COLORS, SUPPORT_GUILD_ID, BELV_GUILD_ID } = require('./constants');
 const {
   ticketControls,
   ticketManagement,
@@ -15,6 +15,7 @@ const {
   deleteTicketButton,
   applicationControls,
   applicationContinue,
+  applicationQuestionPreview,
   orderModal,
   applicationModal,
   moderationModal,
@@ -673,15 +674,37 @@ async function handleButton(interaction) {
   if (id === 'support_ticket_open') return createSupportTicket(interaction, 'support');
   if (id === 'ticket_order') return interaction.showModal(orderModal());
   if (id === 'application_open') {
-    if (!isBviGuild(interaction.guildId) || !moduleEnabled(interaction.guildId, 'bvi')) {
-      return ephemeralError(interaction, 'Az RP jelentkezési rendszer jelenleg nem használható.');
+    if (interaction.guildId !== BELV_GUILD_ID || !moduleEnabled(interaction.guildId, 'bvi')) {
+      return ephemeralError(interaction, 'A BELV írásbeli jelentkezés kizárólag a BELV-szerveren érhető el.');
     }
-    return interaction.showModal(applicationModal());
+    return interaction.reply({
+      embeds: [applicationQuestionPreview(0)],
+      components: [applicationContinue(interaction.user.id, 0)],
+      flags: EPHEMERAL
+    });
+  }
+  if (id.startsWith('application_begin:')) {
+    const [, applicantId, pageText] = id.split(':');
+    const page = Number.parseInt(pageText, 10);
+    if (interaction.guildId !== BELV_GUILD_ID || !moduleEnabled(interaction.guildId, 'bvi')) {
+      return ephemeralError(interaction, 'A BELV írásbeli jelentkezés kizárólag a BELV-szerveren érhető el.');
+    }
+    if (applicantId !== interaction.user.id || !Number.isInteger(page) || page < 0 || page > 4) {
+      return ephemeralError(interaction, 'Ez a jelentkezési gomb nem neked szól vagy lejárt.');
+    }
+    if (page > 0) {
+      const draft = applicationDrafts.get(applicationDraftKey(interaction));
+      if (!draft || Date.now() - draft.createdAt > 30 * 60 * 1000 || draft.nextPage !== page) {
+        applicationDrafts.delete(applicationDraftKey(interaction));
+        return ephemeralError(interaction, 'Ez a jelentkezési rész lejárt. Kezdd újra a BELV TGF-panelről.');
+      }
+    }
+    return interaction.showModal(applicationModal(page));
   }
   if (id.startsWith('application_continue:')) {
     const [, applicantId, pageText] = id.split(':');
     const page = Number.parseInt(pageText || '1', 10);
-    if (applicantId !== interaction.user.id) {
+    if (interaction.guildId !== BELV_GUILD_ID || !moduleEnabled(interaction.guildId, 'bvi') || applicantId !== interaction.user.id) {
       return ephemeralError(interaction, 'Ezt a TGF-et csak a jelentkező folytathatja.');
     }
     const draft = applicationDrafts.get(applicationDraftKey(interaction));
@@ -689,7 +712,11 @@ async function handleButton(interaction) {
       applicationDrafts.delete(applicationDraftKey(interaction));
       return ephemeralError(interaction, 'A jelentkezési rész lejárt vagy már beküldted. Kezdd újra a TGF-panelről.');
     }
-    return interaction.showModal(applicationModal(page));
+    return interaction.reply({
+      embeds: [applicationQuestionPreview(page)],
+      components: [applicationContinue(interaction.user.id, page)],
+      flags: EPHEMERAL
+    });
   }
 
   if (id === 'staff_channel') {
@@ -834,6 +861,9 @@ async function handleButton(interaction) {
   }
 
   if (id.startsWith('application_accept:') || id.startsWith('application_reject:')) {
+    if (interaction.guildId !== BELV_GUILD_ID || !moduleEnabled(interaction.guildId, 'bvi')) {
+      return ephemeralError(interaction, 'A BELV jelentkezések elbírálása kizárólag a BELV-szerveren lehetséges.');
+    }
     if (!isStaff(interaction.member)) return ephemeralError(interaction, 'Csak staff tag bírálhatja el a jelentkezést.');
     const [action, userId] = id.split(':');
     const accepted = action === 'application_accept';
@@ -934,8 +964,8 @@ async function handleOrderSubmit(interaction) {
 }
 
 async function handleApplicationPart(interaction, page) {
-  if (!isBviGuild(interaction.guildId) || !moduleEnabled(interaction.guildId, 'bvi')) {
-    return ephemeralError(interaction, 'Az RP jelentkezési rendszer jelenleg nem használható.');
+  if (interaction.guildId !== BELV_GUILD_ID || !moduleEnabled(interaction.guildId, 'bvi')) {
+    return ephemeralError(interaction, 'A BELV írásbeli jelentkezés kizárólag a BELV-szerveren érhető el.');
   }
   const key = applicationDraftKey(interaction);
   let draft = applicationDrafts.get(key);
@@ -953,7 +983,8 @@ async function handleApplicationPart(interaction, page) {
     const first = nextPage * 5 + 1;
     const last = Math.min(first + 4, TGF_QUESTIONS.length);
     return interaction.reply({
-      content: `✅ **${(page + 1) * 5}/25 válasz** elmentve. A következő rész a **${first}–${last}. kérdéseket** tartalmazza.`,
+      content: `✅ **${(page + 1) * 5}/25 válasz** elmentve. Következik a **${first}–${last}. kérdés**.`,
+      embeds: [applicationQuestionPreview(nextPage)],
       components: [applicationContinue(interaction.user.id, nextPage)],
       flags: EPHEMERAL
     });

@@ -197,7 +197,7 @@ client.once(Events.ClientReady, async (readyClient) => {
       console.error('A zenei panel automatikus közzététele nem sikerült:', error.message);
     });
     await require('./setup').syncRpApplicationPanels(readyClient).then((result) => {
-      console.log(`BELV TGF-panelek: ${result.updated} frissítve, ${result.created} közzétéve, ${result.unchanged} naprakész, ${result.missing} szerver nem érhető el, ${result.failed} hiba.`);
+      console.log(`BELV TGF csak a BELV-szerveren: ${result.updated} panel frissítve, ${result.created} közzétéve, ${result.removedElsewhere} más szerverről eltávolítva, ${result.missing} szerver nem érhető el, ${result.failed} hiba.`);
     }).catch((error) => recordError(error, { command: 'belv_main_written_panel_sync' }));
     await require('./belv-legal').migrateWrittenApplication(readyClient).then((migrated) => {
       if (migrated) console.log('A BELV írásbeli jelentkezési űrlap 25 kérdésre frissült, a panel megjelenése szinkronizálva.');

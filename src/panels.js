@@ -47,6 +47,13 @@ const TGF_SECTIONS = Object.freeze([
   'IV. Döntések és felülvizsgálat',
   'V. Összetett helyzetgyakorlatok'
 ]);
+const TGF_SECTION_SUMMARIES = Object.freeze([
+  'Feladatkör, parancsnoki rend, jogkör és alapelvek.',
+  'Forrásellenőrzés, bizonyítékmegőrzés és bizalmas adatok.',
+  'Bejelentés, előzetes ellenőrzés, meghallgatás és vizsgálat.',
+  'Fokozatok, vezetői jóváhagyás, más frakciók és jogorvoslat.',
+  'Összeférhetetlenség és több szabályt érintő esettanulmányok.'
+]);
 
 function row(...components) {
   return new ActionRowBuilder().addComponents(...components);
@@ -142,15 +149,12 @@ function applicationPanel() {
     .setColor(COLORS.primary)
     .setAuthor({ name: 'NEXA • HIVATALOS BELV-FELVÉTELI' })
     .setTitle('🏛️ Belvédelmi Igazgatóság • ÍRÁSBELI TGF')
-    .setDescription('**25 kérdés · 5 szakasz · saját szavas, indokolt válaszok**\n\nA jelentkezés kizárólag szerveren belüli RP-ismeretet mér. Valós személyes adatot ne írj be. A vezetőség a válaszokat a szabályzat alapján bírálja el.')
-    .addFields(TGF_SECTIONS.map((section, page) => ({
-      name: section,
-      value: TGF_QUESTIONS.slice(page * 5, page * 5 + 5).map((question, offset) => `**${String(page * 5 + offset + 1).padStart(2, '0')}.** ${question}`).join('\n')
-    })))
-    .setFooter({ text: 'NexaBot • BELV írásbeli alkalmassági • 5 × 5 kérdés • Panel v2' });
+    .setDescription('**25 kérdés • 5 rövid rész • saját szavas válaszok**\n\nMinden rész külön nyílik meg, a haladásod látható, a kész válaszaid megmaradnak. Csak a BELV vezetősége bírálja el a jelentkezést. Valós személyes adatot ne adj meg.')
+    .addFields(TGF_SECTIONS.map((section, page) => ({ name: section, value: TGF_SECTION_SUMMARIES[page] })))
+    .setFooter({ text: 'BELV szerver • írásbeli alkalmassági • 5 × 5 kérdés • Panel v3' });
 
   const buttons = row(
-    new ButtonBuilder().setCustomId('application_open').setLabel('RP jelentkezés megkezdése').setEmoji('📝').setStyle(ButtonStyle.Primary)
+    new ButtonBuilder().setCustomId('application_open').setLabel('BELV jelentkezés indítása').setEmoji('📝').setStyle(ButtonStyle.Primary)
   );
   return { embeds: [embed], components: [buttons] };
 }
@@ -296,15 +300,28 @@ function applicationControls(userId) {
 }
 
 function applicationContinue(userId, page = 1) {
-  const first = page * 5 + 1;
-  const last = Math.min(first + 4, TGF_QUESTIONS.length);
   return row(
     new ButtonBuilder()
-      .setCustomId(`application_continue:${userId}:${page}`)
-      .setLabel(`Folytatás: ${first}–${last}. kérdés`)
+      .setCustomId(`application_begin:${userId}:${page}`)
+      .setLabel(`${page === 0 ? 'Kezdés' : `Tovább • ${page + 1}/5. rész`}`)
       .setEmoji('➡️')
       .setStyle(ButtonStyle.Primary)
   );
+}
+
+function applicationQuestionPreview(page = 0) {
+  const start = page * 5;
+  const embed = new EmbedBuilder()
+    .setColor(COLORS.primary)
+    .setAuthor({ name: 'NEXA • BELV ÍRÁSBELI TGF' })
+    .setTitle(`${TGF_SECTIONS[page] || 'Jelentkezési rész'} • ${page + 1}/5`)
+    .setDescription(`**HALADÁS**  ${'▰'.repeat(page)}${'▱'.repeat(5 - page)}  **${page}/5 kész**\n\nOlvasd át ezt az öt kérdést, majd nyomd meg a gombot a válaszok kitöltéséhez.`)
+    .addFields(TGF_QUESTIONS.slice(start, start + 5).map((question, offset) => ({
+      name: `${String(start + offset + 1).padStart(2, '0')}. kérdés`,
+      value: question
+    })))
+    .setFooter({ text: 'A kész részek válaszai megmaradnak • csak a BELV vezetősége látja' });
+  return embed;
 }
 
 function orderModal() {
@@ -325,7 +342,7 @@ function applicationModal(page = 0) {
     .setCustomId(`application_submit_part${page + 1}`)
     .setTitle(`BELV írásbeli • ${TGF_SECTIONS[page]?.split('. ')[0] || `V${page + 1}`}/V`)
     .addComponents(TGF_QUESTIONS.slice(start, start + 5).map((_question, offset) =>
-      row(input(`app_q${start + offset + 1}`, `${String(start + offset + 1).padStart(2, '0')}. válasz`, TextInputStyle.Paragraph, 'A teljes kérdés a jelentkezési kártyán látható.', true, 1000))
+      row(input(`app_q${start + offset + 1}`, `${String(start + offset + 1).padStart(2, '0')}. válasz`, TextInputStyle.Paragraph, String(_question).slice(0, 100), true, 1000))
     ));
 }
 
@@ -389,6 +406,7 @@ module.exports = {
   deleteTicketButton,
   applicationControls,
   applicationContinue,
+  applicationQuestionPreview,
   orderModal,
   applicationModal,
   applicationModalPart2,
@@ -400,5 +418,6 @@ module.exports = {
   unbanPicker,
   channelModal,
   TGF_QUESTIONS,
-  TGF_SECTIONS
+  TGF_SECTIONS,
+  TGF_SECTION_SUMMARIES
 };
