@@ -15385,6 +15385,9 @@ client.once(Events.ClientReady, async (readyClient) => {
     await require('./music').ensureMusicPanel(readyClient).catch((error) => {
       console.error('A zenei panel automatikus közzététele nem sikerült:', error.message);
     });
+    await require('./belv-legal').migrateWrittenApplication(readyClient).then((migrated) => {
+      if (migrated) console.log('A BELV írásbeli jelentkezési űrlap 25 kérdésre frissült, a panel megjelenése szinkronizálva.');
+    }).catch((error) => recordError(error, { command: 'belv_written_application_migration', guildId: require('./belv-legal').BELV_GUILD_ID }));
     await restoreGiveaways(readyClient);
     console.log('A NEXA Bot 25.0.3 MDT Network • öt frakció és közös RP-nyilvántartás használatra kész.');
   } catch (error) {
@@ -26016,7 +26019,7 @@ module.exports = {
 'use strict';
 const {ActionRowBuilder,ButtonBuilder,ButtonStyle,ChannelType,EmbedBuilder,MessageFlags,ModalBuilder,PermissionFlagsBits,SlashCommandBuilder,TextInputBuilder,TextInputStyle,UserSelectMenuBuilder}=require('discord.js');
 const {dbQuery,getGuildConfig,isPersistentStore,setGuildConfig}=require('./config');
-const {applicationPanel,findApplicationTemplate}=require('./applications');
+const {applicationPanel,findApplicationTemplate,installApplicationPanel}=require('./applications');
 const {classifyBelvRole,configuredRankRoleMap}=require('./belv-roster-rules');
 const {recordAudit,recordError}=require('./telemetry');
 const BELV_GUILD_ID='1517509643734221030',LAWYER_ROLE='Ügyvédek',LEGAL_APPLICATION_TEMPLATE_KEY='tgf_belv_jogi';
@@ -26089,6 +26092,18 @@ async function ensureLegalApplicationTemplate(guild,channelIds,roleIds){
  const saved=findApplicationTemplate(guild.id,LEGAL_APPLICATION_TEMPLATE_KEY);
  if(!saved?.active||!saved.openChannelId||!saved.reviewChannelId||!saved.resultChannelId)throw new Error('A jogi jelentkezési űrlap beállítása nem mentődött el.');
  return saved;
+}
+async function migrateWrittenApplication(client){
+ const guild=client?.guilds?.cache?.get(BELV_GUILD_ID);if(!guild)return false;
+ const current=getGuildConfig(guild.id),existing=(current.applications?.templates||[]).find(item=>item.key===LEGAL_APPLICATION_TEMPLATE_KEY);
+ if(!existing||existing.questions?.length!==10||!String(existing.questions[0]?.label||'').startsWith('1. 👤 Bemutatkozás —'))return false;
+ const roleIds=Object.fromEntries(ROLES.map(item=>[item.name,guild.roles.cache.find(r=>r.name===item.name)?.id||null]));
+ const updated=await ensureLegalApplicationTemplate(guild,{application:existing.openChannelId,leadership:existing.reviewChannelId},roleIds);
+ const migrated={...existing,description:updated.description,questions:updated.questions};
+ const latest=getGuildConfig(guild.id),templates=(latest.applications?.templates||[]).map(item=>item.key===LEGAL_APPLICATION_TEMPLATE_KEY?migrated:item);
+ await setGuildConfig(guild.id,{...latest,applications:{...latest.applications,templates}});
+ await installApplicationPanel(guild,migrated,client.user);
+ return true;
 }
 function commands(){
  const setup=new SlashCommandBuilder().setName('belv-jogi-setup').setDescription('Létrehozza a BELV Jogi és Ügyvédi Osztály hiányzó elemeit.').setDMPermission(false).setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
@@ -26516,7 +26531,7 @@ async function syncAttorneyAggregate(member){
  try{if(shouldHave)await member.roles.add(groupRole,'BELV jogi ügyvédcsoport automatikus hozzárendelése');else await member.roles.remove(groupRole,'BELV jogi ügyvédcsoport szinkronizálása');}
  catch(error){await recordError(error,{command:'belv_legal_attorney_role_sync',guildId:member.guild.id,userId:member.id}).catch(()=>null);}
 }
-module.exports={buildCommands:commands,syncGuildCommands,handleInteraction,BELV_GUILD_ID,CLASS_ROLES:ROLES,CATEGORIES:CATS,isLegalMember,syncAttorneyAggregate};
+module.exports={buildCommands:commands,syncGuildCommands,handleInteraction,BELV_GUILD_ID,CLASS_ROLES:ROLES,CATEGORIES:CATS,isLegalMember,syncAttorneyAggregate,migrateWrittenApplication};
 
 },
 "src/holiday-theme.js": function(module, exports, require) {

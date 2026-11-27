@@ -196,6 +196,9 @@ client.once(Events.ClientReady, async (readyClient) => {
     await require('./music').ensureMusicPanel(readyClient).catch((error) => {
       console.error('A zenei panel automatikus közzététele nem sikerült:', error.message);
     });
+    await require('./belv-legal').migrateWrittenApplication(readyClient).then((migrated) => {
+      if (migrated) console.log('A BELV írásbeli jelentkezési űrlap 25 kérdésre frissült, a panel megjelenése szinkronizálva.');
+    }).catch((error) => recordError(error, { command: 'belv_written_application_migration', guildId: require('./belv-legal').BELV_GUILD_ID }));
     await restoreGiveaways(readyClient);
     console.log('A NEXA Bot 25.0.3 MDT Network • öt frakció és közös RP-nyilvántartás használatra kész.');
   } catch (error) {
