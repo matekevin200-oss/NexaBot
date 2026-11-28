@@ -942,6 +942,13 @@ async function syncMdtGuildCommand(guild) {
     catch (error) { await require('./telemetry').recordError(error, { module: 'belv_legal_command_sync', guildId: guild.id }).catch(() => null); }
   }
   if (guild.id === BELV_GUILD_ID) {
+    try {
+      const payload = require('./belv-kio').buildCommand().toJSON(), current = await guild.commands.fetch();
+      const existing = [...current.values()].find((command) => command.name === payload.name);
+      if (existing) await existing.edit(payload); else await guild.commands.create(payload);
+    } catch (error) { await require('./telemetry').recordError(error, { module: 'belv_kio_command_sync', guildId: guild.id }).catch(() => null); }
+  }
+  if (guild.id === BELV_GUILD_ID) {
     try { await require('./holiday-theme').syncGuildCommand(guild); }
     catch (error) { await require('./telemetry').recordError(error, { module: 'belv_holiday_command_sync', guildId: guild.id }).catch(() => null); }
   }
@@ -958,10 +965,12 @@ async function syncMdtGuildCommand(guild) {
   const commands = await guild.commands.fetch(), existing = [...commands.values()].find((command) => command.name === 'mdt');
   const rosterCommand = [...commands.values()].find((command) => command.name === 'allomany');
   const disciplineCommand = [...commands.values()].find((command) => command.name === 'belv-rendszer');
+  const kioCommand = [...commands.values()].find((command) => command.name === 'belv-kio');
   if (!findFaction(guild.id)) {
     if (existing) await existing.delete();
     if (rosterCommand) await rosterCommand.delete();
     if (disciplineCommand) await disciplineCommand.delete();
+    if (kioCommand) await kioCommand.delete();
     return;
   }
   const settings = await getSettings(guild.id);
@@ -979,6 +988,12 @@ async function syncMdtGuildCommand(guild) {
     if (disciplineCommand) await disciplineCommand.edit(payload); else await guild.commands.create(payload);
   } else if (disciplineCommand) {
     await disciplineCommand.delete();
+  }
+  if (guild.id === BELV_GUILD_ID) {
+    const payload = require('./belv-kio').buildCommand().toJSON();
+    if (kioCommand) await kioCommand.edit(payload); else await guild.commands.create(payload);
+  } else if (kioCommand) {
+    await kioCommand.delete();
   }
 }
 async function syncMdtGuildCommands(client) {

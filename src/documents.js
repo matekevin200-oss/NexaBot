@@ -522,6 +522,7 @@ function isBelvDecisionMaker(member) {
 
 function canUseDocument(member, type) {
   if (!member) return false;
+  if (String(type?.key || '').startsWith('custom_belv_kio_')) return require('./belv-kio').canSubmit(member, type.key);
   if (String(type?.key || '').startsWith('custom_bomo_')) {
     return member.guild?.id === require('./bomo').BELV_GUILD_ID && require('./bomo').canSubmit(member, type.key);
   }
@@ -643,6 +644,7 @@ function belvApprovalRoleExists(guild) {
 }
 
 function canApprove(member, type = null) {
+  if (String(type?.key || '').startsWith('custom_belv_kio_')) return require('./belv-kio').canApprove(member, type.key);
   if (String(type?.key || '').startsWith('custom_bomo_')) {
     return member?.guild?.id === require('./bomo').BELV_GUILD_ID && require('./bomo').canApprove(member, type.key);
   }

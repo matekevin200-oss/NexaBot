@@ -7,7 +7,7 @@
   },
   "scripts": {
     "start": "node ./scripts/build-bundle.cjs && node -r ./live-status.js index.js",
-    "test": "node test/run-checks.js"
+    "test": "node scripts/build-bundle.cjs && node test/run-checks.js"
   },
   "dependencies": {
     "@discordjs/voice": "0.19.2",

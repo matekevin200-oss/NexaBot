@@ -45,7 +45,14 @@ assert.equal(roster.adjustedActiveSeconds('2026-01-01T00:00:00Z', '2026-01-01T00
 assert.throws(() => roster.adjustedActiveSeconds('bad', '2026-01-01T00:00:00Z', 0, 1));
 
 const belv = read('src/belv-mdt.js');
-assert.ok(!belv.includes('KIO'), 'KIO must not remain in BELV roster handling');
+assert.ok(!belv.includes('KIO'), 'KIO remains separate from BELV rank roster handling');
+const kio = read('src/belv-kio.js');
+assert.ok(order.includes('src/belv-kio.js'), 'BELV KIO module is included in the runtime bundle');
+assert.ok(kio.includes("const BELV_GUILD_ID = '1517509643734221030'"), 'KIO stays inside the BELV guild');
+assert.ok(kio.includes("'Közúti Igazgató'") && kio.includes("'Közúti Munkatárs Próbaidőn'"), 'KIO rank ladder is restored');
+assert.ok(kio.includes('Meglévő csatornák jogosultságait nem módosítottam.'), 'KIO setup leaves reused channel permissions unchanged');
+assert.ok(kio.includes('custom_belv_kio_jelentes') && kio.includes('custom_belv_kio_jegyzokonyv') && kio.includes('custom_belv_kio_fegyelmi'), 'KIO report, minutes and discipline forms are available');
+assert.ok(kio.includes("setName('belv-kio')"), 'KIO has a dedicated BELV setup command');
 assert.ok(belv.includes('guild.members.fetch()'), 'roster reads current guild membership');
 assert.ok(belv.includes('let belvRosterBadgeSchemaPromise = null;'), 'BELV roster badge schema initialization is declared');
 assert.ok(belv.includes("client.on('guildMemberAdd'"), 'new members trigger roster reconciliation');

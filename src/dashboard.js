@@ -2785,7 +2785,7 @@ async function syncGuildCommandLanguage(guild, language = 'auto') {
     commands.push(buildMdtCommand());
     const belvMdt = require('./belv-mdt');
     if (guild.id === belvMdt.BELV_GUILD_ID) {
-      commands.push(belvMdt.buildBelvRosterCommand(), require('./belv-discipline').buildCommand());
+      commands.push(belvMdt.buildBelvRosterCommand(), require('./belv-discipline').buildCommand(), require('./belv-kio').buildCommand());
     }
   } catch (error) { if (error.status !== 403) throw error; }
   if (guild.id === SUPPORT_GUILD_ID) commands.push(buildSupportSetupCommand());

@@ -102,6 +102,7 @@ src/staff-workflow.js
 src/next-marketplace.js
 src/next-ticket.js
 src/belv-discipline.js
+src/belv-kio.js
 src/bomo.js
 src/belv-legal.js
 src/holiday-theme.js
