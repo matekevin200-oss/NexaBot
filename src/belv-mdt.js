@@ -6,7 +6,7 @@ const { allDocumentTypes, documentRule, findDocumentChannel } = require('./docum
 const { recordAudit, recordError } = require('./telemetry');
 
 const { bounded } = require('./workflow-options');
-const { classifyBelvRole, rankForMember, configuredRankRoleMap, badgeCode, isConfiguredRoleHolder, stripManagedNickname } = require('./belv-roster-rules');
+const { classifyBelvRole, rankForMember, configuredRankRoleMap, badgeCode, badgeRange, isConfiguredRoleHolder, stripManagedNickname } = require('./belv-roster-rules');
 const { getGuildConfig } = require('./config');
 const PREFIX = '/api/mdt/v1';
 const BELV_GUILD_ID = '1517509643734221030';
@@ -16,12 +16,12 @@ const BELV_ROSTER = Object.freeze([
   { id: '1256537413229084735', rank: 'Főigazgató-Helyettes', nickRank: 'Fő Igazgató-H.', badge: 'BELV-02', group: 'Felsővezetés' },
   { id: '1366460534966452345', rank: 'Igazgató', nickRank: 'Igazgató', badge: 'BELV-03', group: 'Felsővezetés' },
   { id: '1177622372589772871', rank: 'Igazgatóhelyettes', nickRank: 'Igazgató-H.', badge: 'BELV-04', group: 'Felsővezetés' },
-  { id: '1411032720770863225', rank: 'Főosztályvezető', nickRank: 'Főoszt. vez.', badge: 'BVI-10', group: 'Vezetői állomány' },
-  { id: '1074961156256567386', rank: 'Főosztályvezető', nickRank: 'Főoszt. vez.', badge: 'BVI-11', group: 'Vezetői állomány' },
-  { id: '1278116261468835964', rank: 'Műveleti Vezető', nickRank: 'Műveleti vez.', badge: 'BVI-15', group: 'Vezetői állomány' },
-  { id: '1479930076459176039', rank: 'Műveleti Vezető', nickRank: 'Műveleti vez.', badge: 'BVI-16', group: 'Vezetői állomány' },
-  { id: '1334868399268040706', rank: 'Műveleti Vezető', nickRank: 'Műveleti vez.', badge: 'BVI-17', group: 'Vezetői állomány' },
-  { id: '1027203605213749359', rank: 'Ellenőrzési Vezető', nickRank: 'Ellenőrzési V.', badge: 'BVI-20', group: 'Vezetői állomány' },
+  { id: '1411032720770863225', rank: 'Főosztályvezető', nickRank: 'Főoszt. vez.', badge: 'BELV-10', group: 'Vezetői állomány' },
+  { id: '1074961156256567386', rank: 'Főosztályvezető', nickRank: 'Főoszt. vez.', badge: 'BELV-11', group: 'Vezetői állomány' },
+  { id: '1278116261468835964', rank: 'Műveleti Vezető', nickRank: 'Műveleti vez.', badge: 'BELV-15', group: 'Vezetői állomány' },
+  { id: '1479930076459176039', rank: 'Műveleti Vezető', nickRank: 'Műveleti vez.', badge: 'BELV-16', group: 'Vezetői állomány' },
+  { id: '1334868399268040706', rank: 'Műveleti Vezető', nickRank: 'Műveleti vez.', badge: 'BELV-17', group: 'Vezetői állomány' },
+  { id: '1027203605213749359', rank: 'Ellenőrzési Vezető', nickRank: 'Ellenőrzési V.', badge: 'BELV-20', group: 'Vezetői állomány' },
   { id: '415704440385830922', rank: 'Vezető Tiszt', nickRank: 'Vezető Tiszt', badge: 'BVI-35', group: 'Hivatásos állomány' },
   { id: '1012658793072570529', rank: 'Vezető Tiszt', nickRank: 'Vezető Tiszt', badge: 'BVI-36', group: 'Hivatásos állomány' },
   { id: '1182693366497021995', rank: 'Belvédelmi Tiszt', nickRank: 'Belv. Tiszt', badge: 'BVI-40', group: 'Hivatásos állomány' },
@@ -798,20 +798,21 @@ async function syncBelvRosterUnlocked(guild, actorId, botUserId) {
   const activeEntries = [], writes = [];
   for (const { member, rank } of ranked) {
     const previous = previousByUser.get(String(member.id));
+    const allowedRange = badgeRange(rank);
     let badgeNumber = null;
-    if (previous && Number(previous.badge) >= rank.min && Number(previous.badge) <= rank.max && occupied.get(Number(previous.badge)) === String(member.id)) badgeNumber = Number(previous.badge);
+    if (previous && Number(previous.badge) >= allowedRange.min && Number(previous.badge) <= allowedRange.max && occupied.get(Number(previous.badge)) === String(member.id)) badgeNumber = Number(previous.badge);
     else {
       if (previous && occupied.get(Number(previous.badge)) === String(member.id)) occupied.delete(Number(previous.badge));
       const exactBadgeNumber = rank.exactBadge ? Number(String(rank.badge || '').match(/(\d+)$/)?.[1]) : null;
-      if (Number.isInteger(exactBadgeNumber) && !occupied.has(exactBadgeNumber) && exactBadgeNumber >= rank.min && exactBadgeNumber <= rank.max) badgeNumber = exactBadgeNumber;
-      if (badgeNumber == null) for (let candidate = rank.min; candidate <= rank.max; candidate += 1) if (!occupied.has(candidate)) { badgeNumber = candidate; break; }
+      if (Number.isInteger(exactBadgeNumber) && !occupied.has(exactBadgeNumber) && exactBadgeNumber >= allowedRange.min && exactBadgeNumber <= allowedRange.max) badgeNumber = exactBadgeNumber;
+      if (badgeNumber == null) for (let candidate = allowedRange.min; candidate <= allowedRange.max; candidate += 1) if (!occupied.has(candidate)) { badgeNumber = candidate; break; }
     }
-    if (badgeNumber == null) { failed.push({ id: member.id, reason: 'a jelenlegi rendfokozati tartományban nincs szabad jelvényszám' }); continue; }
+    if (badgeNumber == null) { failed.push({ id: member.id, reason: rank.group === 'Felsővezetés' || rank.group === 'Vezetői állomány' ? 'a BELV-01–BELV-24 vezetőségi tartományban nincs szabad jelvényszám' : 'a jelenlegi rendfokozati tartományban nincs szabad jelvényszám' }); continue; }
     occupied.set(badgeNumber, String(member.id));
     const badge = badgeCode(rank, badgeNumber);
     const entry = { id: member.id, rank: rank.rank, nickRank: rank.nickRank, badge, group: rank.group };
     activeEntries.push(entry);
-    writes.push([guild.id, member.id, badgeNumber, rank.rank, rank.nickRank, rank.group, rank.min, rank.max, rank.roleId]);
+    writes.push([guild.id, member.id, badgeNumber, rank.rank, rank.nickRank, rank.group, allowedRange.min, allowedRange.max, rank.roleId]);
     if (member.id === guild.ownerId) { skipped.push(member.id); continue; }
     if (!bot.permissions.has(PermissionFlagsBits.ManageNicknames)) { failed.push({ id: member.id, reason: 'a botnak nincs Becenevek kezelése jogosultsága; az állománylista ettől még frissült' }); continue; }
     if (member.id === guild.ownerId || bot.roles.highest.comparePositionTo(member.roles.highest) <= 0) { failed.push({ id: member.id, reason: 'a bot szerepköre nem jogosult a becenév módosítására' }); continue; }
@@ -935,7 +936,7 @@ async function handleBelvRosterCommand(interaction) {
     const result = await syncBelvRoster(interaction.guild, member.id, interaction.client.user.id);
     const errors = result.failed.length ? `\n**Nem módosult:** ${result.failed.map((entry) => `<@${entry.id}> — ${entry.reason}`).join('\n').slice(0, 900)}` : '';
     const missing = result.missing.length ? `\n**Nem található a szerveren:** ${result.missing.map((id) => `<@${id}>`).join(', ')}` : '';
-    return interaction.editReply(`✅ **Belv állomány frissítve**\nCsatorna: ${result.channel}\nNyilvántartás: ${result.rosterMessage.url}\nAktív tag a listában: **${result.total}** · rang nélkül kikerült: **${result.inactive.length}**\nBecenév módosítva: **${result.updated.length}** · már megfelelő: **${result.unchanged.length}** · további kihagyva: **${result.skipped.length - result.inactive.length}**${result.oldMessageRemoved ? '\nA régi kézi nyilvántartás lecserélve.' : ''}${missing}${errors}\n\nA bot BELV-rangváltozáskor és újraindulás után szinkronizál; más szerepek változása nem indít állományfrissítést.`);
+    return interaction.editReply(`✅ **Belv állomány frissítve**\nCsatorna: ${result.channel}\nNyilvántartás: ${result.rosterMessage.url}\nAktív tag a listában: **${result.total}** · rang nélkül kikerült: **${result.inactive.length}**\nBecenév módosítva: **${result.updated.length}** · már megfelelő: **${result.unchanged.length}** · kihagyva: **${result.skipped.length}**${result.oldMessageRemoved ? '\nA régi kézi nyilvántartás lecserélve.' : ''}${missing}${errors}\n\nA vezetőségi tagok BELV-01–BELV-24 tartományból kapnak szabad jelvényszámot. A bot BELV-rangváltozáskor és újraindulás után szinkronizál; más szerepek változása nem indít állományfrissítést.`);
   } catch (error) {
     if (!error.status) await recordError(error, { command: 'belv_roster_sync', guildId: interaction.guildId, userId: interaction.user.id }).catch(() => {});
     return interaction.editReply(`❌ ${error.status ? error.message : 'Az állományi frissítés nem sikerült. Ellenőrizd a bot naplóját.'}`);

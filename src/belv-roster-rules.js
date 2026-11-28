@@ -18,8 +18,14 @@ const RANKS = Object.freeze([
 function badgeCode(rank, number) {
   const value = Number(number);
   if (!rank || !Number.isInteger(value) || value < 1 || value > 99) return null;
-  const prefix = Number(rank.max) <= 9 ? 'BELV' : 'BVI';
+  const prefix = ['Felsővezetés', 'Vezetői állomány'].includes(rank.group) ? 'BELV' : 'BVI';
   return prefix + '-' + String(value).padStart(2, '0');
+}
+function badgeRange(rank) {
+  if (!rank) return null;
+  return ['Felsővezetés', 'Vezetői állomány'].includes(rank.group)
+    ? { min: 1, max: 24 }
+    : { min: Number(rank.min), max: Number(rank.max) };
 }
 function normalize(value) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -79,4 +85,4 @@ function adjustedActiveSeconds(startedAt, endedAt, breakSeconds, adjustmentMinut
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || !Number.isSafeInteger(minutes) || Math.abs(minutes) > 525600 || !Number.isFinite(pause) || pause < 0) throw new Error('Érvénytelen szolgálati időkorrekció.');
   return Math.max(0, Math.floor((end + minutes * 60000 - start) / 1000) - pause);
 }
-module.exports = { RANKS, normalize, configuredRankRoleMap, badgeCode, classifyBelvRole, rankForMember, isConfiguredRoleHolder, stripManagedNickname, cleanBotMention, adjustedActiveSeconds };
+module.exports = { RANKS, normalize, configuredRankRoleMap, badgeCode, badgeRange, classifyBelvRole, rankForMember, isConfiguredRoleHolder, stripManagedNickname, cleanBotMention, adjustedActiveSeconds };
