@@ -44,6 +44,14 @@ assert.equal(roster.adjustedActiveSeconds('2026-01-01T00:00:00Z', '2026-01-01T01
 assert.equal(roster.adjustedActiveSeconds('2026-01-01T00:00:00Z', '2026-01-01T00:02:00Z', 0, -10), 0);
 assert.throws(() => roster.adjustedActiveSeconds('bad', '2026-01-01T00:00:00Z', 0, 1));
 
+const { AuditLogEvent, PermissionFlagsBits } = require('discord.js');
+const security = require('../src/security.js');
+const manageRoleExecutor = { user: { bot: false }, permissions: { has: (permission) => permission === PermissionFlagsBits.ManageRoles } };
+assert.equal(security.isAuthorizedMemberRoleChange({ action: AuditLogEvent.MemberRoleUpdate }, manageRoleExecutor), true, 'a human with Manage Roles can make ordinary member role changes without anti-nuke lockdown');
+assert.equal(security.isAuthorizedMemberRoleChange({ action: AuditLogEvent.RoleDelete }, manageRoleExecutor), false, 'Manage Roles does not exempt role deletion from anti-nuke');
+assert.equal(security.isAuthorizedMemberRoleChange({ action: AuditLogEvent.MemberRoleUpdate }, { ...manageRoleExecutor, user: { bot: true } }), false, 'bots are not exempt from member role update checks');
+assert.equal(security.isAuthorizedMemberRoleChange({ action: AuditLogEvent.MemberRoleUpdate }, { user: { bot: false }, permissions: { has: () => false } }), false, 'members without Manage Roles remain subject to the guard');
+
 const belv = read('src/belv-mdt.js');
 assert.ok(!belv.includes('KIO'), 'KIO remains separate from BELV rank roster handling');
 const kio = read('src/belv-kio.js');

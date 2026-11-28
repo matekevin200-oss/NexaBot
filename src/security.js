@@ -856,6 +856,12 @@ function auditGuardEnabled(action, protection) {
   return false;
 }
 
+function isAuthorizedMemberRoleChange(entry, executor) {
+  return entry?.action === AuditLogEvent.MemberRoleUpdate &&
+    executor?.user?.bot !== true &&
+    Boolean(executor?.permissions?.has?.(PermissionFlagsBits.ManageRoles));
+}
+
 function alreadyProcessedAuditEntry(entry) {
   if (!entry?.id) return false;
   const now = Date.now();
@@ -989,6 +995,15 @@ async function handleAuditLogEntry(entry, guild) {
   const executor = await guild.members.fetch(executorId).catch(() => null);
   if (isSupportModerationPaused(guild.id)) return;
   if (executor && isSecurityTrusted(executor)) return;
+  if (isAuthorizedMemberRoleChange(entry, executor)) {
+    await recordAudit('security_authorized_member_role_update', {
+      actorId: executorId,
+      guildId: guild.id,
+      targetId: entry.targetId,
+      metadata: { permission: 'ManageRoles', action: 'member_role_update' }
+    });
+    return;
+  }
   const now = Date.now();
   const key = `${guild.id}:${executorId}`;
   const records = (nukeWindows.get(key) || []).filter((item) => now - item.at < 12_000);
@@ -1230,6 +1245,7 @@ module.exports = {
   detectMessageBomb,
   assessRaid,
   auditGuardEnabled,
+  isAuthorizedMemberRoleChange,
   isLeadership,
   isSecurityTrusted,
   isLinkExempt,
