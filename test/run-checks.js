@@ -53,6 +53,7 @@ assert.equal(security.isAuthorizedMemberRoleChange({ action: AuditLogEvent.Membe
 assert.equal(security.isAuthorizedMemberRoleChange({ action: AuditLogEvent.MemberRoleUpdate }, { user: { bot: false }, permissions: { has: () => false } }), false, 'members without Manage Roles remain subject to the guard');
 
 const belv = read('src/belv-mdt.js');
+const belvMdt = require('../src/belv-mdt.js');
 assert.ok(!belv.includes('KIO'), 'KIO remains separate from BELV rank roster handling');
 const kio = read('src/belv-kio.js');
 assert.ok(order.includes('src/belv-kio.js'), 'BELV KIO module is included in the runtime bundle');
@@ -65,6 +66,15 @@ assert.ok(belv.includes('guild.members.fetch()'), 'roster reads current guild me
 assert.ok(belv.includes('let belvRosterBadgeSchemaPromise = null;'), 'BELV roster badge schema initialization is declared');
 assert.ok(belv.includes("client.on('guildMemberAdd'"), 'new members trigger roster reconciliation');
 assert.ok(belv.includes("client.on('guildMemberRemove'"), 'departed members trigger roster reconciliation');
+assert.ok(!belv.includes('periodic-reconcile') && !belv.includes('setInterval(() => schedule('), 'BELV roster does not run periodic nickname reconciliations');
+assert.ok(belv.includes("client.on('guildMemberUpdate'") && belv.includes('belvRankSignature(oldMember) !== belvRankSignature(newMember)'), 'only BELV rank changes trigger member-update reconciliation');
+const belvRank = { id: '123456789012345678', name: 'BV-03', position: 10 };
+const otherRole = { id: '123456789012345679', name: 'Közösségi tag', position: 20 };
+const rankMember = (roles) => ({ roles: { cache: new Map(roles.map((role) => [role.id, role])) } });
+assert.equal(belvMdt.belvRankSignature(rankMember([belvRank])), belvMdt.belvRankSignature(rankMember([belvRank, otherRole])), 'non-BELV role changes do not count as a rank change');
+assert.notEqual(belvMdt.belvRankSignature(rankMember([belvRank])), belvMdt.belvRankSignature(rankMember([{ ...belvRank, name: 'BV-04' }])), 'changing the BELV rank changes the monitored rank signature');
+assert.equal(belvMdt.belvRankRoleChanged(belvRank, { ...belvRank }), false, 'unchanged BELV rank roles do not trigger reconciliation');
+assert.equal(belvMdt.belvRankRoleChanged(belvRank, { ...belvRank, position: 11 }), true, 'BELV rank role order changes trigger reconciliation');
 assert.ok(!belv.includes('if (!bot.permissions.has(PermissionFlagsBits.ManageNicknames)) fail'), 'nickname permission must not block roster publishing');
 const docs = read('src/documents.js');
 assert.ok(docs.includes('if (!member) return false;') && docs.includes('function isBelvDecisionMaker(member)'), 'BELV decision forms enforce server-side role checks');
