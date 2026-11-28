@@ -107,6 +107,8 @@ assert.ok(eventsSource.includes('actorId: null') && eventsSource.includes('actor
 
 const ticketRecovery = read('src/ticket-recovery.js');
 assert.ok(ticketRecovery.includes('filter(c=>c&&(c.name===NAMES.ticketCategory'), 'ticket category recovery tolerates missing cache entries');
+assert.ok(ticketRecovery.includes('filter(c=>c?.parentId===channel.id)') && ticketRecovery.includes('filter(c=>c?.parentId===parent.id)'), 'ticket category recovery tolerates null channel entries');
+assert.ok(ticketRecovery.includes('filter(c=>c&&(!c.parentId||c.parentId===channel.id)'), 'ticket orphan recovery skips null channel entries');
 
 const shifts = read('src/shifts.js');
 assert.ok(shifts.includes(".setName('reset')") && shifts.includes("setName('megerosites')"), 'shift reset is available through the shared server command');
