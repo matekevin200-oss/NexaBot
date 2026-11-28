@@ -15,6 +15,12 @@ const RANKS = Object.freeze([
   { rank:'Belvédelmi ügynök', nickRank:'Belv. Ügynök', group:'Hivatásos állomány', min:70, max:89, key:'belvedelmi-ugynok' },
   { rank:'Belvédelmi jelölt', nickRank:'Belv. Jelölt', group:'Képzési állomány', min:90, max:99, key:'belvedelmi-jelolt' }
 ]);
+function badgeCode(rank, number) {
+  const value = Number(number);
+  if (!rank || !Number.isInteger(value) || value < 1 || value > 99) return null;
+  const prefix = Number(rank.max) <= 9 ? 'BELV' : 'BVI';
+  return prefix + '-' + String(value).padStart(2, '0');
+}
 function normalize(value) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
@@ -28,7 +34,7 @@ function configuredRankRoleMap(raw) {
 function rankForCode(code, roleId = null, roleName = '') {
   const value = Number(code);
   const definition = RANKS.find((item) => value >= item.min && value <= item.max);
-  return definition ? { ...definition, badge: 'BVI-' + String(value).padStart(2,'0'), roleId, roleName, exactBadge: true } : null;
+  return definition ? { ...definition, badge: badgeCode(definition, value), roleId, roleName, exactBadge: true } : null;
 }
 function classifyBelvRole(role, roleIdMap = {}) {
   if (!role) return null;
@@ -40,7 +46,8 @@ function classifyBelvRole(role, roleIdMap = {}) {
     if (min < 1 || max > 99 || max < min) return null;
     const definition = RANKS.find((item) => min >= item.min && min <= item.max);
     if (!definition) return null;
-    return { ...definition, min, max, badge: max === min ? 'BVI-' + String(min).padStart(2,'0') : null, exactBadge: max === min, roleId: role.id, roleName: role.name || raw, position: Number(role.position || 0) };
+    const resolved = { ...definition, min, max };
+    return { ...resolved, badge: max === min ? badgeCode(resolved, min) : null, exactBadge: max === min, roleId: role.id, roleName: role.name || raw, position: Number(role.position || 0) };
   }
   const definition = [...RANKS].sort((a,b)=>b.key.length-a.key.length).find((item) =>
     name === item.key || name.startsWith(item.key + '-') || name.includes('-' + item.key + '-') || name.includes(item.key + '-bv')
@@ -72,4 +79,4 @@ function adjustedActiveSeconds(startedAt, endedAt, breakSeconds, adjustmentMinut
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || !Number.isSafeInteger(minutes) || Math.abs(minutes) > 525600 || !Number.isFinite(pause) || pause < 0) throw new Error('Érvénytelen szolgálati időkorrekció.');
   return Math.max(0, Math.floor((end + minutes * 60000 - start) / 1000) - pause);
 }
-module.exports = { RANKS, normalize, configuredRankRoleMap, classifyBelvRole, rankForMember, isConfiguredRoleHolder, stripManagedNickname, cleanBotMention, adjustedActiveSeconds };
+module.exports = { RANKS, normalize, configuredRankRoleMap, badgeCode, classifyBelvRole, rankForMember, isConfiguredRoleHolder, stripManagedNickname, cleanBotMention, adjustedActiveSeconds };

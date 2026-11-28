@@ -31,7 +31,10 @@ const mapped = roster.configuredRankRoleMap('{"123456789012345678":"Főigazgató
 assert.equal(mapped['123456789012345678'], 'Főigazgató');
 assert.deepEqual(roster.configuredRankRoleMap('{bad json'), {});
 const member = { roles: { cache: new Map([['123456789012345678', { id: '123456789012345678', name: 'BV-01', position: 1 }]]) } };
-assert.equal(roster.rankForMember(member).badge, 'BVI-01');
+assert.equal(roster.rankForMember(member).badge, 'BELV-01', 'leadership ranks use the four-letter BELV prefix with two digits');
+assert.equal(roster.classifyBelvRole({ id: '123456789012345681', name: 'BV-10', position: 3 }).badge, 'BVI-10', 'non-leadership ranks keep the BVI prefix');
+assert.equal(roster.badgeCode({ max: 9 }, 9), 'BELV-09');
+assert.equal(roster.badgeCode({ max: 14 }, 10), 'BVI-10');
 assert.equal(roster.isConfiguredRoleHolder(member, '123456789012345678'), true);
 assert.equal(roster.isConfiguredRoleHolder(member, '123456789012345679'), false);
 assert.equal(roster.isConfiguredRoleHolder(member, ''), false);
@@ -64,6 +67,8 @@ assert.ok(kio.includes('custom_belv_kio_jelentes') && kio.includes('custom_belv_
 assert.ok(kio.includes("setName('belv-kio')"), 'KIO has a dedicated BELV setup command');
 assert.ok(belv.includes('guild.members.fetch()'), 'roster reads current guild membership');
 assert.ok(belv.includes('let belvRosterBadgeSchemaPromise = null;'), 'BELV roster badge schema initialization is declared');
+assert.ok(belv.includes("badge: 'BELV-01'") && belv.includes("badge: 'BELV-04'"), 'static leadership roster uses the BELV badge prefix');
+assert.ok(belv.includes("['BELV-', 'BVI-', 'BV-']"), 'old nickname badge prefixes are removed during the first re-sync');
 assert.ok(belv.includes("client.on('guildMemberAdd'"), 'new members trigger roster reconciliation');
 assert.ok(belv.includes("client.on('guildMemberRemove'"), 'departed members trigger roster reconciliation');
 assert.ok(!belv.includes('periodic-reconcile') && !belv.includes('setInterval(() => schedule('), 'BELV roster does not run periodic nickname reconciliations');
