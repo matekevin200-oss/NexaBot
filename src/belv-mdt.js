@@ -11,7 +11,6 @@ const { getGuildConfig } = require('./config');
 const PREFIX = '/api/mdt/v1';
 const BELV_GUILD_ID = '1517509643734221030';
 const BELV_ROSTER_MARKER = 'NEXA_BELV_ROSTER_V1';
-const BELV_NICKNAME_EXEMPT_USER_IDS = new Set(['1221443482829193270']);
 const BELV_ROSTER = Object.freeze([
   { id: '1221443482829193270', rank: 'Főigazgató', nickRank: 'Főigazgató', badge: 'BELV-01', group: 'Felsővezetés' },
   { id: '1256537413229084735', rank: 'Főigazgató-Helyettes', nickRank: 'Fő Igazgató-H.', badge: 'BELV-02', group: 'Felsővezetés' },
@@ -813,7 +812,7 @@ async function syncBelvRosterUnlocked(guild, actorId, botUserId) {
     const entry = { id: member.id, rank: rank.rank, nickRank: rank.nickRank, badge, group: rank.group };
     activeEntries.push(entry);
     writes.push([guild.id, member.id, badgeNumber, rank.rank, rank.nickRank, rank.group, rank.min, rank.max, rank.roleId]);
-    if (isBotOwner(member.id) || BELV_NICKNAME_EXEMPT_USER_IDS.has(member.id)) { skipped.push(member.id); continue; }
+    if (member.id === guild.ownerId) { skipped.push(member.id); continue; }
     if (!bot.permissions.has(PermissionFlagsBits.ManageNicknames)) { failed.push({ id: member.id, reason: 'a botnak nincs Becenevek kezelése jogosultsága; az állománylista ettől még frissült' }); continue; }
     if (member.id === guild.ownerId || bot.roles.highest.comparePositionTo(member.roles.highest) <= 0) { failed.push({ id: member.id, reason: 'a bot szerepköre nem jogosult a becenév módosítására' }); continue; }
     const nickname = belvNickname(member, entry, previous);
@@ -831,7 +830,7 @@ async function syncBelvRosterUnlocked(guild, actorId, botUserId) {
     await query('INSERT INTO nexabot_belv_roster_badges(guild_id,user_id,badge,rank_name,nick_rank,group_name,range_min,range_max,role_id,active,updated_at) VALUES ' + valueSql.join(',') + ' ON CONFLICT(guild_id,user_id) DO UPDATE SET badge=EXCLUDED.badge,rank_name=EXCLUDED.rank_name,nick_rank=EXCLUDED.nick_rank,group_name=EXCLUDED.group_name,range_min=EXCLUDED.range_min,range_max=EXCLUDED.range_max,role_id=EXCLUDED.role_id,active=TRUE,updated_at=NOW()', values);
   }
   for (const member of members.values()) {
-    if (member.user?.bot || rankByUser.has(String(member.id)) || isBotOwner(member.id) || BELV_NICKNAME_EXEMPT_USER_IDS.has(member.id)) continue;
+    if (member.user?.bot || rankByUser.has(String(member.id))) continue;
     const previous = previousByUser.get(String(member.id));
     if (!previous) continue;
     inactive.push(member.id);

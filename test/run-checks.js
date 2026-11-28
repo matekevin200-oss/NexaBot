@@ -69,6 +69,8 @@ assert.ok(belv.includes('guild.members.fetch()'), 'roster reads current guild me
 assert.ok(belv.includes('let belvRosterBadgeSchemaPromise = null;'), 'BELV roster badge schema initialization is declared');
 assert.ok(belv.includes("badge: 'BELV-01'") && belv.includes("badge: 'BELV-04'"), 'static leadership roster uses the BELV badge prefix');
 assert.ok(belv.includes("['BELV-', 'BVI-', 'BV-']"), 'old nickname badge prefixes are removed during the first re-sync');
+const belvNicknameSync = belv.slice(belv.indexOf('for (const { member, rank } of ranked)'), belv.indexOf('for (let offset = 0; offset < writes.length'));
+assert.ok(!belv.includes('BELV_NICKNAME_EXEMPT_USER_IDS') && !belvNicknameSync.includes('isBotOwner(member.id)'), 'BELV leaders, including the bot owner, are not skipped during nickname synchronization');
 assert.ok(belv.includes("client.on('guildMemberAdd'"), 'new members trigger roster reconciliation');
 assert.ok(belv.includes("client.on('guildMemberRemove'"), 'departed members trigger roster reconciliation');
 assert.ok(!belv.includes('periodic-reconcile') && !belv.includes('setInterval(() => schedule('), 'BELV roster does not run periodic nickname reconciliations');
